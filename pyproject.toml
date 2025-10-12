@@ -27,8 +27,18 @@ dependencies = [
 dev-dependencies = [
     "pytest",
     "black",
+    "ruff",
     "flake8",
     "isort",
     "bandit",
     "mypy"
 ]
+
+[tool.black]
+line-length = 88
+
+[tool.flake8]
+max-line-length = 88
+
+[tool.ruff]
+line-length = 88

@@ -1,4 +1,5 @@
-.PHONY: install dev-install lint format test run build deploy
+
+.PHONY: install dev-install lint format test run build deploy mypy security docker-up
 
 install:
 	uv sync
@@ -16,7 +17,7 @@ lint:
 	uv run flake8 src tests
 
 format:
-	uv run black src tests && uv run isort src tests
+	uv run black src tests && uv run isort src tests && uv run ruff check src tests --fix
 
 mypy:
 	uv run mypy src

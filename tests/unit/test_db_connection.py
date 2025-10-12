@@ -1,19 +1,15 @@
-import os
+from sqlmodel import SQLModel, create_engine
 
-from sqlmodel import create_engine
+from src.db import get_engine, init_db
+
 
 def test_sqlite_memory_engine():
     url = "sqlite:///:memory:"
     engine = create_engine(url)
     assert engine is not None
-import os
 
-# Ensure tests use in-memory sqlite to avoid Docker
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from src.db import init_db, get_engine
 engine = get_engine()
-from sqlmodel import SQLModel
 
 
 def test_init_db_creates_tables():

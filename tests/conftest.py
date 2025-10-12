@@ -1,6 +1,9 @@
+import os
 import sys
 from pathlib import Path
 
-# Ensure repository root (one level up from tests) is on sys.path so `src` imports work during tests
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# Use in-memory SQLite for unit tests by default
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")

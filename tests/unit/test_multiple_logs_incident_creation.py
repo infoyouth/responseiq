@@ -1,15 +1,10 @@
-import os
-
-# ensure test DB isolation
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 from fastapi.testclient import TestClient
-from src.app import app
-from src.db import init_db, get_engine
-engine = get_engine()
 from sqlmodel import SQLModel
 
+from src.app import app
+from src.db import get_engine, init_db
 
+engine = get_engine()
 client = TestClient(app)
 
 
@@ -26,7 +21,8 @@ def get_incidents():
 
 
 def test_multiple_logs_only_matching_create_incidents():
-    # ensure clean DB for this test (other tests may have populated the shared in-memory DB)
+    # ensure clean DB for this test
+    # other tests may have populated the shared in-memory DB
     SQLModel.metadata.drop_all(engine)
     init_db()
 
@@ -37,6 +33,13 @@ def test_multiple_logs_only_matching_create_incidents():
 
     incidents = get_incidents()
     # At least one incident should exist for the 'error' log
-    assert any("error" in (i.get("description") or "").lower() or i.get("severity") == "medium" for i in incidents)
-    # Non-matching logs should not create incidents; ensure incidents count less than logs posted
+    assert any(
+        (
+            "error" in (i.get("description") or "").lower()
+            or i.get("severity") == "medium"
+        )
+        for i in incidents
+    )
+    # Non-matching logs should not create incidents.
+    # Ensure incidents count is less than logs posted.
     assert len(incidents) < 4

@@ -1,11 +1,10 @@
 import os
 
-from sqlmodel import SQLModel, create_engine, Session
 from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
 # Reuse models from src.models to avoid duplicate table definitions
-from .models import Log, Incident  # noqa: F401
-
+from .models import Incident, Log  # noqa: F401
 
 _engine = None
 
@@ -29,7 +28,10 @@ def get_engine():
             echo=False,
         )
     else:
-        _engine = create_engine(database_url, echo=False)
+        _engine = create_engine(
+            database_url,
+            echo=False,
+        )
 
     return _engine
 
@@ -45,4 +47,5 @@ def get_session():
         yield session
 
 
-# Note: do NOT create a module-level engine here; call `get_engine()` when needed.
+# Note: avoid creating a module-level engine here.
+# Use `get_engine()` when an engine is required so tests can set DATABASE_URL.

@@ -1,7 +1,6 @@
-from typing import Optional, Dict, Any
 import json
-import os
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from src.schemas.incident import IncidentOut
 
@@ -22,9 +21,33 @@ def reload_config(path: str | None = None) -> None:
     if not cfg_path.exists():
         # fallback to built-in defaults
         _config = {
-            "simple": ["error", "exception", "failed", "panic", "critical"],
-            "events": {"oomkilled": "OOMKilled", "crashloop": "CrashLoopBackOff", "502": "Nginx502"},
-            "mapping": {"high": ["panic", "critical", "oomkilled", "crashloop"], "medium": ["error", "exception", "failed"]},
+            "simple": [
+                "error",
+                "exception",
+                "failed",
+                "panic",
+                "critical",
+                "timeout",
+            ],
+            "events": {
+                "oomkilled": "OOMKilled",
+                "crashloop": "CrashLoopBackOff",
+                "502": "Nginx502",
+            },
+            "mapping": {
+                "high": [
+                    "panic",
+                    "critical",
+                    "oomkilled",
+                    "crashloop",
+                ],
+                "medium": [
+                    "error",
+                    "exception",
+                    "failed",
+                    "timeout",
+                ],
+            },
         }
         return
 
@@ -39,7 +62,8 @@ reload_config()
 def analyze_message(message: str) -> Optional[dict]:
     """Simple keyword-based analyzer returning metadata for incidents.
 
-    Returns a dict like {'severity': 'medium', 'reason': 'matched:error'} or None.
+    Returns a dict like:
+    {'severity': 'medium', 'reason': 'matched:error'} or None.
     """
     text = message.lower()
     for kw in _config.get("simple", []):
@@ -53,14 +77,22 @@ def analyze_message(message: str) -> Optional[dict]:
                     break
             if severity is None:
                 severity = "medium"
-            return {"severity": severity, "reason": f"matched:{kw}"}
+            return {
+                "severity": severity,
+                "reason": f"matched:{kw}",
+            }
     return None
 
 
 def analyze_log(log_text: str) -> Optional[IncidentOut]:
-    """Event-oriented analyzer returning an IncidentOut for compatibility with older tests."""
+    """Event-oriented analyzer.
+
+    Returns an IncidentOut when an event keyword is detected. This keeps
+    compatibility with older tests.
+    """
     txt = log_text.lower()
-    # event detection: return IncidentOut with both title and severity when applicable
+    # event detection:
+    # return an IncidentOut with both title and severity when applicable
     for k, title in _config.get("events", {}).items():
         if k in txt:
             # severity mapping may include events mapping
@@ -72,6 +104,10 @@ def analyze_log(log_text: str) -> Optional[IncidentOut]:
                     break
             if sev is None:
                 sev = "high" if k in ("oomkilled", "crashloop") else "medium"
-            return IncidentOut(id=None, title=title, severity=sev, description=f"Detected {title} from logs")
+            return IncidentOut(
+                id=None,
+                title=title,
+                severity=sev,
+                description=f"Detected {title} from logs",
+            )
     return None
-

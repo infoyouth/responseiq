@@ -1,4 +1,5 @@
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -9,7 +10,6 @@ class LogIn(BaseModel):
 
 
 class LogOut(BaseModel):
-    id: int
+    id: Optional[int]
     message: str
     severity: Optional[str] = None
-

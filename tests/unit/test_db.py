@@ -1,8 +1,3 @@
-import os
-
-# Use an in-memory SQLite DB for unit tests
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 from src.db import get_session, init_db
 
 

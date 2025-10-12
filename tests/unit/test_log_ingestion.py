@@ -1,13 +1,7 @@
-import os
-
-# Use in-memory DB for tests
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 from fastapi.testclient import TestClient
 
 from src.app import app
 from src.services.analyzer import analyze_message
-
 
 client = TestClient(app)
 
@@ -31,7 +25,5 @@ def test_log_ingestion_and_incident_creation():
     resp2 = client.get("/incidents")
     assert resp2.status_code == 200
     incidents = resp2.json()
-    assert len(incidents) >= 1
-import os
 
- 
+    assert len(incidents) >= 1

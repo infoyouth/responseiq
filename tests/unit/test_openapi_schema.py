@@ -1,9 +1,5 @@
-import os
-
-# ensure test DB isolation
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 from fastapi.testclient import TestClient
+
 from src.app import app
 
 client = TestClient(app)

@@ -1,11 +1,6 @@
-import os
-
-# ensure test DB isolation
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-
 from fastapi.testclient import TestClient
-from src.app import app
 
+from src.app import app
 
 client = TestClient(app)
 
@@ -26,5 +21,10 @@ def test_duplicate_logs_are_stored():
     assert resp.status_code == 200
     incidents = resp.json()
     # Expect at least two incidents matching panic/critical
-    panic_incidents = [i for i in incidents if (i.get("title") or "").lower().find("panic") >= 0 or i.get("severity") == "high"]
+    panic_incidents = [
+        i
+        for i in incidents
+        if (i.get("title") or "").lower().find("panic") >= 0
+        or i.get("severity") == "high"
+    ]
     assert len(panic_incidents) >= 2

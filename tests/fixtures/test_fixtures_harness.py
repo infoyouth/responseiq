@@ -1,12 +1,12 @@
-import json
 import glob
+import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.app import app
-from src.db import get_session, init_db
+from src.db import init_db
 
 
 @pytest.fixture(autouse=True)
@@ -29,9 +29,11 @@ def load_fixtures():
 def test_fixtures_create_expected_incidents():
     # tests should use an in-memory sqlite DB for isolation
     import os
+
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    from src.db import get_engine, init_db
     from sqlmodel import SQLModel
+
+    from src.db import get_engine, init_db
 
     client = TestClient(app)
     fixtures = load_fixtures()
@@ -43,7 +45,7 @@ def test_fixtures_create_expected_incidents():
         payload = {"message": fx["message"]}
         resp = client.post("/logs", json=payload)
         assert resp.status_code == 201
-        body = resp.json()
+
         # after ingestion, query incidents
         sev = fx.get("expected_incident_severity")
 
@@ -52,10 +54,15 @@ def test_fixtures_create_expected_incidents():
         incidents = inc_resp.json()
 
         if sev is None:
-            # expect no incidents created for this message
-            # ensure none of the incidents correspond to this message's detected keywords
-            # (we assume fixtures limited so we can assert no incidents at all)
-            assert all((i.get("severity") != "high" and i.get("severity") != "medium") for i in incidents)
+            # expect no incidents created for this message. Ensure none of the
+            # incidents correspond to this message's detected keywords. We
+            # assume fixtures are limited so this asserts no incidents at all.
+            assert all(
+                (i.get("severity") != "high" and i.get("severity") != "medium")
+                for i in incidents
+            )
         else:
             # expect at least one incident with the expected severity
-            assert any(i.get("severity") == sev for i in incidents), f"expected severity {sev} in incidents: {incidents}"
+            assert any(
+                i.get("severity") == sev for i in incidents
+            ), f"expected severity {sev} in incidents: {incidents}"
