@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_integration:
+        description: 'Set to true to run integration tests'
+        required: false
+        default: 'false'
 
 env:
   PYTHON_VERSION: '3.12'
@@ -142,9 +148,10 @@ jobs:
     needs: setup-and-cache
     steps:
       - uses: actions/checkout@v4
-      - name: Scan for license policy issues
-        uses: tibdex/github-app-token@v1
-        # Placeholder: Add license scanning step or third-party action here
+      - name: License scan (placeholder)
+        run: |
+          echo "License/policy scan step is a placeholder."
+          echo "Replace with a proper license scanner action and configure required inputs."
 
   report:
     name: Upload reports
@@ -163,10 +170,8 @@ jobs:
     name: Integration tests (optional)
     needs: setup-and-cache
     runs-on: ubuntu-latest
-    if: contains(matrix.integration, 'true') || github.event.inputs.run_integration == 'true' || false
-    strategy:
-      matrix:
-        integration: [true]
+    # Only run integration tests when explicitly requested via workflow_dispatch
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker (already available on runners)

@@ -24,6 +24,11 @@ app = FastAPI(
 )
 
 
+@app.get("/health", summary="Health check")
+def health():
+    return {"status": "ok"}
+
+
 POST_LOG_EXAMPLE = {
     "message": "critical: panic when allocating resource",
     "severity": "high",
