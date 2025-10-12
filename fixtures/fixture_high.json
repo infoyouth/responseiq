@@ -1,0 +1,4 @@
+{
+  "message": "panic: out of memory while allocating buffer",
+  "expected_incident_severity": "high"
+}

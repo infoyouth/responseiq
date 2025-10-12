@@ -1,0 +1,4 @@
+{
+  "message": "error: failed to connect to upstream service (timeout)",
+  "expected_incident_severity": "medium"
+}

@@ -1,0 +1,20 @@
+import os
+
+# ensure test DB isolation
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
+from fastapi.testclient import TestClient
+from src.app import app
+
+client = TestClient(app)
+
+
+def test_openapi_contains_schemas():
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    spec = r.json()
+    schemas = spec.get("components", {}).get("schemas", {})
+    # Ensure our schemas are present
+    assert "LogIn" in schemas
+    assert "LogOut" in schemas
+    assert "IncidentOut" in schemas

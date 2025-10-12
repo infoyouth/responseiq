@@ -1,0 +1,23 @@
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: ../Dockerfile
+    volumes:
+      - ..:/workspaces/responseiq
+    ports:
+      - "8000:8000"
+    environment:
+      - UVICORN_RELOAD=true
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: responseiq
+      POSTGRES_PASSWORD: responseiq
+      POSTGRES_DB: responseiq
+    ports:
+      - "5432:5432"
