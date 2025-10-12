@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from typing import List
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from sqlmodel import select
 
 from .db import get_session, init_db
@@ -36,7 +36,15 @@ POST_LOG_EXAMPLE = {
     response_model=LogOut,
     summary="Ingest a log",
 )
-def ingest_log(payload: LogIn, session=Depends(get_session)):
+def ingest_log(
+    payload: LogIn,
+    session=Depends(get_session),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+):
+    # optional API key enforcement for ingestion
+    required_key = __import__("os").environ.get("LOG_INGEST_API_KEY")
+    if required_key and x_api_key != required_key:
+        raise HTTPException(status_code=401, detail="invalid api key")
     # create log (temporarily without analyzer severity)
     log = Log(message=payload.message, severity=payload.severity)
     session.add(log)
@@ -76,7 +84,15 @@ def ingest_log(payload: LogIn, session=Depends(get_session)):
     response_model=List[IncidentOut],
     summary="List incidents",
 )
-def list_incidents(severity: str | None = None, session=Depends(get_session)):
+def list_incidents(
+    severity: str | None = None,
+    session=Depends(get_session),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+):
+    # optional API key enforcement for reading incidents
+    read_key = __import__("os").environ.get("LOG_READ_API_KEY")
+    if read_key and x_api_key != read_key:
+        raise HTTPException(status_code=401, detail="invalid api key")
     q = select(Incident)
     if severity:
         q = q.where(Incident.severity == severity)
