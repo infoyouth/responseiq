@@ -1,0 +1,12 @@
+{
+  "simple": ["error", "exception", "failed", "panic", "critical", "timeout"],
+  "events": {
+    "oomkilled": "OOMKilled",
+    "crashloop": "CrashLoopBackOff",
+    "502": "Nginx502"
+  },
+  "mapping": {
+    "high": ["panic", "critical", "oomkilled", "crashloop"],
+    "medium": ["error", "exception", "failed", "timeout"]
+  }
+}

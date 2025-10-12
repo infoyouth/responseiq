@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.12'
+  CACHE_NAME: responseiq-uv
+
+jobs:
+  setup-and-cache:
+    name: Prepare environment
+    runs-on: ubuntu-latest
+    outputs:
+      cache-hit: ${{ steps.cache.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Cache UV and pip cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+      - name: Install UV (if cache miss)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Sync dependencies
+        run: uv sync --group dev --active
+      - name: Install pre-commit hooks and run composer-like checks
+        run: |
+          pip install pre-commit
+          pre-commit run --all-files || true
+
+  lint-format-type-test:
+    name: Lint, Format-check, Type-check and Tests
+    needs: setup-and-cache
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Sync dependencies
+        run: uv sync --group dev --active
+      - name: Lint (flake8)
+        run: uv run flake8 src tests
+      - name: Format check (black/isort)
+        run: uv run black --check src tests && uv run isort --check-only src tests
+      - name: Type check (mypy)
+        run: uv run mypy src
+      - name: Run tests (pytest + coverage)
+        run: |
+          uv run pytest --maxfail=1 --disable-warnings -q
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: .pytest_cache || ./
+
+  security-scan:
+    name: Security checks
+    runs-on: ubuntu-latest
+    needs: setup-and-cache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Sync dependencies
+        run: uv sync --group dev --active
+      - name: Bandit security scan
+        run: uv run bandit -r src -ll
+      - name: Dependency vulnerability scan (safety-db)
+        uses: pyupio/safety-db-action@v1
+        with:
+          args: check --full-report
+
+  pre-commit-on-pr:
+    name: Pre-commit checks
+    runs-on: ubuntu-latest
+    needs: setup-and-cache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Sync dependencies
+        run: uv sync --group dev --active
+      - name: Run pre-commit
+        uses: pre-commit/action@v4
+        with:
+          extra_args: --all-files
+
+  license-check:
+    name: License and policy checks
+    runs-on: ubuntu-latest
+    needs: setup-and-cache
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan for license policy issues
+        uses: tibdex/github-app-token@v1
+        # Placeholder: Add license scanning step or third-party action here
+
+  report:
+    name: Upload reports
+    runs-on: ubuntu-latest
+    needs: [lint-format-type-test, security-scan]
+    steps:
+      - name: Aggregate and upload logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: |
+            .pytest_cache
+            /tmp/bandit-output || ./
+
+  integration-tests:
+    name: Integration tests (optional)
+    needs: setup-and-cache
+    runs-on: ubuntu-latest
+    if: contains(matrix.integration, 'true') || github.event.inputs.run_integration == 'true' || false
+    strategy:
+      matrix:
+        integration: [true]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker (already available on runners)
+        run: docker --version
+      - name: Install UV
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Sync dependencies
+        run: uv sync --group dev --active
+      - name: Run integration tests
+        env:
+          RUN_INTEGRATION: '1'
+        run: |
+          uv run pytest tests/integration/test_integration_postgres.py -q
