@@ -10,6 +10,7 @@ from .models import Incident, Log
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut
 from .services.analyzer import analyze_message
+from .routers.blueprints import router as blueprints_router
 
 
 @asynccontextmanager
@@ -22,6 +23,9 @@ app = FastAPI(
     title="ResponseIQ MVP",
     lifespan=lifespan,
 )
+
+# include routers
+app.include_router(blueprints_router)
 
 
 @app.get("/health", summary="Health check")
