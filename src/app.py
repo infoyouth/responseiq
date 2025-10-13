@@ -3,14 +3,16 @@ from contextlib import asynccontextmanager
 from typing import List
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
 
 from .db import get_session, init_db
 from .models import Incident, Log
+from .routers.blueprints import router as blueprints_router
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut
 from .services.analyzer import analyze_message
-from .routers.blueprints import router as blueprints_router
 
 
 @asynccontextmanager
@@ -26,6 +28,14 @@ app = FastAPI(
 
 # include routers
 app.include_router(blueprints_router)
+
+# serve static UI
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
+
+
+@app.get("/ui/blueprints")
+def blueprints_ui():
+    return RedirectResponse(url="/static/blueprints.html")
 
 
 @app.get("/health", summary="Health check")
