@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException, Header
+import os
 from typing import List
 
+from fastapi import APIRouter, Header, HTTPException
+
+from ..blueprints import get, get_all
 from ..schemas.blueprint import Blueprint
-from ..blueprints import get_all, get
-import os
-
-
 
 router = APIRouter(prefix="/blueprints", tags=["blueprints"])
 
@@ -23,9 +22,10 @@ def get_blueprint(blueprint_id: str):
     return bp
 
 
-
 @router.post("/reload", summary="Reload blueprints from disk")
-def reload_blueprints_admin(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
+def reload_blueprints_admin(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")
+):
     # Protect reload with a simple token set in env BLUEPRINT_RELOAD_TOKEN
     required = os.environ.get("BLUEPRINT_RELOAD_TOKEN")
     if required and x_admin_token != required:
