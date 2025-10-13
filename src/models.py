@@ -7,7 +7,7 @@ def _now():
     return datetime.now(timezone.utc)
 
 
-class Log(SQLModel, table=True):
+class Log(SQLModel, table=True):  # type: ignore[call-arg]
     __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     message: str
@@ -15,7 +15,7 @@ class Log(SQLModel, table=True):
     severity: str | None = None
 
 
-class Incident(SQLModel, table=True):
+class Incident(SQLModel, table=True):  # type: ignore[call-arg]
     __table_args__ = {"extend_existing": True}
     id: int | None = Field(default=None, primary_key=True)
     log_id: int

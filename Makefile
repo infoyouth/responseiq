@@ -33,3 +33,12 @@ docker-up:
 
 deploy:
 	helm upgrade --install responseiq ./helm
+
+
+# run the same checks as CI locally
+ci:
+	uv run flake8 src tests
+	uv run black --check src tests
+	uv run isort --check-only src tests
+	uv run mypy src
+	uv run pytest --maxfail=1 --disable-warnings -q

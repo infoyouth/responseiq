@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>ResponseIQ — Blueprints</title>
+  <style>
+    body { font-family: system-ui, Arial; max-width: 900px; margin: 2rem; }
+    .list { margin-bottom: 1rem; }
+    .bp { border: 1px solid #eee; padding: 0.8rem; margin: 0.5rem 0; cursor: pointer; }
+    .detail { margin-top: 1rem; padding: 1rem; border: 1px solid #ddd; background:#fafafa }
+    .meta { color: #666; font-size: 0.9rem; }
+    button { margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Blueprints</h1>
+  <div id="list" class="list">Loading…</div>
+  <div id="detail" class="detail" hidden></div>
+
+  <script>
+    async function fetchJSON(path, opts) {
+      const r = await fetch(path, opts);
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+    function renderList(items) {
+      const el = document.getElementById('list');
+      el.innerHTML = '';
+      items.forEach(bp => {
+        const d = document.createElement('div');
+        d.className = 'bp';
+        d.textContent = bp.title + ' (' + (bp.severity || 'n/a') + ')';
+        d.onclick = () => loadDetail(bp.id);
+        el.appendChild(d);
+      });
+    }
+    async function loadList() {
+      try {
+        const data = await fetchJSON('/blueprints/');
+        renderList(data);
+      } catch (e) { document.getElementById('list').textContent = 'Error: ' + e.message; }
+    }
+    async function loadDetail(id) {
+      try {
+        const bp = await fetchJSON('/blueprints/' + id);
+        const detail = document.getElementById('detail');
+        detail.hidden = false;
+        detail.innerHTML = `<h2>${bp.title}</h2>
+          <div class="meta">id: ${bp.id} • severity: ${bp.severity} • confidence: ${bp.confidence}</div>
+          <p>${bp.description || ''}</p>
+          <h3>Rationale</h3><p>${bp.rationale || ''}</p>
+          <h3>Actions</h3><pre>${JSON.stringify(bp.actions, null, 2)}</pre>
+          <h3>Rollback</h3><pre>${JSON.stringify(bp.rollback, null, 2)}</pre>
+          <button id="reload-btn">Reload blueprints (admin)</button>
+          `;
+        document.getElementById('reload-btn').onclick = async () => {
+          const token = prompt('Admin token (BLUEPRINT_RELOAD_TOKEN) — leave blank to cancel:');
+          if (!token) return;
+          try {
+            const r = await fetch('/blueprints/reload', { method: 'POST', headers: { 'X-Admin-Token': token }});
+            if (!r.ok) throw new Error(await r.text());
+            alert('Reloaded');
+            loadList();
+          } catch (e) { alert('Reload failed: ' + e.message); }
+        };
+      } catch (e) { alert('Error: ' + e.message); }
+    }
+    loadList();
+  </script>
+</body>
+</html>

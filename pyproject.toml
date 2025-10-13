@@ -31,7 +31,9 @@ dev-dependencies = [
     "flake8",
     "isort",
     "bandit",
-    "mypy"
+    "mypy",
+    "types-requests",
+    "pbr",
 ]
 
 [tool.black]
