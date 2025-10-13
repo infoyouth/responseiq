@@ -18,3 +18,17 @@ def test_get_blueprint_detail():
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == "crashloop_increase_memory"
+
+
+def test_reload_blueprints_requires_token(monkeypatch):
+    # Ensure reload endpoint requires token when env var is set
+    monkeypatch.setenv("BLUEPRINT_RELOAD_TOKEN", "secret-token")
+    resp = client.post("/blueprints/reload")
+    assert resp.status_code == 401
+
+
+def test_reload_blueprints_with_token(monkeypatch):
+    monkeypatch.setenv("BLUEPRINT_RELOAD_TOKEN", "secret-token")
+    resp = client.post("/blueprints/reload", headers={"X-Admin-Token": "secret-token"})
+    assert resp.status_code == 200
+    assert resp.json().get("reloaded") is True

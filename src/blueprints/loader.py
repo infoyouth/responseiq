@@ -11,7 +11,8 @@ _REGISTRY: Dict[str, Blueprint] = {}
 def _load_file(path: str) -> Blueprint:
     with open(path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
-    bp = Blueprint.parse_obj(data)
+    # Pydantic v2 method
+    bp = Blueprint.model_validate(data)
     return bp
 
 
