@@ -70,16 +70,21 @@ def scan_directory(target_path: str, mode: str):
                     # Simulate result for demo if LLM not configured
                     result = analyze_message(msg)
 
-                    # Fallback if analyzer didn't catch matched keyword
+                    # Fallback if analyzer didn't catch matched keyword or severity is too low
+                    # but we strongly suspect it due to keywords
                     if not result and "panic" in msg_lower:
-                        result = {"severity": "critical", "reason": "System Panic Detected"}
-
-                    if result and result.get("severity") in ["high", "critical"]:
-                        logger.warning(
+                         result = {"severity": "critical", "reason": "System Panic Detected (Keyword)"}
+                    
+                    if result and ((result.get("severity") in ["high", "critical"]) or "panic" in msg_lower):
+                         # Force upgrade severity if panic present
+                         if "panic" in msg_lower:
+                             result["severity"] = "critical"
+                             
+                         logger.warning(
                             f"Likely incident detected in {file}: {result['reason']}"
                         )
                         
-                        issue_record = {
+                         issue_record = {
                             "severity": result.get("severity", "high"),
                             "path": file_path,
                             "reason": result.get("reason"),
