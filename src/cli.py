@@ -8,6 +8,32 @@ from src.services.analyzer import analyze_message
 from src.utils.logger import logger
 
 
+def write_summary(issues: list):
+    """
+    Writes a Markdown summary to GITHUB_STEP_SUMMARY.
+    """
+    summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_file:
+        return
+
+    with open(summary_file, "a") as f:
+        f.write("# 🔍 ResponseIQ Scan Results\n\n")
+        if not issues:
+            f.write("✅ **No critical issues found.**\n")
+            return
+
+        f.write(f"⚠️ Found **{len(issues)}** potential issues:\n\n")
+        f.write("| Severity | File | Reason | Action |\n")
+        f.write("| :--- | :--- | :--- | :--- |\n")
+        
+        for issue in issues:
+            sev_icon = "🔴" if issue['severity'] == "critical" else "🟠"
+            file_name = issue['path'].name
+            f.write(f"| {sev_icon} {issue['severity'].upper()} | `{file_name}` | {issue['reason']} | {issue['status']} |\n")
+        
+        f.write("\n_Analysis performed by ResponseIQ_\n")
+
+
 def scan_directory(target_path: str, mode: str):
     """
     Scans a directory for known issues.
@@ -19,8 +45,9 @@ def scan_directory(target_path: str, mode: str):
         logger.error(f"Target path {target_path} does not exist.")
         sys.exit(1)
 
+    issues_found = []
+    
     # Simple walk for MVP
-    issues_found = 0
     for root, dirs, files in os.walk(path):
         for file in files:
             # Skip hidden files and venv
@@ -34,32 +61,47 @@ def scan_directory(target_path: str, mode: str):
                 with open(file_path, "r", errors="ignore") as f:
                     msg = f.read(1024)
 
-                # Analyze
-                if (
-                    "error" in msg.lower()
-                    or "fail" in msg.lower()
-                    or "exception" in msg.lower()
-                ):
+                # Broaden detection for CLI to catch 'critical' and 'panic'
+                msg_lower = msg.lower()
+                detection_keywords = ["error", "fail", "exception", "panic", "critical"]
+                
+                if any(k in msg_lower for k in detection_keywords):
                     logger.info(f"Analyzing potential issue in {file_path}")
                     # Simulate result for demo if LLM not configured
                     result = analyze_message(msg)
+
+                    # Fallback if analyzer didn't catch matched keyword
+                    if not result and "panic" in msg_lower:
+                        result = {"severity": "critical", "reason": "System Panic Detected"}
 
                     if result and result.get("severity") in ["high", "critical"]:
                         logger.warning(
                             f"Likely incident detected in {file}: {result['reason']}"
                         )
-                        issues_found += 1
+                        
+                        issue_record = {
+                            "severity": result.get("severity", "high"),
+                            "path": file_path,
+                            "reason": result.get("reason"),
+                            "status": "Reported"
+                        }
 
                         if mode == "fix":
                             logger.info(
                                 "Fix mode enabled: Attempting remediation (simulation)"
                             )
                             attempt_fix(file_path, result)
+                            issue_record["status"] = "Fix Attempted"
+
+                        issues_found.append(issue_record)
+
             except Exception as e:
                 logger.debug(f"Skipping {file}: {e}")
 
-    logger.info(f"Scan complete. Found {issues_found} issues.")
-    if issues_found > 0 and mode == "scan":
+    write_summary(issues_found)
+    logger.info(f"Scan complete. Found {len(issues_found)} issues.")
+    
+    if len(issues_found) > 0 and mode == "scan":
         sys.exit(1)  # Fail build on issues in scan mode
 
 
