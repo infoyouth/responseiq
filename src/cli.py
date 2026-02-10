@@ -5,7 +5,12 @@ from pathlib import Path
 
 from src.integrations.github_integration import GitHubIntegration
 from src.services.analyzer import analyze_message
+from src.services.remediation_service import RemediationService
 from src.utils.logger import logger
+
+# Initialize Remediation Service
+remediation_service = RemediationService()
+
 
 
 def write_summary(issues: list):
@@ -47,21 +52,26 @@ def scan_directory(target_path: str, mode: str):
 
     issues_found = []
     
-    # Simple walk for MVP
-    for root, dirs, files in os.walk(path):
-        for file in files:
-            # Skip hidden files and venv
-            if file.startswith(".") or "venv" in root:
-                continue
+    # Determine files to scan
+    files_to_scan = []
+    if path.is_file():
+        files_to_scan.append(path)
+    else:
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                # Skip hidden files and venv
+                if file.startswith(".") or "venv" in root:
+                    continue
+                files_to_scan.append(Path(root) / file)
 
-            file_path = Path(root) / file
-            try:
-                # Read first 1KB to detect issues (simulation)
-                msg = ""
-                with open(file_path, "r", errors="ignore") as f:
-                    msg = f.read(1024)
+    for file_path in files_to_scan:
+        try:
+            # Read first 1KB to detect issues (simulation)
+            msg = ""
+            with open(file_path, "r", errors="ignore") as f:
+                msg = f.read(1024)
 
-                # Broaden detection for CLI to catch 'critical' and 'panic'
+            # Broaden detection for CLI to catch 'critical' and 'panic'
                 msg_lower = msg.lower()
                 detection_keywords = ["error", "fail", "exception", "panic", "critical"]
                 
@@ -84,13 +94,6 @@ def scan_directory(target_path: str, mode: str):
                             f"Likely incident detected in {file}: {result['reason']}"
                         )
                         
-                         issue_record = {
-                            "severity": result.get("severity", "high"),
-                            "path": file_path,
-                            "reason": result.get("reason"),
-                            "status": "Reported"
-                        }
-
                         if mode == "fix":
                             logger.info(
                                 "Fix mode enabled: Attempting remediation (simulation)"
@@ -114,6 +117,16 @@ def attempt_fix(file_path: Path, issue: dict):
     """
     Simulates a fix action via GitHub PR.
     """
+    logger.info(f"Attempting to remediate: {issue['reason']}")
+    
+    # 1. Apply Physical Fix (Static Analysis Engine)
+    # We pass the parent directory of the log file as context context to find k8s files
+    fix_applied = remediation_service.remediate_incident(issue, file_path.parent)
+    
+    if not fix_applied:
+        logger.warning("Could not apply automated fix locally.")
+        return
+
     repo_name = os.environ.get("GITHUB_REPOSITORY")
     if not repo_name:
         logger.warning(
@@ -129,8 +142,10 @@ def attempt_fix(file_path: Path, issue: dict):
 
     # Create PR logic simulation
     title = f"fix: Resolve {issue.get('reason')} in {file_path.name}"
+    # In real world: git commit -am "fix..." && git push
     # gh.create_pr(...)
     logger.info(f"Would create PR on {repo_name} with title: {title}")
+
 
 
 def main():
