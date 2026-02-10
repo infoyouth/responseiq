@@ -36,6 +36,8 @@ dev-dependencies = [
     "mypy",
     "types-requests",
     "pbr",
+    "pre-commit",
+    "safety",
 ]
 
 [tool.black]
@@ -49,3 +51,7 @@ max-line-length = 88
 
 [tool.ruff]
 line-length = 88
+
+[tool.bandit]
+exclude_dirs = ["tests", "fixtures"]
+
