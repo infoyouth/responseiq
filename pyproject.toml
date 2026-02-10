@@ -23,10 +23,11 @@ dependencies = [
     "sqlmodel",
     "pydantic-settings>=2.12.0",
     "opentelemetry-exporter-otlp>=1.15.0",
+    "ruamel-yaml>=0.19.1",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest",
     "black",
     "ruff",

@@ -6,6 +6,14 @@ branding:
   color: 'blue'
 
 inputs:
+  target:
+    description: 'Directory or File to scan'
+    required: false
+    default: '.'
+  mode:
+    description: 'Mode of operation: scan or fix'
+    required: false
+    default: 'scan'
   github_token:
     description: 'GitHub Token with permissions to create PRs'
     required: true
@@ -20,7 +28,20 @@ inputs:
 runs:
   using: 'docker'
   image: 'Dockerfile'
+  args:
+    - "uv"
+    - "run"
+    - "--project"
+    - "/app"
+    - "python"
+    - "-m"
+    - "src.cli"
+    - "--target"
+    - ${{ inputs.target }}
+    - "--mode"
+    - ${{ inputs.mode }}
   env:
     GITHUB_TOKEN: ${{ inputs.github_token }}
     OPENAI_API_KEY: ${{ inputs.openai_api_key }}
     ENVIRONMENT: 'prod'
+    PYTHONPATH: '/app'

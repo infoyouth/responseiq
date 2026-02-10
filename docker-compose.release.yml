@@ -1,0 +1,29 @@
+services:
+  app:
+    image: ghcr.io/infoyouth/responseiq:${RELEASE_VERSION:-v1.0.0}
+    ports:
+      - "8001:8000"  # Expose on 8001 to avoid conflict with dev env (8000)
+    environment:
+      - DATABASE_URL=postgresql://responseiq:responseiq@db:5432/responseiq
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      # No UVICORN_RELOAD, simulating prod
+    depends_on:
+      - db
+      - jaeger
+    # No volumes: we want to test the baked-in code, not local source
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: responseiq
+      POSTGRES_PASSWORD: responseiq
+      POSTGRES_DB: responseiq
+    ports:
+      - "5436:5432" # Expose on 5436 to avoid conflict with dev env (5435)
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    ports:
+      - "16687:16686" # Shift ports +1
+      - "4318:4317"
+      # - "4317:4317" # Avoid conflicting with dev jaeger on 4317 UDP/TCP
