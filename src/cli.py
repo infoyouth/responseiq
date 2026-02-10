@@ -3,13 +3,14 @@ import os
 import sys
 from pathlib import Path
 
-from src.integrations.github_integration import GitHubIntegration
 from src.services.analyzer import analyze_message
+from src.services.pr_service import PRService
 from src.services.remediation_service import RemediationService
 from src.utils.logger import logger
 
-# Initialize Remediation Service
+# Initialize Services
 remediation_service = RemediationService()
+pr_service = PRService()
 
 
 def write_summary(issues: list):
@@ -53,6 +54,7 @@ def scan_directory(target_path: str, mode: str):
         sys.exit(1)
 
     issues_found = []
+    fixes_applied = 0
 
     # Determine files to scan
     files_to_scan = []
@@ -129,8 +131,11 @@ def scan_directory(target_path: str, mode: str):
 
                     if mode == "fix":
                         logger.info("Fix mode enabled: Attempting remediation")
-                        attempt_fix(file_path, result)
-                        issue_record["status"] = "Fix Attempted"
+                        if attempt_fix(file_path, result):
+                            fixes_applied += 1
+                            issue_record["status"] = "Fixed"
+                        else:
+                            issue_record["status"] = "Fix Failed"
 
                     issues_found.append(issue_record)
 
@@ -140,42 +145,23 @@ def scan_directory(target_path: str, mode: str):
     write_summary(issues_found)
     logger.info(f"Scan complete. Found {len(issues_found)} issues.")
 
+    if fixes_applied > 0:
+        logger.info(f"Initiating batch PR creation for {fixes_applied} fixes...")
+        pr_service.create_batch_pr(fixes_applied)
+
     if len(issues_found) > 0 and mode == "scan":
         sys.exit(1)  # Fail build on issues in scan mode
 
 
-def attempt_fix(file_path: Path, issue: dict):
+def attempt_fix(file_path: Path, issue: dict) -> bool:
     """
-    Simulates a fix action via GitHub PR.
+    Applies the physical fix locally using RemediationService.
+    Does NOT create PRs directly.
     """
     logger.info(f"Attempting to remediate: {issue['reason']}")
 
     # 1. Apply Physical Fix (Static Analysis Engine)
-    # We pass the parent directory of the log file as context context to find k8s files
-    fix_applied = remediation_service.remediate_incident(issue, file_path.parent)
-
-    if not fix_applied:
-        logger.warning("Could not apply automated fix locally.")
-        return
-
-    repo_name = os.environ.get("GITHUB_REPOSITORY")
-    if not repo_name:
-        logger.warning(
-            "Not running in GitHub Actions (GITHUB_REPOSITORY missing). "
-            "Cannot create PR."
-        )
-        return
-
-    gh = GitHubIntegration()
-    if not gh.check_permissions():
-        logger.error("GitHub permissions check failed.")
-        return
-
-    # Create PR logic simulation
-    title = f"fix: Resolve {issue.get('reason')} in {file_path.name}"
-    # In real world: git commit -am "fix..." && git push
-    # gh.create_pr(...)
-    logger.info(f"Would create PR on {repo_name} with title: {title}")
+    return remediation_service.remediate_incident(issue, file_path.parent)
 
 
 def main():
