@@ -1,6 +1,6 @@
 [project]
 name = "responseiq"
-version = "1.2.0"
+version = "1.1.0"
 description = "AI-powered remediation copilot for incident response"
 authors = [{ name = "Youth Innovations", email = "info.youthinno@gmail.com" }]
 requires-python = "==3.12.*"
@@ -25,6 +25,9 @@ dependencies = [
     "opentelemetry-exporter-otlp>=1.15.0",
     "ruamel-yaml>=0.19.1",
 ]
+
+[project.scripts]
+responseiq = "src.cli:main"
 
 [dependency-groups]
 dev = [
