@@ -7,7 +7,7 @@ branding:
 
 inputs:
   target:
-    description: 'Directory to scan'
+    description: 'Directory or File to scan'
     required: false
     default: '.'
   mode:

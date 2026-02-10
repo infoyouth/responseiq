@@ -12,7 +12,6 @@ from src.utils.logger import logger
 remediation_service = RemediationService()
 
 
-
 def write_summary(issues: list):
     """
     Writes a Markdown summary to GITHUB_STEP_SUMMARY.
@@ -30,12 +29,15 @@ def write_summary(issues: list):
         f.write(f"⚠️ Found **{len(issues)}** potential issues:\n\n")
         f.write("| Severity | File | Reason | Action |\n")
         f.write("| :--- | :--- | :--- | :--- |\n")
-        
+
         for issue in issues:
             sev_icon = "🔴" if issue['severity'] == "critical" else "🟠"
-            file_name = issue['path'].name
-            f.write(f"| {sev_icon} {issue['severity'].upper()} | `{file_name}` | {issue['reason']} | {issue['status']} |\n")
-        
+            file_name = Path(issue['file']).name
+            f.write(
+                f"| {sev_icon} {issue['severity'].upper()} | `{file_name}` | "
+                f"{issue['reason']} | {issue['status']} |\n"
+            )
+
         f.write("\n_Analysis performed by ResponseIQ_\n")
 
 
@@ -51,7 +53,7 @@ def scan_directory(target_path: str, mode: str):
         sys.exit(1)
 
     issues_found = []
-    
+
     # Determine files to scan
     files_to_scan = []
     if path.is_file():
@@ -72,43 +74,59 @@ def scan_directory(target_path: str, mode: str):
                 msg = f.read(1024)
 
             # Broaden detection for CLI to catch 'critical' and 'panic'
-                msg_lower = msg.lower()
-                detection_keywords = ["error", "fail", "exception", "panic", "critical"]
-                
-                if any(k in msg_lower for k in detection_keywords):
-                    logger.info(f"Analyzing potential issue in {file_path}")
-                    # Simulate result for demo if LLM not configured
-                    result = analyze_message(msg)
+            msg_lower = msg.lower()
+            detection_keywords = [
+                "error", "fail", "exception", "panic", "critical"
+            ]
 
-                    # Fallback if analyzer didn't catch matched keyword or severity is too low
-                    # but we strongly suspect it due to keywords
-                    if not result and "panic" in msg_lower:
-                         result = {"severity": "critical", "reason": "System Panic Detected (Keyword)"}
-                    
-                    if result and ((result.get("severity") in ["high", "critical"]) or "panic" in msg_lower):
-                         # Force upgrade severity if panic present
-                         if "panic" in msg_lower:
-                             result["severity"] = "critical"
-                             
-                         logger.warning(
-                            f"Likely incident detected in {file}: {result['reason']}"
+            if any(k in msg_lower for k in detection_keywords):
+                logger.info(f"Analyzing potential issue in {file_path}")
+                # Simulate result for demo if LLM not configured
+                result = analyze_message(msg)
+
+                # Fallback if analyzer missed keywords or severity is low
+                # but we suspect it due to keywords
+                if not result and "panic" in msg_lower:
+                    result = {
+                        "severity": "critical",
+                        "reason": "System Panic Detected (Keyword)"
+                    }
+
+                if result and (
+                    (result.get("severity") in ["high", "critical"]) or
+                    "panic" in msg_lower
+                ):
+                    # Force upgrade severity if panic present
+                    if "panic" in msg_lower:
+                        result["severity"] = "critical"
+
+                    logger.warning(
+                        f"Likely incident detected in {file_path}: {result['reason']}"
+                    )
+
+                    issue_record = {
+                        "file": str(file_path),
+                        "severity": result["severity"],
+                        "context": msg.strip()[:200],
+                        "recommendation": result.get("reason", "Unknown"),
+                        "status": "Detected"
+                    }
+
+                    if mode == "fix":
+                        logger.info(
+                            "Fix mode enabled: Attempting remediation"
                         )
-                        
-                        if mode == "fix":
-                            logger.info(
-                                "Fix mode enabled: Attempting remediation (simulation)"
-                            )
-                            attempt_fix(file_path, result)
-                            issue_record["status"] = "Fix Attempted"
+                        attempt_fix(file_path, result)
+                        issue_record["status"] = "Fix Attempted"
 
-                        issues_found.append(issue_record)
+                    issues_found.append(issue_record)
 
-            except Exception as e:
-                logger.debug(f"Skipping {file}: {e}")
+        except Exception as e:
+            logger.debug(f"Skipping {file_path}: {e}")
 
     write_summary(issues_found)
     logger.info(f"Scan complete. Found {len(issues_found)} issues.")
-    
+
     if len(issues_found) > 0 and mode == "scan":
         sys.exit(1)  # Fail build on issues in scan mode
 
@@ -118,11 +136,11 @@ def attempt_fix(file_path: Path, issue: dict):
     Simulates a fix action via GitHub PR.
     """
     logger.info(f"Attempting to remediate: {issue['reason']}")
-    
+
     # 1. Apply Physical Fix (Static Analysis Engine)
     # We pass the parent directory of the log file as context context to find k8s files
     fix_applied = remediation_service.remediate_incident(issue, file_path.parent)
-    
+
     if not fix_applied:
         logger.warning("Could not apply automated fix locally.")
         return
@@ -145,7 +163,6 @@ def attempt_fix(file_path: Path, issue: dict):
     # In real world: git commit -am "fix..." && git push
     # gh.create_pr(...)
     logger.info(f"Would create PR on {repo_name} with title: {title}")
-
 
 
 def main():
