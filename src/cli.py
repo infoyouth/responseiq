@@ -108,7 +108,7 @@ def scan_directory(target_path: str, mode: str):
                         "file": str(file_path),
                         "severity": result["severity"],
                         "context": msg.strip()[:200],
-                        "recommendation": result.get("reason", "Unknown"),
+                        "reason": result.get("reason", "Unknown"),
                         "status": "Detected"
                     }
 
