@@ -170,6 +170,12 @@ def main():
     parser.add_argument(
         "--mode", default="scan", choices=["scan", "fix"], help="Operation mode"
     )
+    # Support for GitHub Action inputs
+    parser.add_argument("--action", choices=["scan", "fix"], help="Alias for --mode")
+    parser.add_argument(
+        "--url", help="Repository URL (e.g., https://github.com/owner/repo)"
+    )
+    parser.add_argument("--token", help="GitHub Token")
 
     # Ignored args that might be passed by action.yml but handled via ENV
     parser.add_argument("--github-token", help=argparse.SUPPRESS)
@@ -177,7 +183,20 @@ def main():
 
     args, unknown = parser.parse_known_args()
 
-    scan_directory(args.target, args.mode)
+    # Map Action inputs to CLI args
+    mode = args.action if args.action else args.mode
+
+    # Set Env vars from args if provided
+    if args.token:
+        os.environ["GITHUB_TOKEN"] = args.token
+    if args.url:
+        # Extract owner/repo from URL if possible, or use as is if logic supports it
+        # Expected format: https://github.com/owner/repo
+        if "github.com/" in args.url:
+            repo_slug = args.url.split("github.com/")[-1].replace(".git", "")
+            os.environ["GITHUB_REPOSITORY"] = repo_slug
+
+    scan_directory(args.target, mode)
 
 
 if __name__ == "__main__":

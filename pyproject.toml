@@ -1,6 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "responseiq"
-version = "1.2.0"
+version = "1.1.0"
 description = "AI-powered remediation copilot for incident response"
 authors = [{ name = "Youth Innovations", email = "info.youthinno@gmail.com" }]
 requires-python = "==3.12.*"
@@ -26,6 +30,9 @@ dependencies = [
     "ruamel-yaml>=0.19.1",
 ]
 
+[project.scripts]
+responseiq = "src.cli:main"
+
 [dependency-groups]
 dev = [
     "pytest",
@@ -40,6 +47,9 @@ dev = [
     "pre-commit",
     "safety",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.black]
 line-length = 88
