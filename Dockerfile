@@ -2,8 +2,12 @@
 FROM python:3.12-slim
 WORKDIR /app
 
-# Install system dependencies if needed (e.g. for some python packages)
-# RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+# git: required for GitClient (PR creation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
