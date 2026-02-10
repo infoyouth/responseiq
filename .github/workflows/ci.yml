@@ -110,10 +110,8 @@ jobs:
         run: uv sync --group dev --active
       - name: Bandit security scan
         run: uv run bandit -r src -ll
-      - name: Dependency vulnerability scan (safety-db)
-        uses: pyupio/safety-db-action@v1
-        with:
-          args: check --full-report
+      - name: Dependency vulnerability scan (safety)
+        run: uv run safety check --full-report
 
   pre-commit-on-pr:
     name: Pre-commit checks
@@ -137,7 +135,7 @@ jobs:
       - name: Sync dependencies
         run: uv sync --group dev --active
       - name: Run pre-commit
-        uses: pre-commit/action@v4
+        uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files
 
