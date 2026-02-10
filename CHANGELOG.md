@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-02-10)
+
+### Features
+
+- Implement PR automation logic and security fixes
+  ([`6716dd8`](https://github.com/infoyouth/responseiq/commit/6716dd80c766a2d9faece7264fc8eeec79ebf4d4))
+
+- **workflow**: Implement automated PR creation logic locally
+  ([`93ee7ac`](https://github.com/infoyouth/responseiq/commit/93ee7ac7eec0e517b59c987c90abc7d5439ba839))
+
+
 ## v1.1.0 (2026-02-10)
 
 ### Bug Fixes
