@@ -1,8 +1,8 @@
-import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 from ruamel.yaml import YAML
+
 
 class KubernetesPatcher:
     def __init__(self):
@@ -29,9 +29,14 @@ class KubernetesPatcher:
         except Exception:
             return False
 
-    def update_memory_limit(self, file_path: Path, container_name: str = None, new_limit: str = "512Mi") -> bool:
+    def update_memory_limit(
+        self,
+        file_path: Path,
+        container_name: Optional[str] = None,
+        new_limit: str = "512Mi",
+    ) -> bool:
         """
-        Updates the memory limit for a specific container or the first key container found.
+        Updates the memory limit for a specific container or the first key container.
         """
         data = self.load_deployment(file_path)
         if not data:
@@ -39,9 +44,14 @@ class KubernetesPatcher:
 
         # Navigate nested structure: spec -> template -> spec -> containers
         try:
-            containers = data.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+            containers = (
+                data.get("spec", {})
+                .get("template", {})
+                .get("spec", {})
+                .get("containers", [])
+            )
             target = None
-            
+
             if not containers:
                 return False
 
@@ -51,7 +61,7 @@ class KubernetesPatcher:
                         target = c
                         break
             else:
-                # Default to first container if not specified (common for single-container pods)
+                # Default to first container if not specified
                 target = containers[0]
 
             if target:
@@ -60,12 +70,12 @@ class KubernetesPatcher:
                     target["resources"] = {}
                 if "limits" not in target["resources"]:
                     target["resources"]["limits"] = {}
-                
+
                 # Apply update
                 target["resources"]["limits"]["memory"] = new_limit
                 return self.save_deployment(file_path, data)
-            
+
             return False
-            
+
         except Exception:
             return False

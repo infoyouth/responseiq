@@ -31,8 +31,8 @@ def write_summary(issues: list):
         f.write("| :--- | :--- | :--- | :--- |\n")
 
         for issue in issues:
-            sev_icon = "🔴" if issue['severity'] == "critical" else "🟠"
-            file_name = Path(issue['file']).name
+            sev_icon = "🔴" if issue["severity"] == "critical" else "🟠"
+            file_name = Path(issue["file"]).name
             f.write(
                 f"| {sev_icon} {issue['severity'].upper()} | `{file_name}` | "
                 f"{issue['reason']} | {issue['status']} |\n"
@@ -58,7 +58,14 @@ def scan_directory(target_path: str, mode: str):
     files_to_scan = []
     # Files to ignore during recursive scan (to avoid false positives in configs/docs)
     IGNORED_EXTENSIONS = {
-        ".yml", ".yaml", ".json", ".md", ".toml", ".pyc", ".pyo", ".lock"
+        ".yml",
+        ".yaml",
+        ".json",
+        ".md",
+        ".toml",
+        ".pyc",
+        ".pyo",
+        ".lock",
     }
 
     if path.is_file():
@@ -69,11 +76,11 @@ def scan_directory(target_path: str, mode: str):
                 # Skip hidden files and venv
                 if file.startswith(".") or "venv" in root:
                     continue
-                
+
                 # Check extension
                 if Path(file).suffix.lower() in IGNORED_EXTENSIONS:
                     continue
-                    
+
                 files_to_scan.append(Path(root) / file)
 
     for file_path in files_to_scan:
@@ -85,9 +92,7 @@ def scan_directory(target_path: str, mode: str):
 
             # Broaden detection for CLI to catch 'critical' and 'panic'
             msg_lower = msg.lower()
-            detection_keywords = [
-                "error", "fail", "exception", "panic", "critical"
-            ]
+            detection_keywords = ["error", "fail", "exception", "panic", "critical"]
 
             if any(k in msg_lower for k in detection_keywords):
                 logger.info(f"Analyzing potential issue in {file_path}")
@@ -99,12 +104,12 @@ def scan_directory(target_path: str, mode: str):
                 if not result and "panic" in msg_lower:
                     result = {
                         "severity": "critical",
-                        "reason": "System Panic Detected (Keyword)"
+                        "reason": "System Panic Detected (Keyword)",
                     }
 
                 if result and (
-                    (result.get("severity") in ["high", "critical"]) or
-                    "panic" in msg_lower
+                    (result.get("severity") in ["high", "critical"])
+                    or "panic" in msg_lower
                 ):
                     # Force upgrade severity if panic present
                     if "panic" in msg_lower:
@@ -119,13 +124,11 @@ def scan_directory(target_path: str, mode: str):
                         "severity": result["severity"],
                         "context": msg.strip()[:200],
                         "reason": result.get("reason", "Unknown"),
-                        "status": "Detected"
+                        "status": "Detected",
                     }
 
                     if mode == "fix":
-                        logger.info(
-                            "Fix mode enabled: Attempting remediation"
-                        )
+                        logger.info("Fix mode enabled: Attempting remediation")
                         attempt_fix(file_path, result)
                         issue_record["status"] = "Fix Attempted"
 
