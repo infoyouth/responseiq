@@ -56,6 +56,11 @@ def scan_directory(target_path: str, mode: str):
 
     # Determine files to scan
     files_to_scan = []
+    # Files to ignore during recursive scan (to avoid false positives in configs/docs)
+    IGNORED_EXTENSIONS = {
+        ".yml", ".yaml", ".json", ".md", ".toml", ".pyc", ".pyo", ".lock"
+    }
+
     if path.is_file():
         files_to_scan.append(path)
     else:
@@ -64,6 +69,11 @@ def scan_directory(target_path: str, mode: str):
                 # Skip hidden files and venv
                 if file.startswith(".") or "venv" in root:
                     continue
+                
+                # Check extension
+                if Path(file).suffix.lower() in IGNORED_EXTENSIONS:
+                    continue
+                    
                 files_to_scan.append(Path(root) / file)
 
     for file_path in files_to_scan:
