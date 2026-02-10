@@ -36,6 +36,9 @@ def test_postgres_integration():
         ready = wait_for("http://localhost:8000/health") or wait_for(
             "http://localhost:8000/docs"
         )
+        if not ready:
+            print("App failed to start. Logs:")
+            subprocess.call(["docker", "compose", "logs", "app"])
         assert ready, "app did not start"
 
         # Post a log
@@ -43,15 +46,29 @@ def test_postgres_integration():
             "http://localhost:8000/logs",
             json={"message": "integration test critical panic"},
         )
+        if resp.status_code != 202:
+            print(f"POST /logs error: {resp.text}")
         assert resp.status_code == 202
         body = resp.json()
         assert "id" in body
 
         # Poll for incidents
-        incidents = requests.get("http://localhost:8000/incidents").json()
+        # Give a moment for background task
+        time.sleep(2)
+        resp_inc = requests.get("http://localhost:8000/incidents")
+        if resp_inc.status_code != 200:
+             print(f"GET /incidents error: {resp_inc.text}")
+        
+        assert resp_inc.status_code == 200
+        incidents = resp_inc.json()
+        
         assert any(
             (i.get("severity") == "high" or "panic" in (i.get("description") or ""))
             for i in incidents
         )
+    except Exception:
+        subprocess.call(["docker", "compose", "logs", "app"])
+        subprocess.call(["docker", "compose", "logs", "db"])
+        raise
     finally:
         subprocess.check_call(["docker", "compose", "down", "-v"])
