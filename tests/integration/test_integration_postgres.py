@@ -43,7 +43,7 @@ def test_postgres_integration():
             "http://localhost:8000/logs",
             json={"message": "integration test critical panic"},
         )
-        assert resp.status_code == 201
+        assert resp.status_code == 202
         body = resp.json()
         assert "id" in body
 

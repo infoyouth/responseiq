@@ -43,26 +43,27 @@ def test_fixtures_create_expected_incidents():
         SQLModel.metadata.drop_all(get_engine())
         init_db()
         payload = {"message": fx["message"]}
+
+        # Ingest Log
         resp = client.post("/logs", json=payload)
-        assert resp.status_code == 201
+        assert resp.status_code == 202
 
-        # after ingestion, query incidents
-        sev = fx.get("expected_incident_severity")
-
+        # Check Incidents
+        # Background task should have finished, so DB is updated.
         inc_resp = client.get("/incidents")
         assert inc_resp.status_code == 200
         incidents = inc_resp.json()
 
-        if sev is None:
-            # expect no incidents created for this message. Ensure none of the
-            # incidents correspond to this message's detected keywords. We
-            # assume fixtures are limited so this asserts no incidents at all.
-            assert all(
-                (i.get("severity") != "high" and i.get("severity") != "medium")
-                for i in incidents
-            )
+        expected_sev = fx.get("expected_incident_severity")
+
+        if expected_sev is None:
+            # expect NO incidents created for this log
+            # (or at least none matching severity?)
+            # The original test logic seemed to imply we check incidents.
+            # If expected is None, we expect empty list or list of unrelated?
+            # Since we drop_all() every loop, list should be empty.
+            assert len(incidents) == 0, f"Expected no incidents, found {incidents}"
         else:
             # expect at least one incident with the expected severity
-            assert any(
-                i.get("severity") == sev for i in incidents
-            ), f"expected severity {sev} in incidents: {incidents}"
+            found = any(i.get("severity") == expected_sev for i in incidents)
+            assert found, f"Expected severity {expected_sev} in incidents: {incidents}"

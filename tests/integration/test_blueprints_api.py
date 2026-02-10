@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from src.app import app
+from src.config.settings import settings
 
 client = TestClient(app)
 
@@ -22,13 +23,13 @@ def test_get_blueprint_detail():
 
 def test_reload_blueprints_requires_token(monkeypatch):
     # Ensure reload endpoint requires token when env var is set
-    monkeypatch.setenv("BLUEPRINT_RELOAD_TOKEN", "secret-token")
+    monkeypatch.setattr(settings, "blueprint_reload_token", "secret-token")
     resp = client.post("/blueprints/reload")
     assert resp.status_code == 401
 
 
 def test_reload_blueprints_with_token(monkeypatch):
-    monkeypatch.setenv("BLUEPRINT_RELOAD_TOKEN", "secret-token")
+    monkeypatch.setattr(settings, "blueprint_reload_token", "secret-token")
     resp = client.post("/blueprints/reload", headers={"X-Admin-Token": "secret-token"})
     assert resp.status_code == 200
     assert resp.json().get("reloaded") is True

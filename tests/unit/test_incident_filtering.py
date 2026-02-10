@@ -7,7 +7,7 @@ client = TestClient(app)
 
 def post_log(message: str):
     resp = client.post("/logs", json={"message": message})
-    assert resp.status_code == 201
+    assert resp.status_code == 202
     return resp.json()
 
 

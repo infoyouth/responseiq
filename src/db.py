@@ -1,7 +1,7 @@
-import os
-
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
+
+from .config.settings import settings
 
 # Reuse models from src.models to avoid duplicate table definitions
 from .models import Incident, Log  # noqa: F401
@@ -18,7 +18,7 @@ def get_engine():
     if _engine is not None:
         return _engine
 
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./responseiq.db")
+    database_url = settings.database_url
     # Configure engine to support in-memory sqlite for tests (thread-safe)
     if database_url == "sqlite:///:memory:":
         _engine = create_engine(
