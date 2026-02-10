@@ -1,6 +1,6 @@
 [project]
 name = "responseiq"
-version = "1.0.0"
+version = "1.1.0"
 description = "AI-powered remediation copilot for incident response"
 authors = [{ name = "Youth Innovations", email = "info.youthinno@gmail.com" }]
 requires-python = "==3.12.*"
