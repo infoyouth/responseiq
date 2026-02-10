@@ -110,10 +110,8 @@ jobs:
         run: uv sync --group dev --active
       - name: Bandit security scan
         run: uv run bandit -r src -ll
-      - name: Dependency vulnerability scan (safety-db)
-        uses: pyupio/safety-db-action@v1
-        with:
-          args: check --full-report
+      - name: Dependency vulnerability scan (safety)
+        run: uv run safety check --full-report
 
   pre-commit-on-pr:
     name: Pre-commit checks
@@ -137,7 +135,7 @@ jobs:
       - name: Sync dependencies
         run: uv sync --group dev --active
       - name: Run pre-commit
-        uses: pre-commit/action@v4
+        uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files
 
@@ -151,6 +149,41 @@ jobs:
         run: |
           echo "License/policy scan step is a placeholder."
           echo "Replace with a proper license scanner action and configure required inputs."
+
+  check-changes:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    outputs:
+      run_integration: ${{ steps.filter.outputs.integration }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            integration:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'docker-compose.yml'
+              - 'Dockerfile'
+
+  check-docker-build:
+    name: Verify Docker build
+    runs-on: ubuntu-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.run_integration == 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: responseiq:test
 
   report:
     name: Upload reports
@@ -166,15 +199,23 @@ jobs:
             /tmp/bandit-output || ./
 
   integration-tests:
-    name: Integration tests (optional)
-    needs: setup-and-cache
+    name: Integration tests
+    needs: [setup-and-cache, check-changes]
     runs-on: ubuntu-latest
-    # Only run integration tests when explicitly requested via workflow_dispatch
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true'
+    if: |
+      needs.check-changes.outputs.run_integration == 'true' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker (already available on runners)
         run: docker --version
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/pyproject.toml') }}
       - name: Install UV
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Sync dependencies

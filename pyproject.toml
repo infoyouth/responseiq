@@ -21,6 +21,8 @@ dependencies = [
     "opentelemetry-instrumentation-logging",
     "psycopg2-binary",
     "sqlmodel",
+    "pydantic-settings>=2.12.0",
+    "opentelemetry-exporter-otlp>=1.15.0",
 ]
 
 [tool.uv]
@@ -34,13 +36,36 @@ dev-dependencies = [
     "mypy",
     "types-requests",
     "pbr",
+    "pre-commit",
+    "safety",
 ]
 
 [tool.black]
 line-length = 88
+
+[tool.isort]
+profile = "black"
 
 [tool.flake8]
 max-line-length = 88
 
 [tool.ruff]
 line-length = 88
+
+[tool.bandit]
+exclude_dirs = ["tests", "fixtures"]
+
+[tool.semantic_release]
+version_variable = [
+    "src/__version__.py:__version__",
+]
+version_toml = [
+    "pyproject.toml:project.version",
+]
+branch = "main"
+upload_to_pypi = false
+upload_to_release = true
+build_command = "pip install uv && uv build"
+commit_message = "chore(release): {version} [skip ci]"
+
+

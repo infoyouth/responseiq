@@ -2,8 +2,8 @@
 from contextlib import asynccontextmanager
 from typing import List
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
 
@@ -12,19 +12,40 @@ from .models import Incident, Log
 from .routers.blueprints import router as blueprints_router
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut
-from .services.analyzer import analyze_message
+from .services.incident_service import process_log_ingestion
+
+# Initialize logging/telemetry early
+from .utils.logger import logger
+from .utils.telemetry import setup_telemetry
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Telemetry setup could happen here or at module level,
+    # but module level is often needed for instrumenting imports.
+    # We'll call the setup function on the app object.
+    setup_telemetry(app)
+    logger.info("Service started successfully.")
     yield
+    logger.info("Service stopping.")
 
 
 app = FastAPI(
-    title="ResponseIQ MVP",
+    title="ResponseIQ",
     lifespan=lifespan,
 )
+
+
+# Global Exception Handler for reliability
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unexpected system error.")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "System encountered an error", "trace_id": "refer_to_logs"},
+    )
+
 
 # include routers
 app.include_router(blueprints_router)
@@ -51,12 +72,13 @@ POST_LOG_EXAMPLE = {
 
 @app.post(
     "/logs",
-    status_code=201,
+    status_code=202,
     response_model=LogOut,
-    summary="Ingest a log",
+    summary="Ingest log entry",
 )
 def ingest_log(
     payload: LogIn,
+    background_tasks: BackgroundTasks,
     session=Depends(get_session),
     x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
 ):
@@ -64,32 +86,20 @@ def ingest_log(
     required_key = __import__("os").environ.get("LOG_INGEST_API_KEY")
     if required_key and x_api_key != required_key:
         raise HTTPException(status_code=401, detail="invalid api key")
-    # create log (temporarily without analyzer severity)
+
+    # 1. Persist Log
     log = Log(message=payload.message, severity=payload.severity)
     session.add(log)
     session.commit()
     session.refresh(log)
 
-    # analyze and possibly create an incident
-    # persist analyzer-detected severity on the log when available
-    incident_meta = analyze_message(log.message)
-    if incident_meta:
-        detected_sev = incident_meta.get("severity")
-        # update log.severity if analyzer found something
-        if detected_sev and not log.severity:
-            log.severity = detected_sev
-            session.add(log)
-            session.commit()
-            session.refresh(log)
-
-        incident = Incident(
-            log_id=log.id,
-            severity=detected_sev,
-            description=incident_meta.get("reason"),
+    if not log.id:
+        raise HTTPException(
+            status_code=500, detail="Database failure: Log ID not generated"
         )
-        session.add(incident)
-        session.commit()
-        session.refresh(incident)
+
+    # 2. Assign analysis task
+    background_tasks.add_task(process_log_ingestion, log.id)
 
     return LogOut(
         id=log.id,

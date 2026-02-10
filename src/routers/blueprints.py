@@ -1,9 +1,9 @@
-import os
 from typing import List
 
 from fastapi import APIRouter, Header, HTTPException
 
 from ..blueprints import get, get_all
+from ..config.settings import settings
 from ..schemas.blueprint import Blueprint
 
 router = APIRouter(prefix="/blueprints", tags=["blueprints"])
@@ -27,7 +27,7 @@ def reload_blueprints_admin(
     x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")
 ):
     # Protect reload with a simple token set in env BLUEPRINT_RELOAD_TOKEN
-    required = os.environ.get("BLUEPRINT_RELOAD_TOKEN")
+    required = settings.blueprint_reload_token
     if required and x_admin_token != required:
         raise HTTPException(status_code=401, detail="unauthorized")
     # perform reload

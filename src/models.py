@@ -22,3 +22,6 @@ class Incident(SQLModel, table=True):  # type: ignore[call-arg]
     detected_at: datetime = Field(default_factory=_now)
     severity: str | None = None
     description: str | None = None
+    source: str | None = Field(
+        default="unknown", description="detection source: ai or rules"
+    )

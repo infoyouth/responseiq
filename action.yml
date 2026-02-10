@@ -1,0 +1,26 @@
+name: 'ResponseIQ Incident Response'
+description: 'Automated Log Analysis and Incident Remediation'
+author: 'ResponseIQ'
+branding:
+  icon: 'activity'
+  color: 'blue'
+
+inputs:
+  github_token:
+    description: 'GitHub Token with permissions to create PRs'
+    required: true
+  openai_api_key:
+    description: 'OpenAI API Key for intelligent log analysis'
+    required: false
+  responseiq_url:
+    description: 'URL of the deployed ResponseIQ instance (if not running local)'
+    required: false
+    default: 'http://localhost:8000'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  env:
+    GITHUB_TOKEN: ${{ inputs.github_token }}
+    OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+    ENVIRONMENT: 'prod'

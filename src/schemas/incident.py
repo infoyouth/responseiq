@@ -8,3 +8,4 @@ class IncidentOut(BaseModel):
     title: Optional[str] = None
     severity: Optional[str] = None
     description: Optional[str] = None
+    source: Optional[str] = "unknown"

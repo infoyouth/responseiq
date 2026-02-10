@@ -15,7 +15,7 @@ def test_analyzer_detects_error():
 def test_log_ingestion_and_incident_creation():
     payload = {"message": "critical: panic when allocating resource"}
     resp = client.post("/logs", json=payload)
-    assert resp.status_code == 201
+    assert resp.status_code == 202
     body = resp.json()
     assert "id" in body
     # the ingestion should return analyzer-detected severity on the log

@@ -9,8 +9,8 @@ def test_duplicate_logs_are_stored():
     payload = {"message": "critical: panic when allocating resource"}
     r1 = client.post("/logs", json=payload)
     r2 = client.post("/logs", json=payload)
-    assert r1.status_code == 201
-    assert r2.status_code == 201
+    assert r1.status_code == 202
+    assert r2.status_code == 202
     b1 = r1.json()
     b2 = r2.json()
     # Stored as separate rows (IDs different)
