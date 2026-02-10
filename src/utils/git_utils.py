@@ -1,5 +1,5 @@
 import os
-import subprocess
+import subprocess  # nosec B404
 from pathlib import Path
 from typing import Optional
 
@@ -13,8 +13,12 @@ class GitClient:
     def run(self, args: list) -> bool:
         try:
             cmd = ["git"] + args
-            subprocess.run(
-                cmd, cwd=self.cwd, capture_output=True, text=True, check=True
+            subprocess.run(  # nosec
+                cmd,
+                cwd=self.cwd,
+                capture_output=True,
+                text=True,
+                check=True,
             )
             return True
         except subprocess.CalledProcessError as e:
@@ -47,7 +51,7 @@ class GitClient:
         # (Though our current run implementation logs stderr which might
         # contain it if git echoes it back)
         try:
-            subprocess.run(
+            subprocess.run(  # nosec
                 ["git", "push", remote_url, branch_name],
                 cwd=self.cwd,
                 check=True,
