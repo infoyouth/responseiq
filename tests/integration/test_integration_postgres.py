@@ -57,11 +57,11 @@ def test_postgres_integration():
         time.sleep(2)
         resp_inc = requests.get("http://localhost:8000/incidents")
         if resp_inc.status_code != 200:
-             print(f"GET /incidents error: {resp_inc.text}")
-        
+            print(f"GET /incidents error: {resp_inc.text}")
+
         assert resp_inc.status_code == 200
         incidents = resp_inc.json()
-        
+
         assert any(
             (i.get("severity") == "high" or "panic" in (i.get("description") or ""))
             for i in incidents
