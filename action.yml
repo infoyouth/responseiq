@@ -33,7 +33,6 @@ runs:
     - "run"
     - "--project"
     - "/app"
-    - "--no-project"  # Do not look for project in current dir (which is github workspace)
     - "python"
     - "-m"
     - "src.cli"
