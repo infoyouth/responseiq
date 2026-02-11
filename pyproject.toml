@@ -28,6 +28,7 @@ dependencies = [
     "pydantic-settings>=2.12.0",
     "opentelemetry-exporter-otlp>=1.15.0",
     "ruamel-yaml>=0.19.1",
+    "aiofiles",
 ]
 
 [project.scripts]
@@ -36,6 +37,7 @@ responseiq = "src.cli:main"
 [dependency-groups]
 dev = [
     "pytest",
+    "pytest-asyncio",
     "black",
     "ruff",
     "flake8",
@@ -43,25 +45,27 @@ dev = [
     "bandit",
     "mypy",
     "types-requests",
+    "types-aiofiles",
     "pbr",
     "pre-commit",
     "safety",
+    "pytest-cov>=7.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
 
 [tool.black]
-line-length = 88
+line-length = 120
 
 [tool.isort]
 profile = "black"
 
 [tool.flake8]
-max-line-length = 88
+max-line-length = 120
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 
 [tool.bandit]
 exclude_dirs = ["tests", "fixtures"]
@@ -78,5 +82,4 @@ upload_to_pypi = false
 upload_to_release = true
 build_command = "pip install uv && uv build"
 commit_message = "chore(release): {version} [skip ci]"
-
 

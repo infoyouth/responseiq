@@ -33,9 +33,7 @@ def test_postgres_integration():
 
     try:
         # wait for app to be ready
-        ready = wait_for("http://localhost:8000/health") or wait_for(
-            "http://localhost:8000/docs"
-        )
+        ready = wait_for("http://localhost:8000/health") or wait_for("http://localhost:8000/docs")
         if not ready:
             print("App failed to start. Logs:")
             subprocess.call(["docker", "compose", "logs", "app"])
@@ -62,10 +60,7 @@ def test_postgres_integration():
         assert resp_inc.status_code == 200
         incidents = resp_inc.json()
 
-        assert any(
-            (i.get("severity") == "high" or "panic" in (i.get("description") or ""))
-            for i in incidents
-        )
+        assert any((i.get("severity") == "high" or "panic" in (i.get("description") or "")) for i in incidents)
     except Exception:
         subprocess.call(["docker", "compose", "logs", "app"])
         subprocess.call(["docker", "compose", "logs", "db"])

@@ -1,9 +1,11 @@
 import argparse
+import asyncio
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
-from src.services.analyzer import analyze_message
+from src.services.analyzer import analyze_message_async
 from src.services.pr_service import PRService
 from src.services.remediation_service import RemediationService
 from src.utils.logger import logger
@@ -42,9 +44,71 @@ def write_summary(issues: list):
         f.write("\n_Analysis performed by ResponseIQ_\n")
 
 
-def scan_directory(target_path: str, mode: str):
+async def process_file(file_path: Path, mode: str) -> Optional[dict]:
     """
-    Scans a directory for known issues.
+    Async worker to process a single file.
+    Uses Parallel Log Processing for large files.
+    """
+    try:
+        msg = ""
+        # Advanced: Use ParallelLogProcessor if file is large (>1MB) logic is inside
+        from src.utils.log_processor import ParallelLogProcessor
+
+        processor = ParallelLogProcessor()
+
+        # This will auto-switch between "fast read" and "parallel map-reduce"
+        msg = await processor.scan_large_file(file_path)
+
+        if not msg:
+            return None
+
+        msg_lower = msg.lower()
+        detection_keywords = ["error", "fail", "exception", "panic", "critical"]
+
+        if any(k in msg_lower for k in detection_keywords):
+            logger.info(f"Analyzing potential issue in {file_path}")
+
+            # Use async analyzer
+            result = await analyze_message_async(msg)
+
+            # Fallback if analyzer missed keywords or severity is low
+            if not result and "panic" in msg_lower:
+                result = {
+                    "severity": "critical",
+                    "reason": "System Panic Detected (Keyword)",
+                }
+
+            if result and ((result.get("severity") in ["high", "critical"]) or "panic" in msg_lower):
+                if "panic" in msg_lower:
+                    result["severity"] = "critical"
+
+                logger.warning(f"Likely incident detected in {file_path}: {result['reason']}")
+
+                issue_record = {
+                    "file": str(file_path),
+                    "severity": result["severity"],
+                    "context": msg.strip()[:200],
+                    "reason": result.get("reason", "Unknown"),
+                    "status": "Detected",
+                }
+
+                if mode == "fix":
+                    logger.info("Fix mode enabled: Attempting remediation")
+                    if await attempt_fix(file_path, result):
+                        issue_record["status"] = "Fixed"
+                    else:
+                        issue_record["status"] = "Fix Failed"
+
+                return issue_record
+    except Exception as e:
+        logger.debug(f"Skipping {file_path}: {e}")
+
+    return None
+
+
+async def scan_directory_async(target_path: str, mode: str):
+    """
+    Scans a directory for known issues using async concurrency.
     """
     logger.info(f"Starting ResponseIQ CLI in '{mode}' mode on '{target_path}'")
 
@@ -53,12 +117,8 @@ def scan_directory(target_path: str, mode: str):
         logger.error(f"Target path {target_path} does not exist.")
         sys.exit(1)
 
-    issues_found = []
-    fixes_applied = 0
-
     # Determine files to scan
     files_to_scan = []
-    # Files to ignore during recursive scan (to avoid false positives in configs/docs)
     IGNORED_EXTENSIONS = {
         ".yml",
         ".yaml",
@@ -74,86 +134,38 @@ def scan_directory(target_path: str, mode: str):
         files_to_scan.append(path)
     else:
         for root, dirs, files in os.walk(path):
+            if "venv" in root or ".git" in root:
+                continue
             for file in files:
-                # Skip hidden files and venv
-                if file.startswith(".") or "venv" in root:
+                if file.startswith("."):
                     continue
-
-                # Check extension
                 if Path(file).suffix.lower() in IGNORED_EXTENSIONS:
                     continue
-
                 files_to_scan.append(Path(root) / file)
 
-    for file_path in files_to_scan:
-        try:
-            # Read first 1KB to detect issues (simulation)
-            msg = ""
-            with open(file_path, "r", errors="ignore") as f:
-                msg = f.read(1024)
+    # Create tasks for all files
+    tasks = [process_file(f, mode) for f in files_to_scan]
 
-            # Broaden detection for CLI to catch 'critical' and 'panic'
-            msg_lower = msg.lower()
-            detection_keywords = ["error", "fail", "exception", "panic", "critical"]
+    # Run them concurrently
+    results = await asyncio.gather(*tasks)
 
-            if any(k in msg_lower for k in detection_keywords):
-                logger.info(f"Analyzing potential issue in {file_path}")
-                # Simulate result for demo if LLM not configured
-                result = analyze_message(msg)
-
-                # Fallback if analyzer missed keywords or severity is low
-                # but we suspect it due to keywords
-                if not result and "panic" in msg_lower:
-                    result = {
-                        "severity": "critical",
-                        "reason": "System Panic Detected (Keyword)",
-                    }
-
-                if result and (
-                    (result.get("severity") in ["high", "critical"])
-                    or "panic" in msg_lower
-                ):
-                    # Force upgrade severity if panic present
-                    if "panic" in msg_lower:
-                        result["severity"] = "critical"
-
-                    logger.warning(
-                        f"Likely incident detected in {file_path}: {result['reason']}"
-                    )
-
-                    issue_record = {
-                        "file": str(file_path),
-                        "severity": result["severity"],
-                        "context": msg.strip()[:200],
-                        "reason": result.get("reason", "Unknown"),
-                        "status": "Detected",
-                    }
-
-                    if mode == "fix":
-                        logger.info("Fix mode enabled: Attempting remediation")
-                        if attempt_fix(file_path, result):
-                            fixes_applied += 1
-                            issue_record["status"] = "Fixed"
-                        else:
-                            issue_record["status"] = "Fix Failed"
-
-                    issues_found.append(issue_record)
-
-        except Exception as e:
-            logger.debug(f"Skipping {file_path}: {e}")
+    # Filter out None results
+    issues_found = [r for r in results if r is not None]
 
     write_summary(issues_found)
     logger.info(f"Scan complete. Found {len(issues_found)} issues.")
+
+    fixes_applied = sum(1 for i in issues_found if i["status"] == "Fixed")
 
     if fixes_applied > 0:
         logger.info(f"Initiating batch PR creation for {fixes_applied} fixes...")
         pr_service.create_batch_pr(fixes_applied)
 
     if len(issues_found) > 0 and mode == "scan":
-        sys.exit(1)  # Fail build on issues in scan mode
+        sys.exit(1)
 
 
-def attempt_fix(file_path: Path, issue: dict) -> bool:
+async def attempt_fix(file_path: Path, issue: dict) -> bool:
     """
     Applies the physical fix locally using RemediationService.
     Does NOT create PRs directly.
@@ -161,20 +173,16 @@ def attempt_fix(file_path: Path, issue: dict) -> bool:
     logger.info(f"Attempting to remediate: {issue['reason']}")
 
     # 1. Apply Physical Fix (Static Analysis Engine)
-    return remediation_service.remediate_incident(issue, file_path.parent)
+    return await remediation_service.remediate_incident(issue, file_path.parent)
 
 
 def main():
     parser = argparse.ArgumentParser(description="ResponseIQ CLI")
     parser.add_argument("--target", default=".", help="Directory to scan")
-    parser.add_argument(
-        "--mode", default="scan", choices=["scan", "fix"], help="Operation mode"
-    )
+    parser.add_argument("--mode", default="scan", choices=["scan", "fix"], help="Operation mode")
     # Support for GitHub Action inputs
     parser.add_argument("--action", choices=["scan", "fix"], help="Alias for --mode")
-    parser.add_argument(
-        "--url", help="Repository URL (e.g., https://github.com/owner/repo)"
-    )
+    parser.add_argument("--url", help="Repository URL (e.g., https://github.com/owner/repo)")
     parser.add_argument("--token", help="GitHub Token")
 
     # Ignored args that might be passed by action.yml but handled via ENV
@@ -190,13 +198,17 @@ def main():
     if args.token:
         os.environ["GITHUB_TOKEN"] = args.token
     if args.url:
-        # Extract owner/repo from URL if possible, or use as is if logic supports it
-        # Expected format: https://github.com/owner/repo
         if "github.com/" in args.url:
             repo_slug = args.url.split("github.com/")[-1].replace(".git", "")
             os.environ["GITHUB_REPOSITORY"] = repo_slug
 
-    scan_directory(args.target, mode)
+    try:
+        asyncio.run(scan_directory_async(args.target, mode))
+    except KeyboardInterrupt:
+        logger.info("Scan cancelled by user.")
+    except Exception as e:
+        logger.exception(f"Fatal error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

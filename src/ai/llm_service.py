@@ -7,11 +7,11 @@ from src.config.settings import settings
 from src.utils.logger import logger
 
 
-def analyze_with_llm(log_text: str) -> Optional[Dict[str, Any]]:
+async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Dict[str, Any]]:
     """
     Analyzes log using OpenAI API if available.
     Returns structured data if successful, None if configured to skip or fails.
-    Synchronous version for compatibility with current background worker threads.
+    Asynchronous version for high-throughput processing.
     """
     if not settings.openai_api_key:
         logger.debug("OpenAI API key not set. Skipping AI analysis.")
@@ -21,6 +21,12 @@ def analyze_with_llm(log_text: str) -> Optional[Dict[str, Any]]:
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
+    # Enrich the prompt with source code if available
+    final_user_content = f"Log content: {log_text}"
+    if code_context:
+        final_user_content += f"\n\n{code_context}"
+        logger.info("Enriched AI Prompt with Source Code Context")
+
     # Prompt asking for specific JSON format to ensure compatibility
     payload = {
         "model": "gpt-3.5-turbo",
@@ -28,22 +34,24 @@ def analyze_with_llm(log_text: str) -> Optional[Dict[str, Any]]:
             {
                 "role": "system",
                 "content": (
-                    "You are a DevOps Incident Analyzer. Analyze the log. "
+                    "You are a DevOps Incident Analyzer. Analyze the log AND the provided source code context. "
+                    "Pinpoint the exact line of code causing the issue if visible. "
                     "Return a JSON object with keys: 'title' (string), "
                     "'severity' (low/medium/high), 'description' (string), "
-                    "'remediation' (string). Do not add markdown formatting."
+                    "'remediation' (string). The remediation should be a precise code change if possible. "
+                    "Do not add markdown formatting."
                 ),
             },
-            {"role": "user", "content": f"Log content: {log_text}"},
+            {"role": "user", "content": final_user_content},
         ],
         "temperature": 0.0,
-        "max_tokens": 150,
+        "max_tokens": 300,  # Increased tokens for detailed code fixes
     }
 
     try:
-        # Use sync Client
-        with httpx.Client(timeout=5.0) as client:
-            response = client.post(
+        # Use Async Client with context manager
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 json=payload,
                 headers=headers,
@@ -71,9 +79,7 @@ def analyze_with_llm(log_text: str) -> Optional[Dict[str, Any]]:
                 return None
 
     except httpx.RequestError as e:
-        logger.warning(
-            f"LLM Connection Error: {str(e)}. Falling back to local parsers."
-        )
+        logger.warning(f"LLM Connection Error: {str(e)}. Falling back to local parsers.")
         return None
     except Exception as e:
         logger.exception(f"Unexpected error in LLM analysis: {str(e)}")

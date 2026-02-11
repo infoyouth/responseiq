@@ -25,9 +25,7 @@ class GitClient:
             logger.error(f"Git command failed: {' '.join(cmd)}\nStderr: {e.stderr}")
             return False
 
-    def configure_user(
-        self, name: str = "ResponseIQ Bot", email: str = "bot@responseiq.io"
-    ):
+    def configure_user(self, name: str = "ResponseIQ Bot", email: str = "bot@responseiq.io"):
         self.run(["config", "user.name", name])
         self.run(["config", "user.email", email])
 

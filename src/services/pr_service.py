@@ -74,9 +74,7 @@ class PRService:
             "Please review the changes before merging."
         )
 
-        pr_url = self.gh.create_pr(
-            repo_name=repo_name, title=pr_title, body=pr_body, head=branch_name
-        )
+        pr_url = self.gh.create_pr(repo_name=repo_name, title=pr_title, body=pr_body, head=branch_name)
 
         if pr_url:
             logger.info(f"🚀 PR Created Successfully: {pr_url}")

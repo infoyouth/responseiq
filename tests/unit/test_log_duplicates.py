@@ -22,9 +22,6 @@ def test_duplicate_logs_are_stored():
     incidents = resp.json()
     # Expect at least two incidents matching panic/critical
     panic_incidents = [
-        i
-        for i in incidents
-        if (i.get("title") or "").lower().find("panic") >= 0
-        or i.get("severity") == "high"
+        i for i in incidents if (i.get("title") or "").lower().find("panic") >= 0 or i.get("severity") == "high"
     ]
     assert len(panic_incidents) >= 2
