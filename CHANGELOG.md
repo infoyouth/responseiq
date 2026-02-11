@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.2.1 (2026-02-10)
+
+### Bug Fixes
+
+- **cli**: Support --action argument and register cli script
+  ([`642afe7`](https://github.com/infoyouth/responseiq/commit/642afe75d4f94d60c4cd87f94f9fd0e4ee9d1a45))
+
+### Build System
+
+- Configure hatchling build system and packages
+  ([`af76f8f`](https://github.com/infoyouth/responseiq/commit/af76f8f67ddf204b817d6ba88e75d114bdf0401d))
+
+
 ## v1.2.0 (2026-02-10)
 
 ### Features
