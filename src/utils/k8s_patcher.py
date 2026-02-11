@@ -44,12 +44,7 @@ class KubernetesPatcher:
 
         # Navigate nested structure: spec -> template -> spec -> containers
         try:
-            containers = (
-                data.get("spec", {})
-                .get("template", {})
-                .get("spec", {})
-                .get("containers", [])
-            )
+            containers = data.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
             target = None
 
             if not containers:

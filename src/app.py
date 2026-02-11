@@ -94,9 +94,7 @@ def ingest_log(
     session.refresh(log)
 
     if not log.id:
-        raise HTTPException(
-            status_code=500, detail="Database failure: Log ID not generated"
-        )
+        raise HTTPException(status_code=500, detail="Database failure: Log ID not generated")
 
     # 2. Assign analysis task
     background_tasks.add_task(process_log_ingestion, log.id)

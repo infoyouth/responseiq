@@ -8,14 +8,10 @@ from src.utils.logger import logger
 
 class GitHubIntegration:
     def __init__(self):
-        self.token = (
-            settings.github_token.get_secret_value() if settings.github_token else None
-        )
+        self.token = settings.github_token.get_secret_value() if settings.github_token else None
         self.client = Github(self.token) if self.token else None
 
-    def create_pr(
-        self, repo_name: str, title: str, body: str, head: str, base: str = "main"
-    ) -> Optional[str]:
+    def create_pr(self, repo_name: str, title: str, body: str, head: str, base: str = "main") -> Optional[str]:
         """
         Creates a Pull Request in the specified repository.
         """

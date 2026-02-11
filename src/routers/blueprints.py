@@ -23,9 +23,7 @@ def get_blueprint(blueprint_id: str):
 
 
 @router.post("/reload", summary="Reload blueprints from disk")
-def reload_blueprints_admin(
-    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")
-):
+def reload_blueprints_admin(x_admin_token: str | None = Header(default=None, alias="X-Admin-Token")):
     # Protect reload with a simple token set in env BLUEPRINT_RELOAD_TOKEN
     required = settings.blueprint_reload_token
     if required and x_admin_token != required:

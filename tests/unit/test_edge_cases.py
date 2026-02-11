@@ -23,9 +23,7 @@ def test_analyzer_none_creates_no_incident():
     assert r.status_code == 202
     # ensure no incident created for that log
     incidents = client.get("/incidents").json()
-    assert all(
-        ((i.get("description") or "").lower().find("benign") == -1) for i in incidents
-    )
+    assert all(((i.get("description") or "").lower().find("benign") == -1) for i in incidents)
 
 
 def test_unexpected_severity_handled_gracefully(monkeypatch):

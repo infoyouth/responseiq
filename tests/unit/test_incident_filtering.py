@@ -28,10 +28,7 @@ def test_filter_high_returns_only_high():
     assert len(all_inc) >= 2
 
     high_inc = get_incidents("high")
-    assert all(
-        (i.get("severity") == "high" or i.get("title", "").lower().find("panic") >= 0)
-        for i in high_inc
-    )
+    assert all((i.get("severity") == "high" or i.get("title", "").lower().find("panic") >= 0) for i in high_inc)
     assert len(high_inc) >= 1
 
 

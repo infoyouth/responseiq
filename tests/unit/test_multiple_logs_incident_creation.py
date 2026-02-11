@@ -37,11 +37,7 @@ def test_multiple_logs_only_matching_create_incidents():
     # At least one incident should exist for the 'error' log
     # Note: Description might contain 'matched: error' or similar
     assert any(
-        (
-            "error" in (i.get("description") or "").lower()
-            or i.get("title") == "error"
-            or i.get("severity") == "medium"
-        )
+        ("error" in (i.get("description") or "").lower() or i.get("title") == "error" or i.get("severity") == "medium")
         for i in incidents
     )
 

@@ -40,6 +40,4 @@ def process_log_ingestion(log_id: int) -> None:
             session.add(incident)
 
             session.commit()
-            logger.info(
-                "Incident created from log.", incident_id=incident.id, log_id=log.id
-            )
+            logger.info("Incident created from log.", incident_id=incident.id, log_id=log.id)
