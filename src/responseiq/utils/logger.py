@@ -2,7 +2,7 @@ import sys
 
 from loguru import logger
 
-from src.config.settings import settings
+from responseiq.config.settings import settings
 
 
 def setup_logging():

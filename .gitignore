@@ -206,3 +206,8 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 *.db
+system/
+
+CHANGELOG.md
+README_UV_Update.md
+ResponseIQ_Design_Document.md

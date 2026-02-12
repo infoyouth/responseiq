@@ -4,7 +4,7 @@ from typing import Optional
 
 import aiofiles
 
-from src.utils.logger import logger
+from responseiq.utils.logger import logger
 
 # Regex patterns for common stack traces (Python, Node, Go, Java mostly)
 # Captures: 1=File Path, 2=Line Number

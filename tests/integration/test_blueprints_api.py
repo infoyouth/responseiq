@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from src.app import app
-from src.config.settings import settings
+from responseiq.app import app
+from responseiq.config.settings import settings
 
 client = TestClient(app)
 

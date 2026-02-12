@@ -5,12 +5,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from src.__version__ import __version__
-from src.services.analyzer import analyze_message_async
-from src.services.pr_service import PRService
-from src.services.remediation_service import RemediationService
-from src.utils.config_loader import load_config
-from src.utils.logger import logger
+from responseiq.__version__ import __version__
+from responseiq.services.analyzer import analyze_message_async
+from responseiq.services.pr_service import PRService
+from responseiq.services.remediation_service import RemediationService
+from responseiq.utils.config_loader import load_config
+from responseiq.utils.logger import logger
 
 # Initialize Services
 remediation_service = RemediationService()
@@ -54,7 +54,7 @@ async def process_file(file_path: Path, mode: str) -> Optional[dict]:
     try:
         msg = ""
         # Advanced: Use ParallelLogProcessor if file is large (>1MB) logic is inside
-        from src.utils.log_processor import ParallelLogProcessor
+        from responseiq.utils.log_processor import ParallelLogProcessor
 
         processor = ParallelLogProcessor()
 

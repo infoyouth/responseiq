@@ -1,4 +1,4 @@
-from src.db import get_session, init_db
+from responseiq.db import get_session, init_db
 
 
 def test_db_init():

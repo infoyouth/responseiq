@@ -2,8 +2,8 @@ from typing import Optional
 
 from github import Github, GithubException
 
-from src.config.settings import settings
-from src.utils.logger import logger
+from responseiq.config.settings import settings
+from responseiq.utils.logger import logger
 
 
 class GitHubIntegration:

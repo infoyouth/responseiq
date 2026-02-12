@@ -1,9 +1,9 @@
 from sqlmodel import Session
 
-from src.db import get_engine
-from src.models import Incident, Log
-from src.services.analyzer import analyze_message
-from src.utils.logger import logger
+from responseiq.db import get_engine
+from responseiq.models import Incident, Log
+from responseiq.services.analyzer import analyze_message
+from responseiq.utils.logger import logger
 
 
 def process_log_ingestion(log_id: int) -> None:

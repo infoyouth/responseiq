@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from src.app import app
+from responseiq.app import app
 
 client = TestClient(app)
 
@@ -32,7 +32,7 @@ def test_unexpected_severity_handled_gracefully(monkeypatch):
         return {"severity": "criticality_unknown", "reason": "weird"}
 
     # patch where it is USED: in the incident_service
-    import src.services.incident_service as svc_module
+    import responseiq.services.incident_service as svc_module
 
     monkeypatch.setattr(svc_module, "analyze_message", fake_analyze)
 

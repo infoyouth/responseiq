@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from src.app import app
-from src.db import init_db
+from responseiq.app import app
+from responseiq.db import init_db
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +33,7 @@ def test_fixtures_create_expected_incidents():
     os.environ["DATABASE_URL"] = "sqlite:///:memory:"
     from sqlmodel import SQLModel
 
-    from src.db import get_engine, init_db
+    from responseiq.db import get_engine, init_db
 
     client = TestClient(app)
     fixtures = load_fixtures()

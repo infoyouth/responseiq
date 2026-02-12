@@ -1,4 +1,4 @@
-from src.blueprints import get, get_all
+from responseiq.blueprints import get, get_all
 
 
 def test_loader_returns_blueprints():

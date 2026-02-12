@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import List, Tuple
 
 # Context extractor patterns (shared)
-from src.utils.context_extractor import PATTERNS
-from src.utils.logger import logger
+from responseiq.utils.context_extractor import PATTERNS
+from responseiq.utils.logger import logger
 
 CHUNK_SIZE = 1024 * 1024 * 5  # 5MB chunks for parallel processing
 

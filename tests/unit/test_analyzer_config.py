@@ -1,7 +1,7 @@
-from src.config.settings import settings
-from src.parsers.custom_parser import KeywordParser
-from src.parsers.registry import registry
-from src.services import analyzer
+from responseiq.config.settings import settings
+from responseiq.parsers.custom_parser import KeywordParser
+from responseiq.parsers.registry import registry
+from responseiq.services import analyzer
 
 
 def test_reload_config_and_mapping(tmp_path, monkeypatch):
