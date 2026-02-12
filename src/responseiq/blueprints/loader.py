@@ -3,17 +3,19 @@ import logging
 import os
 from typing import Dict
 
-import yaml  # type: ignore
 from pydantic import ValidationError
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from ..schemas.blueprint import Blueprint
 
 _REGISTRY: Dict[str, Blueprint] = {}
+_YAML = YAML(typ="safe")
 
 
 def _load_file(path: str) -> Blueprint:
     with open(path, "r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh)
+        data = _YAML.load(fh)
     # Pydantic v2 method
     bp = Blueprint.model_validate(data)
     return bp
@@ -33,7 +35,7 @@ def reload_blueprints():
         for path in glob.glob(pat):
             try:
                 bp = _load_file(path)
-            except (yaml.YAMLError, ValidationError) as exc:
+            except (YAMLError, ValidationError) as exc:
                 # skip invalid blueprint files but continue loading others
                 logging.warning("skipping invalid blueprint %s: %s", path, exc)
                 continue
