@@ -5,9 +5,11 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from src.__version__ import __version__
 from src.services.analyzer import analyze_message_async
 from src.services.pr_service import PRService
 from src.services.remediation_service import RemediationService
+from src.utils.config_loader import load_config
 from src.utils.logger import logger
 
 # Initialize Services
@@ -117,31 +119,31 @@ async def scan_directory_async(target_path: str, mode: str):
         logger.error(f"Target path {target_path} does not exist.")
         sys.exit(1)
 
+    # Load Configuration (User defined or Defaults)
+    config = load_config(Path.cwd())
+
     # Determine files to scan
     files_to_scan = []
-    IGNORED_EXTENSIONS = {
-        ".yml",
-        ".yaml",
-        ".json",
-        ".md",
-        ".toml",
-        ".pyc",
-        ".pyo",
-        ".lock",
-    }
 
     if path.is_file():
         files_to_scan.append(path)
     else:
         for root, dirs, files in os.walk(path):
-            if "venv" in root or ".git" in root:
-                continue
+            # Prune directories in-place using config
+            # We specifically filter out ignored dirs to improve performance logic
+            dirs[:] = [d for d in dirs if d not in config.ignored_dirs and not d.startswith(".")]
+
             for file in files:
-                if file.startswith("."):
+                file_path = Path(root) / file
+                if config.is_ignored(file_path):
                     continue
-                if Path(file).suffix.lower() in IGNORED_EXTENSIONS:
-                    continue
-                files_to_scan.append(Path(root) / file)
+                files_to_scan.append(file_path)
+
+    if not files_to_scan:
+        logger.warning(
+            f"No relevant log files found in '{target_path}'. (Check your ignore settings in pyproject.toml)"
+        )
+        return
 
     # Create tasks for all files
     tasks = [process_file(f, mode) for f in files_to_scan]
@@ -178,8 +180,10 @@ async def attempt_fix(file_path: Path, issue: dict) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(description="ResponseIQ CLI")
-    parser.add_argument("--target", default=".", help="Directory to scan")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument("--target", default=None, help="Directory to scan (defaults to './logs' if exists)")
     parser.add_argument("--mode", default="scan", choices=["scan", "fix"], help="Operation mode")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     # Support for GitHub Action inputs
     parser.add_argument("--action", choices=["scan", "fix"], help="Alias for --mode")
     parser.add_argument("--url", help="Repository URL (e.g., https://github.com/owner/repo)")
@@ -190,6 +194,16 @@ def main():
     parser.add_argument("--openai-api-key", help=argparse.SUPPRESS)
 
     args, unknown = parser.parse_known_args()
+
+    # Configure Logging based on flag
+    log_level = "DEBUG" if args.debug else "INFO"
+    logger.remove()
+    logger.add(
+        sys.stdout,
+        colorize=True,
+        format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+        level=log_level,
+    )
 
     # Map Action inputs to CLI args
     mode = args.action if args.action else args.mode
@@ -202,8 +216,22 @@ def main():
             repo_slug = args.url.split("github.com/")[-1].replace(".git", "")
             os.environ["GITHUB_REPOSITORY"] = repo_slug
 
+    # Smart Target Resolution
+    target_path = args.target
+    if target_path is None:
+        if Path("./logs").exists() and Path("./logs").is_dir():
+            target_path = "./logs"
+            logger.info("No target specified. Auto-detected './logs' directory.")
+        else:
+            # Print help + banner
+            parser.print_help()
+            print()  # Spacer
+            logger.warning("No target specified and no './logs' folder found.")
+            logger.warning("Please provide a path (e.g., 'responseiq --target ./var/log')")
+            sys.exit(0)
+
     try:
-        asyncio.run(scan_directory_async(args.target, mode))
+        asyncio.run(scan_directory_async(target_path, mode))
     except KeyboardInterrupt:
         logger.info("Scan cancelled by user.")
     except Exception as e:

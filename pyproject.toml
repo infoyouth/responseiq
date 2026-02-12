@@ -5,9 +5,24 @@ build-backend = "hatchling.build"
 [project]
 name = "responseiq"
 version = "1.2.1"
-description = "AI-powered remediation copilot for incident response"
+description = "AI-Powered Infrastructure Copilot: The Self-Healing SRE."
+readme = "README.md"
 authors = [{ name = "Youth Innovations", email = "info.youthinno@gmail.com" }]
-requires-python = "==3.12.*"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Software Development :: Debuggers",
+    "Framework :: FastAPI",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+home-page = "https://github.com/infoyouth/responseiq"
+repository = "https://github.com/infoyouth/responseiq"
+documentation = "https://github.com/infoyouth/responseiq#readme"
 
 dependencies = [
     "fastapi",
@@ -78,8 +93,23 @@ version_toml = [
     "pyproject.toml:project.version",
 ]
 branch = "main"
-upload_to_pypi = false
+upload_to_pypi = true
 upload_to_release = true
 build_command = "pip install uv && uv build"
 commit_message = "chore(release): {version} [skip ci]"
 
+
+[tool.responseiq]
+# Configure what ResponseIQ scans/ignores.
+# This prevents checking source code for false positives when running self-scans.
+ignore_dirs = [
+    ".git", ".venv", "venv", "env", "node_modules", "__pycache__",
+    "dist", "build", "system", "site-packages",
+    "tests", "test", "docs", "fixtures", "terraform", "helm"
+]
+ignore_extensions = [
+    ".yml", ".yaml", ".json", ".md", ".toml", ".pyc", ".pyo", ".lock",
+    ".whl", ".png", ".jpg", ".gif", ".css", ".map",
+    # Source Code (ResponseIQ parses logs, not source code, unless specifically targeted)
+    ".py", ".js", ".ts", ".go", ".java", ".c", ".cpp"
+]
