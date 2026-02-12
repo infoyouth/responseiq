@@ -155,8 +155,10 @@ prerelease = false
 
 [tool.semantic_release.changelog]
 template_dir = "templates"
-changelog_file = "CHANGELOG.md"
 exclude_commit_patterns = []
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
 
 [tool.semantic_release.changelog.environment]
 block_start_string = "{%"
@@ -173,7 +175,7 @@ extensions = []
 autoescape = true
 
 [tool.semantic_release.commit_author]
-env_name = "GIT_COMMIT_AUTHOR"
+env = "GIT_COMMIT_AUTHOR"
 default = "semantic-release <semantic-release>"
 
 [tool.semantic_release.commit_parser_options]
