@@ -1,5 +1,38 @@
 # responseiq
 
+[![CI](https://github.com/infoyouth/responseiq/actions/workflows/ci.yml/badge.svg)](https://github.com/infoyouth/responseiq/actions)
+[![PyPI](https://img.shields.io/pypi/v/responseiq)](https://pypi.org/project/responseiq/)
+[![License](https://img.shields.io/github/license/infoyouth/responseiq)](LICENSE)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+> **"Don't debug. Innovative fix."**
+
+**ResponseIQ** is not just a log parser. It is the **First Self-Healing Infrastructure Copilot**.
+It automatically analyzes your crash logs, physically reads your source code to understand the context, and generates surgical remediation plans to fix production incidents in seconds.
+
+## 🚀 Quick Start
+
+### 1. Install
+```bash
+pip install responseiq
+```
+
+### 2. Scan for Issues
+Run from your project root:
+```bash
+responseiq --target ./logs --mode scan
+```
+_Output: Scans logs in `./logs` and reports errors found._
+
+### 3. Auto-Fix (The Magic)
+Ask ResponseIQ to analyze the code context and suggest a fix:
+```bash
+responseiq --target ./logs --mode fix
+```
+
+---
+
 ## Dependency Management & Virtual Environment
 
 This project uses [UV](https://github.com/astral-sh/uv) for ultra-fast dependency installation and reproducible builds.
