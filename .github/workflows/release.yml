@@ -37,6 +37,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
+        env:
+          # REQUIRED: Ensure you have added PYPI_TOKEN to your GitHub Repository Secrets
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
 
   docker-publish:
     name: Build & Push Docker
