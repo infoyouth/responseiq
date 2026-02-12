@@ -214,3 +214,10 @@ ResponseIQ_Design_Document.md
 
 # AI Agents
 .github/agents/
+
+# Local CI/release investigation artifacts
+run_*.txt
+semantic_job.txt
+jobs.json
+release_v*.log
+run_failure.txt

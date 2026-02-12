@@ -35,7 +35,7 @@ runs:
     - "/app"
     - "python"
     - "-m"
-    - "src.cli"
+    - "responseiq.cli"
     - "--target"
     - ${{ inputs.target }}
     - "--mode"
