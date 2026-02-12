@@ -7,6 +7,7 @@ from typing import Optional
 
 from responseiq.__version__ import __version__
 from responseiq.services.analyzer import analyze_message_async
+from responseiq.services.impact import assess_impact
 from responseiq.services.pr_service import PRService
 from responseiq.services.remediation_service import RemediationService
 from responseiq.utils.config_loader import load_config
@@ -94,6 +95,15 @@ async def process_file(file_path: Path, mode: str) -> Optional[dict]:
                     "status": "Detected",
                 }
 
+                impact = assess_impact(
+                    severity=result.get("severity"),
+                    title=result.get("reason"),
+                    description=msg.strip()[:200],
+                    source=result.get("source"),
+                )
+                issue_record["impact_score"] = impact.score
+                issue_record["impact_factors"] = impact.factors
+
                 if mode == "fix":
                     logger.info("Fix mode enabled: Attempting remediation")
                     if await attempt_fix(file_path, result):
@@ -153,6 +163,7 @@ async def scan_directory_async(target_path: str, mode: str):
 
     # Filter out None results
     issues_found = [r for r in results if r is not None]
+    issues_found.sort(key=lambda current: current.get("impact_score", 0.0), reverse=True)
 
     write_summary(issues_found)
     logger.info(f"Scan complete. Found {len(issues_found)} issues.")
@@ -175,7 +186,8 @@ async def attempt_fix(file_path: Path, issue: dict) -> bool:
     logger.info(f"Attempting to remediate: {issue['reason']}")
 
     # 1. Apply Physical Fix (Static Analysis Engine)
-    return await remediation_service.remediate_incident(issue, file_path.parent)
+    recommendation = await remediation_service.remediate_incident(issue, file_path.parent)
+    return recommendation.allowed
 
 
 def main():
