@@ -1,0 +1,52 @@
+name: Release Candidate Verify
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  rc-verify:
+    name: RC Verify (Py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Build distributables
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          rm -rf dist
+          uv build
+
+      - name: Install built wheel in fresh environment
+        run: |
+          python -m venv /tmp/responseiq-rc
+          /tmp/responseiq-rc/bin/pip install --upgrade pip
+          WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
+          /tmp/responseiq-rc/bin/pip install "$WHEEL_PATH"
+
+      - name: CLI smoke tests
+        run: |
+          /tmp/responseiq-rc/bin/responseiq --help
+          /tmp/responseiq-rc/bin/python -m responseiq.cli --help
+
+      - name: API health smoke test
+        run: |
+          /tmp/responseiq-rc/bin/python -m uvicorn responseiq.app:app --host 127.0.0.1 --port 8001 &
+          APP_PID=$!
+          cleanup() {
+            kill "$APP_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          sleep 5
+          curl -fsS http://127.0.0.1:8001/health

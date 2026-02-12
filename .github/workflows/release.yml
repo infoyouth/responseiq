@@ -15,8 +15,14 @@ permissions:
   pull-requests: write
 
 jobs:
+  pre-release-verify:
+    name: Pre-release verification
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/release_candidate.yml
+
   release:
     name: Semantic Release
+    needs: pre-release-verify
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     concurrency: release

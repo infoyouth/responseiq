@@ -7,13 +7,24 @@ concurrency:
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/**"
+      - "action.yml"
+      - "uv.lock"
+      - "Makefile"
+      - "Dockerfile"
+      - "docker-compose.yml"
   pull_request:
     branches: [main]
     paths:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/**"
+      - "action.yml"
       - "uv.lock"
       - "Makefile"
       - "Dockerfile"
@@ -47,7 +58,8 @@ jobs:
               - 'tests/**'
               - 'pyproject.toml'
               - 'uv.lock'
-              - '.github/workflows/ci.yml'
+              - '.github/workflows/**'
+              - 'action.yml'
               - 'Makefile'
             integration:
               - 'src/**'
