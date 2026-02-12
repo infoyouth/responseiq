@@ -2,6 +2,25 @@
 
 <!-- version list -->
 
+## v1.3.0 (2026-02-12)
+
+### Chores
+
+- Prep for beta launch with pypi config, optimized action, and new readme
+  ([`c79e3da`](https://github.com/infoyouth/responseiq/commit/c79e3dade5d3393af7eab217a28bcb6abd3bb2af))
+
+- Remove k8s deploy workflow
+  ([`72acf28`](https://github.com/infoyouth/responseiq/commit/72acf28195c34d96e172322e8c8e951d85f7b9b4))
+
+- **deps**: Bump cryptography in the uv group across 1 directory
+  ([`b7efbb6`](https://github.com/infoyouth/responseiq/commit/b7efbb6228759ed34525c0e5dfde570b69bea051))
+
+### Features
+
+- **beta**: Prepare for launch with refined CLI, docs, and config
+  ([`6d96977`](https://github.com/infoyouth/responseiq/commit/6d96977f0548bf7d95847bd91b6d2416ad2fcb00))
+
+
 ## v1.2.1 (2026-02-10)
 
 ### Bug Fixes
