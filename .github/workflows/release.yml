@@ -34,8 +34,9 @@ jobs:
           git_committer_name: "Youth Innovations"
           git_committer_email: "info.youthinno@gmail.com"
         env:
-          # REQUIRED: Ensure you have added PYPI_TOKEN to your GitHub Repository Secrets
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          # Standard Twine variables for PyPI Upload
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
 
   docker-publish:
     name: Build & Push Docker
