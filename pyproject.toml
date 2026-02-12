@@ -46,18 +46,19 @@ dependencies = [
     "httpx>=0.24.0",
     "slack-sdk>=3.20.0",
     "PyGithub>=1.59.0",
-    "opentelemetry-api>=1.15.0",
-    "opentelemetry-sdk>=1.15.0",
-    "opentelemetry-instrumentation>=0.36b0",
-    "opentelemetry-instrumentation-fastapi>=0.36b0",
-    "opentelemetry-exporter-jaeger>=1.15.0",
-    "opentelemetry-instrumentation-logging>=0.36b0",
+    "opentelemetry-api>=1.24.0",
+    "opentelemetry-sdk>=1.24.0",
+    "opentelemetry-instrumentation>=0.45b0",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    # Jaeger exporter is deprecated, use OTLP
+    "opentelemetry-instrumentation-logging>=0.45b0",
     "psycopg2-binary>=2.9.0",
     "sqlmodel>=0.0.8",
     "pydantic-settings>=2.0.0",
-    "opentelemetry-exporter-otlp>=1.15.0",
+    "opentelemetry-exporter-otlp>=1.24.0",
     "ruamel.yaml>=0.17.0",
     "aiofiles>=23.0.0",
+    "googleapis-common-protos>=1.63.0",
 ]
 
 [project.urls]
