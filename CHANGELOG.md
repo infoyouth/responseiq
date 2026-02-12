@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.3.2 (2026-02-12)
+
+### Bug Fixes
+
+- **ci**: Map PYPI_TOKEN to TWINE_PASSWORD for correct authentication during upload
+  ([`cd08ccf`](https://github.com/infoyouth/responseiq/commit/cd08ccff12d7d8d6d09391f2209345f9e48f2964))
+
+### Chores
+
+- Remove AI agent context files per user request
+  ([`813d2d7`](https://github.com/infoyouth/responseiq/commit/813d2d792ed30b67cad5d7f703a316323010808d))
+
+- **ci**: Optimize CI trigger to run only on code changes
+  ([`94c71cb`](https://github.com/infoyouth/responseiq/commit/94c71cb87e50a2f15f9d1fc4b02992ec5deb56c5))
+
+### Continuous Integration
+
+- Implement smart concurrency and strict path filtering
+  ([`699a8ca`](https://github.com/infoyouth/responseiq/commit/699a8ca96d8636b9a59fecdd33ea0931fcd5870b))
+
+### Documentation
+
+- Add AI Manifesto and ResponseIQ CTO instructions
+  ([`684bd22`](https://github.com/infoyouth/responseiq/commit/684bd22cdb75d8c3660ccc7e7bf932b0cc852c04))
+
+
 ## v1.3.1 (2026-02-12)
 
 ### Bug Fixes
