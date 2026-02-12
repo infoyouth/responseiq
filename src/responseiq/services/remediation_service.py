@@ -174,7 +174,7 @@ class RemediationService:
             confidence=ai_confidence,
             impact_score=impact_assessment.score,
             blast_radius=blast_radius,
-            rationale=remediation_request.rationale,
+            rationale=remediation_request.rationale or "AI-generated remediation based on incident analysis",
             remediation_plan=remediation_plan,
             affected_files=affected_files,
             proposed_changes=proposed_changes,

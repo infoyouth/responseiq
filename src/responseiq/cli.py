@@ -186,7 +186,8 @@ async def attempt_fix(file_path: Path, issue: dict) -> bool:
     logger.info(f"Attempting to remediate: {issue['reason']}")
 
     # 1. Apply Physical Fix (Static Analysis Engine)
-    return await remediation_service.remediate_incident(issue, file_path.parent)
+    recommendation = await remediation_service.remediate_incident(issue, file_path.parent)
+    return recommendation.allowed
 
 
 def main():

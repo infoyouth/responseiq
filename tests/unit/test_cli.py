@@ -185,9 +185,26 @@ def test_main_execution():
 @pytest.mark.asyncio
 async def test_attempt_fix():
     """Test attempt_fix calls remediation service."""
+    from responseiq.config.policy_config import PolicyMode
+    from responseiq.services.remediation_service import RemediationRecommendation
+
+    # Create a proper RemediationRecommendation mock object
+    mock_recommendation = RemediationRecommendation(
+        incident_id="test-1",
+        title="Test Incident",
+        severity="medium",
+        confidence=0.8,
+        impact_score=50.0,
+        blast_radius="low",
+        rationale="Test rationale",
+        remediation_plan="Test plan",
+        allowed=True,
+        execution_mode=PolicyMode.SUGGEST_ONLY,
+    )
+
     # We need to patch the global remediation_service instance in cli.py
     with patch("responseiq.cli.remediation_service.remediate_incident", new_callable=AsyncMock) as mock_remediate:
-        mock_remediate.return_value = True
+        mock_remediate.return_value = mock_recommendation
 
         issue = {"reason": "test"}
         path = Path("/tmp/file.log")
