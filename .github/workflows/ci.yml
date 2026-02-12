@@ -136,6 +136,21 @@ jobs:
       - name: Run tests (pytest + coverage)
         run: |
           uv run pytest --maxfail=1 --disable-warnings -q
+
+      # Packaging smoke test: ensure installable artifact and CLI entrypoint work
+      - name: Build distributables
+        run: |
+          rm -rf dist
+          uv build
+      - name: Smoke test wheel install and CLI
+        run: |
+          python -m venv /tmp/responseiq-smoke
+          /tmp/responseiq-smoke/bin/pip install --upgrade pip
+          WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
+          /tmp/responseiq-smoke/bin/pip install "$WHEEL_PATH"
+          /tmp/responseiq-smoke/bin/responseiq --help
+          /tmp/responseiq-smoke/bin/python -m responseiq.cli --help
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
