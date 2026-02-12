@@ -1,5 +1,9 @@
 name: CI
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     branches: [main]
@@ -10,6 +14,8 @@ on:
       - ".github/workflows/ci.yml"
       - "uv.lock"
       - "Makefile"
+      - "Dockerfile"
+      - "docker-compose.yml"
   workflow_dispatch:
     inputs:
       run_integration:
@@ -22,8 +28,37 @@ env:
   CACHE_NAME: responseiq-uv
 
 jobs:
+  check-changes:
+    name: Check for changes
+    runs-on: ubuntu-latest
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      integration: ${{ steps.filter.outputs.integration }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            python:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+              - 'Makefile'
+            integration:
+              - 'src/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'docker-compose.yml'
+              - 'Dockerfile'
+
   setup-and-cache:
     name: Prepare environment
+    needs: check-changes
+    if: needs.check-changes.outputs.python == 'true' || needs.check-changes.outputs.integration == 'true'
     runs-on: ubuntu-latest
     outputs:
       cache-hit: ${{ steps.cache.outputs.cache-hit }}
@@ -47,15 +82,19 @@ jobs:
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Sync dependencies
         run: uv sync --group dev --active
-      - name: Install pre-commit hooks and run composer-like checks
+      - name: Install pre-commit hooks
         run: |
           pip install pre-commit
-          pre-commit run --all-files || true
+          # Run pre-commit hooks, but don't fail properly yet if env is weird - just ensure it installs
+          # Actually, running pre-commit check here is redundant if we run specific checks below.
+          # Let's keep it minimal.
+          echo "Pre-commit installed."
 
   quality-checks:
     name: Code Quality & Tests
-    needs: setup-and-cache
+    needs: [setup-and-cache, check-changes]
     runs-on: ubuntu-latest
+    if: needs.check-changes.outputs.python == 'true'
     strategy:
       matrix:
         python-version: [3.12]
@@ -113,7 +152,7 @@ jobs:
   license-check:
     name: License and policy checks
     runs-on: ubuntu-latest
-    needs: setup-and-cache
+    needs: check-changes
     steps:
       - uses: actions/checkout@v4
       - name: License scan (placeholder)
@@ -121,30 +160,13 @@ jobs:
           echo "License/policy scan step is a placeholder."
           echo "Replace with a proper license scanner action and configure required inputs."
 
-  check-changes:
-    name: Check for changes
-    runs-on: ubuntu-latest
-    outputs:
-      run_integration: ${{ steps.filter.outputs.integration }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            integration:
-              - 'src/**'
-              - 'tests/**'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'docker-compose.yml'
-              - 'Dockerfile'
+  # REMOVED DUPLICATE check-changes job here #
 
   check-docker-build:
     name: Verify Docker build
     runs-on: ubuntu-latest
     needs: check-changes
-    if: needs.check-changes.outputs.run_integration == 'true'
+    if: needs.check-changes.outputs.integration == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
@@ -174,7 +196,7 @@ jobs:
     needs: [setup-and-cache, check-changes]
     runs-on: ubuntu-latest
     if: |
-      needs.check-changes.outputs.run_integration == 'true' ||
+      needs.check-changes.outputs.integration == 'true' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
     steps:
       - uses: actions/checkout@v4
