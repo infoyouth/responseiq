@@ -3,8 +3,8 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from src.config.settings import settings
-from src.utils.logger import logger
+from responseiq.config.settings import settings
+from responseiq.utils.logger import logger
 
 
 async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Dict[str, Any]]:

@@ -30,10 +30,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     def get_keywords_config_path(self) -> Path:
-        """Return configured path or default to src/config/keywords.json"""
+        """Return configured path or default to package config/keywords.json"""
         if self.keywords_config_path:
             return self.keywords_config_path
-        return self.base_dir / "src" / "config" / "keywords.json"
+        # Use location relative to this settings file, which works in installed package too
+        return Path(__file__).parent / "keywords.json"
 
 
 settings = Settings()

@@ -2,7 +2,7 @@ import tomllib
 from pathlib import Path
 from typing import Set
 
-from src.utils.logger import logger
+from responseiq.utils.logger import logger
 
 # Default "Safe" ignores so users don't accidentaly scan the world
 DEFAULT_IGNORED_EXTENSIONS = {

@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Import the new innovative modules
-from src.utils.context_extractor import extract_context_from_log
-from src.utils.log_processor import ParallelLogProcessor
+from responseiq.utils.context_extractor import extract_context_from_log
+from responseiq.utils.log_processor import ParallelLogProcessor
 
 
 @pytest.mark.asyncio
@@ -15,8 +15,8 @@ async def test_context_extraction_regex():
     """
     log_line = 'File "src/main.py", line 15 in <module>'
     # Mock read_code_around_line since we don't have the file
-    with patch("src.utils.context_extractor.read_code_around_line", new_callable=AsyncMock) as mock_read:
-        with patch("src.utils.context_extractor.resolve_local_path") as mock_resolve:
+    with patch("responseiq.utils.context_extractor.read_code_around_line", new_callable=AsyncMock) as mock_read:
+        with patch("responseiq.utils.context_extractor.resolve_local_path") as mock_resolve:
 
             mock_read.return_value = "15 | >> print('hello')"
             # Return a MagicMock that behaves like a Path but allows attribute setting
@@ -75,7 +75,7 @@ async def test_parallel_log_processor_large_file_split():
 
             # Actually, simpler to mock the entire executor logic or just trust the integration test
             # Let's test the `_scan_chunk_for_errors` worker function logic specifically
-            from src.utils.log_processor import _scan_chunk_for_errors
+            from responseiq.utils.log_processor import _scan_chunk_for_errors
 
             # Create a real file for the worker to read
             real_file = Path("test_worker.log")
@@ -115,7 +115,7 @@ async def test_resolve_local_path_filesystem(tmp_path):
     target_file.touch()
 
     # Case 1: Direct relative path match
-    from src.utils.context_extractor import resolve_local_path
+    from responseiq.utils.context_extractor import resolve_local_path
 
     # We pretend 'tmp_path' is the workspace root
     resolved = resolve_local_path("src/utils/helper.py", tmp_path)
@@ -136,7 +136,7 @@ async def test_read_code_around_line_aiofiles(tmp_path):
     """
     Tests actual async file reading with aiofiles.
     """
-    from src.utils.context_extractor import read_code_around_line
+    from responseiq.utils.context_extractor import read_code_around_line
 
     f = tmp_path / "code.py"
     # Create a file with 10 lines
@@ -160,7 +160,7 @@ async def test_parallel_log_processor_large_flow(tmp_path):
     """
     Tests the flow of large file splitting without mocking the internals too heavily.
     """
-    from src.utils.log_processor import ParallelLogProcessor
+    from responseiq.utils.log_processor import ParallelLogProcessor
 
     processor = ParallelLogProcessor()
     # Force the processor to use 1 worker to be friendly to test environment

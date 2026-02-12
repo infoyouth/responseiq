@@ -1,4 +1,4 @@
-from src.services.analyzer import analyze_log
+from responseiq.services.analyzer import analyze_log
 
 
 def test_analyzer_detects_oomkilled():

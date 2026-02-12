@@ -3,7 +3,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from .config.settings import settings
 
-# Reuse models from src.models to avoid duplicate table definitions
+# Reuse models from responseiq.models to avoid duplicate table definitions
 from .models import Incident, Log  # noqa: F401
 
 _engine = None

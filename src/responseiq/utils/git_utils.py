@@ -3,7 +3,7 @@ import subprocess  # nosec B404
 from pathlib import Path
 from typing import Optional
 
-from src.utils.logger import logger
+from responseiq.utils.logger import logger
 
 
 class GitClient:

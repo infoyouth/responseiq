@@ -2,10 +2,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from src.app import app
-from src.config.settings import settings
-from src.db import get_engine
-from src.models import Incident, Log
+from responseiq.app import app
+from responseiq.config.settings import settings
+from responseiq.db import get_engine
+from responseiq.models import Incident, Log
 
 
 @pytest.fixture(name="client")
@@ -15,16 +15,16 @@ def client_fixture():
     settings.database_url = "sqlite:///:memory:"
 
     # Reset engine to force recreation with new settings
-    import src.db
+    import responseiq.db
 
-    src.db._engine = None
+    responseiq.db._engine = None
 
     # Use context manager to trigger lifespan events (init_db)
     with TestClient(app) as client:
         yield client
 
     # Cleanup
-    src.db._engine = None
+    responseiq.db._engine = None
 
 
 def test_async_ingestion_creates_incident(client):

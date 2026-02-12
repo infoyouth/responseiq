@@ -1,10 +1,10 @@
 from typing import Optional
 
 # Ensure parsers are registered
-import src.parsers  # noqa: F401
-from src.ai.llm_service import analyze_with_llm
-from src.parsers.registry import registry
-from src.schemas.incident import IncidentOut
+import responseiq.parsers  # noqa: F401
+from responseiq.ai.llm_service import analyze_with_llm
+from responseiq.parsers.registry import registry
+from responseiq.schemas.incident import IncidentOut
 
 
 def analyze_message(message: str) -> Optional[dict]:
@@ -23,7 +23,7 @@ async def analyze_message_async(message: str) -> Optional[dict]:
     Returns a dict with severity and reason/title.
     """
     # 0. Context Extraction
-    from src.utils.context_extractor import extract_context_from_log
+    from responseiq.utils.context_extractor import extract_context_from_log
 
     code_context = await extract_context_from_log(message)
 
@@ -58,7 +58,7 @@ async def analyze_log_async(log_text: str) -> Optional[IncidentOut]:
     """
     # 0. Context Extraction (Magical Step)
     # We try to find the source code related to the log
-    from src.utils.context_extractor import extract_context_from_log
+    from responseiq.utils.context_extractor import extract_context_from_log
 
     code_context = await extract_context_from_log(log_text)
 

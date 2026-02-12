@@ -1,6 +1,7 @@
 # ResponseIQ
 
 [![CI](https://github.com/infoyouth/responseiq/actions/workflows/ci.yml/badge.svg)](https://github.com/infoyouth/responseiq/actions)
+[![GitHub Release](https://img.shields.io/github/v/release/infoyouth/responseiq)](https://github.com/infoyouth/responseiq/releases)
 [![PyPI](https://img.shields.io/pypi/v/responseiq)](https://pypi.org/project/responseiq/)
 [![License](https://img.shields.io/github/license/infoyouth/responseiq)](LICENSE)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)

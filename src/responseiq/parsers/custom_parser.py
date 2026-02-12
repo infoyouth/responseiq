@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, Optional
 
-from src.config.settings import settings
+from responseiq.config.settings import settings
 
 from .base import BaseParser
 from .registry import registry

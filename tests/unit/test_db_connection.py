@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, create_engine
 
-from src.db import get_engine, init_db
+from responseiq.db import get_engine, init_db
 
 
 def test_sqlite_memory_engine():

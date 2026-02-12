@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from src.app import app
-from src.services.analyzer import analyze_message
+from responseiq.app import app
+from responseiq.services.analyzer import analyze_message
 
 client = TestClient(app)
 

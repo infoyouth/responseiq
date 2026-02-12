@@ -1,7 +1,7 @@
 
 .PHONY: all install dev-install lint format test run build deploy mypy security docker-up ci
 
-all: ci security
+all: install format lint test security build
 
 install:
 	uv sync
@@ -10,7 +10,7 @@ dev-install:
 	uv sync --group dev
 
 run:
-	uv run uvicorn src.app:app --reload
+	uv run uvicorn responseiq.app:app --reload
 
 test:
 	uv run pytest
@@ -28,6 +28,9 @@ security:
 	uv run bandit -r src
 
 build:
+	uv build
+
+docker-build:
 	docker build -t responseiq:latest .
 
 docker-up:

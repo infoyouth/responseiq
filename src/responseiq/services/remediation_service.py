@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from src.ai.llm_service import analyze_with_llm
-from src.utils.k8s_patcher import KubernetesPatcher
-from src.utils.logger import logger
+from responseiq.ai.llm_service import analyze_with_llm
+from responseiq.utils.k8s_patcher import KubernetesPatcher
+from responseiq.utils.logger import logger
 
 
 class RemediationService:

@@ -7,68 +7,115 @@ name = "responseiq"
 version = "1.3.2"
 description = "AI-Powered Infrastructure Copilot: The Self-Healing SRE."
 readme = "README.md"
-authors = [{ name = "Youth Innovations", email = "info.youthinno@gmail.com" }]
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Youth Innovations", email = "info.youthinno@gmail.com" }
+]
+keywords = [
+    "sre",
+    "kubernetes",
+    "observability",
+    "ai-ops",
+    "devops",
+    "platform-engineering",
+    "responseiq",
+    "self-healing",
+    "infrastructure-as-code"
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
+    "Intended Audience :: Information Technology",
     "Topic :: System :: Systems Administration",
     "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Monitoring",
     "Framework :: FastAPI",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
 ]
-home-page = "https://github.com/infoyouth/responseiq"
-repository = "https://github.com/infoyouth/responseiq"
-documentation = "https://github.com/infoyouth/responseiq#readme"
-
 dependencies = [
-    "fastapi",
-    "uvicorn",
-    "loguru",
-    "pydantic",
-    "httpx",
-    "slack-sdk",
-    "PyGithub",
-    "opentelemetry-api",
-    "opentelemetry-sdk",
-    "opentelemetry-instrumentation",
-    "opentelemetry-instrumentation-fastapi",
-    "opentelemetry-exporter-jaeger",
-    "opentelemetry-instrumentation-logging",
-    "psycopg2-binary",
-    "sqlmodel",
-    "pydantic-settings>=2.12.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "loguru>=0.7.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.24.0",
+    "slack-sdk>=3.20.0",
+    "PyGithub>=1.59.0",
+    "opentelemetry-api>=1.15.0",
+    "opentelemetry-sdk>=1.15.0",
+    "opentelemetry-instrumentation>=0.36b0",
+    "opentelemetry-instrumentation-fastapi>=0.36b0",
+    "opentelemetry-exporter-jaeger>=1.15.0",
+    "opentelemetry-instrumentation-logging>=0.36b0",
+    "psycopg2-binary>=2.9.0",
+    "sqlmodel>=0.0.8",
+    "pydantic-settings>=2.0.0",
     "opentelemetry-exporter-otlp>=1.15.0",
-    "ruamel-yaml>=0.19.1",
-    "aiofiles",
+    "ruamel.yaml>=0.17.0",
+    "aiofiles>=23.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/infoyouth/responseiq"
+Repository = "https://github.com/infoyouth/responseiq"
+Documentation = "https://github.com/infoyouth/responseiq#readme"
+"Bug Tracker" = "https://github.com/infoyouth/responseiq/issues"
+Changelog = "https://github.com/infoyouth/responseiq/blob/main/CHANGELOG.md"
 
 [project.scripts]
-responseiq = "src.cli:main"
+responseiq = "responseiq.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/responseiq"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    ".github",
+    ".devcontainer",
+    "config",
+    "docs",
+    "fixtures",
+    "helm",
+    "scripts",
+    "terraform",
+    "tests",
+    ".dockerignore",
+    ".flake8",
+    ".pre-commit-config.yaml",
+    "action.yml",
+    "CHANGELOG.md",
+    "docker-compose*.yml",
+    "Dockerfile",
+    "Makefile",
+    "Procfile",
+    "README_UV_Update.md",
+    "ResponseIQ_Design_Document.md",
+    "requirements-dev.txt",
+    "uv.lock",
+]
 
 [dependency-groups]
 dev = [
-    "pytest",
-    "pytest-asyncio",
-    "black",
-    "ruff",
-    "flake8",
-    "isort",
-    "bandit",
-    "mypy",
-    "types-requests",
-    "types-aiofiles",
-    "pbr",
-    "pre-commit",
-    "safety",
-    "pytest-cov>=7.0.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.0.270",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+    "bandit>=1.7.0",
+    "mypy>=1.0.0",
+    "types-requests>=2.0.0",
+    "types-aiofiles>=23.0.0",
+    "pbr>=5.0.0",
+    "pre-commit>=3.0.0",
+    "safety>=2.0.0",
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
 
 [tool.black]
 line-length = 120
@@ -87,7 +134,7 @@ exclude_dirs = ["tests", "fixtures"]
 
 [tool.semantic_release]
 version_variable = [
-    "src/__version__.py:__version__",
+    "src/responseiq/__version__.py:__version__",
 ]
 version_toml = [
     "pyproject.toml:project.version",
@@ -98,10 +145,8 @@ upload_to_release = true
 build_command = "pip install uv && uv build"
 commit_message = "chore(release): {version} [skip ci]"
 
-
 [tool.responseiq]
 # Configure what ResponseIQ scans/ignores.
-# This prevents checking source code for false positives when running self-scans.
 ignore_dirs = [
     ".git", ".venv", "venv", "env", "node_modules", "__pycache__",
     "dist", "build", "system", "site-packages",
@@ -110,6 +155,5 @@ ignore_dirs = [
 ignore_extensions = [
     ".yml", ".yaml", ".json", ".md", ".toml", ".pyc", ".pyo", ".lock",
     ".whl", ".png", ".jpg", ".gif", ".css", ".map",
-    # Source Code (ResponseIQ parses logs, not source code, unless specifically targeted)
     ".py", ".js", ".ts", ".go", ".java", ".c", ".cpp"
 ]

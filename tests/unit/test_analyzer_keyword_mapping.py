@@ -1,4 +1,4 @@
-from src.services.analyzer import analyze_log, analyze_message
+from responseiq.services.analyzer import analyze_log, analyze_message
 
 
 def test_simple_keyword_severity_mapping():

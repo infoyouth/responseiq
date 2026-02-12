@@ -1,9 +1,9 @@
 import os
 import time
 
-from src.integrations.github_integration import GitHubIntegration
-from src.utils.git_utils import GitClient
-from src.utils.logger import logger
+from responseiq.integrations.github_integration import GitHubIntegration
+from responseiq.utils.git_utils import GitClient
+from responseiq.utils.logger import logger
 
 
 class PRService:

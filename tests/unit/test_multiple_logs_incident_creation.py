@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 from sqlmodel import SQLModel
 
-from src.app import app
-from src.db import get_engine, init_db
+from responseiq.app import app
+from responseiq.db import get_engine, init_db
 
 client = TestClient(app)
 

@@ -1,5 +1,6 @@
 # replace startup with lifespan
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import List
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
@@ -48,10 +49,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # include routers
+
 app.include_router(blueprints_router)
 
 # serve static UI
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/ui/blueprints")
