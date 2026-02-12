@@ -98,3 +98,18 @@ upload_to_release = true
 build_command = "pip install uv && uv build"
 commit_message = "chore(release): {version} [skip ci]"
 
+
+[tool.responseiq]
+# Configure what ResponseIQ scans/ignores.
+# This prevents checking source code for false positives when running self-scans.
+ignore_dirs = [
+    ".git", ".venv", "venv", "env", "node_modules", "__pycache__",
+    "dist", "build", "system", "site-packages",
+    "tests", "test", "docs", "fixtures", "terraform", "helm"
+]
+ignore_extensions = [
+    ".yml", ".yaml", ".json", ".md", ".toml", ".pyc", ".pyo", ".lock",
+    ".whl", ".png", ".jpg", ".gif", ".css", ".map",
+    # Source Code (ResponseIQ parses logs, not source code, unless specifically targeted)
+    ".py", ".js", ".ts", ".go", ".java", ".c", ".cpp"
+]

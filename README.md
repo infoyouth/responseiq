@@ -1,4 +1,4 @@
-# responseiq
+# ResponseIQ
 
 [![CI](https://github.com/infoyouth/responseiq/actions/workflows/ci.yml/badge.svg)](https://github.com/infoyouth/responseiq/actions)
 [![PyPI](https://img.shields.io/pypi/v/responseiq)](https://pypi.org/project/responseiq/)
@@ -6,181 +6,125 @@
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-> **"Don't debug. Innovative fix."**
+> **"Don't just debug. Fix."**
 
-**ResponseIQ** is not just a log parser. It is the **First Self-Healing Infrastructure Copilot**.
-It automatically analyzes your crash logs, physically reads your source code to understand the context, and generates surgical remediation plans to fix production incidents in seconds.
+**ResponseIQ** is an AI-Native **Self-Healing Infrastructure Copilot**.
+Unlike traditional parsers that match regex strings, ResponseIQ reads your application logs, **loads your actual source code into an LLM context**, and generates surgical, context-aware remediation patches for incidents.
 
-## 🚀 Quick Start
+---
+
+## 📸 See It In Action
+
+![ResponseIQ CLI Demo](docs/assets/demo_placeholder.gif)
+
+*Above: ResponseIQ scanning a crash log, reading the `service.py` file mentioned in the stack trace, and proposing a specific code patch.*
+
+---
+
+## ✨ Key Features
+
+- **🧠 AI-Native Analysis**: Uses Generic AI reasoning instead of fragile regex parsing rules.
+- **👁️ Context-Aware**: Reads the local source files referenced in logs to understand *why* the crash happened.
+- **⚡ Self-Healing**: Can generate Pull Requests or apply patches directly (CLI mode).
+- **🛡️ Battle-Tested**: Includes "Sandbox Mode" to safely test remediation logic.
+
+---
+
+## 🚀 Quick Start (CLI Tool)
+
+For developers who want to fix bugs in their local environment or CI pipeline.
 
 ### 1. Install
 ```bash
 pip install responseiq
 ```
 
-### 2. Scan for Issues
-Run from your project root:
-```bash
-responseiq --target ./logs --mode scan
-```
-_Output: Scans logs in `./logs` and reports errors found._
+### 2. Configure Credentials
+ResponseIQ requires access to an LLM provider to reason about your code.
 
-### 3. Auto-Fix (The Magic)
-Ask ResponseIQ to analyze the code context and suggest a fix:
+*Currently supported: OpenAI*
+
 ```bash
-responseiq --target ./logs --mode fix
+export OPENAI_API_KEY="sk-..."
+```
+
+### 3. Usage Examples
+
+**Example A: Analyze Local Logs**
+Scan a directory of log files and get a report of active incidents.
+```bash
+responseiq --mode scan --target ./var/log/app/
+```
+
+**Example B: The "Magic Fix"**
+Analyze logs AND the current source code to generate a patch.
+```bash
+# Finds errors in logs, locates the source file, and explains the fix
+responseiq --mode fix --target ./logs/error.log
+```
+
+**Example C: CI/CD Pipeline Integration**
+Run ResponseIQ as a step in your GitHub Action to auto-triage build failures.
+```bash
+# In your workflow
+responseiq --mode scan --target ./build_logs.txt >> summary.md
 ```
 
 ---
 
-## Dependency Management & Virtual Environment
+## 🏢 Platform Server (Self-Hosted)
 
-This project uses [UV](https://github.com/astral-sh/uv) for ultra-fast dependency installation and reproducible builds.
+For Platform Engineers who want to host a centralized incident response API (Webhook receiver for Datadog, PagerDuty, etc.).
 
-### Setup
-1. **Create a virtual environment (recommended):**
-   ```sh
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-2. **Install UV:**
-   ```sh
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   ```
-3. **Sync dependencies:**
-   ```sh
-   uv sync
-   # For development dependencies:
-   uv sync --group dev
-   ```
+### Prerequisites
+- Docker & Docker Compose
+- OpenAI API Key configured in `.env`
 
-### Running the App
-Use UV to run the FastAPI app with hot reload:
-```sh
+### Running with Docker
+```bash
+# 1. Start the API and Database
+docker-compose up -d
+
+# 2. The API is now available at http://localhost:8000
+curl http://localhost:8000/health
+```
+
+### Development Setup (Local)
+We use [UV](https://github.com/astral-sh/uv) for lightning-fast dependency management.
+
+```bash
+# Install dependencies
+uv sync
+
+# Run the API server with hot-reload
 uv run uvicorn src.app:app --reload
 ```
 
-## Docker & Docker Compose
+---
 
-This project uses Docker and Docker Compose for consistent local and CI/CD environments.
+## 🧪 Development & Contributing
 
-### Setup
-1. **Build and start services:**
-   ```sh
-   docker-compose up --build
-   ```
-2. **Services:**
-   - `app`: FastAPI application
-   - `db`: Postgres database
+### Workflow
+1. **Linting**: `make lint`
+2. **Testing**: `make test`
+3. **Format**: `make format`
 
-### Benefits
-- Same environment locally and in CI/CD
-- Avoids "works on my machine" issues
+### Project Structure
+* `src/cli.py`: Entry point for the CLI tool.
+* `src/app.py`: Entry point for the API Server.
+* `src/services/remediation_service.py`: The core "Brain" that interfaces with the LLM.
 
-### Benefits
-- Ultra-fast installs
-- Reproducible builds
-- No pip/venv overhead
+### License
+MIT
 
-## Hot Reload with Uvicorn
+---
 
-Hot reload is enabled for development. Use:
-```sh
-make run
-```
-This runs Uvicorn with `--reload` for instant feedback during development.
+## ⚠️ Disclaimer & Liability
 
-## Pre-commit Hooks
+This tool uses **Generative AI** to suggest infrastructure and code fixes.
+By using ResponseIQ, you acknowledge that:
+1.  **AI Can Hallucinate:** The suggestions provided may be syntactically correct but functionally wrong or insecure.
+2.  **Human Review is Mandatory:** You must strictly review all Pull Requests or patches generated by this tool before deploying them.
+3.  **No Warranty:** As per the [MIT License](LICENSE), the authors assume **no liability** for system outages, data loss, or security vulnerabilities resulting from the use of this software.
 
-Pre-commit hooks are configured to auto lint, format, and type-check before each commit.
-
-### Setup
-1. Install pre-commit:
-   ```sh
-   pip install pre-commit
-   ```
-2. Install hooks:
-   ```sh
-   pre-commit install
-   ```
-3. Run hooks manually (optional):
-   ```sh
-   pre-commit run --all-files
-   ```
-
-### Benefits
-- No broken code in repo
-- Consistent code style and quality
-
-## Makefile Automation
-
-Common development tasks are automated in the Makefile:
-- `make lint` → flake8
-- `make format` → black + isort
-- `make test` → pytest
-- `make security` → bandit
-
-Run any task with:
-```sh
-make <task>
-```
-
-## Live Testing with Watchdog
-
-Continuous test reruns are enabled with [pytest-watch](https://github.com/joeyespo/pytest-watch):
-
-Install dev dependencies:
-```sh
-uv sync --group dev
-```
-Run live tests:
-```sh
-uv run ptw tests/
-```
-
-## Local Observability with OpenTelemetry
-
-Trace performance locally before production using OpenTelemetry instrumentation:
-
-Install OpenTelemetry:
-```sh
-uv sync --group dev
-```
-Run the app with tracing:
-```sh
-uv run opentelemetry-instrument uvicorn src.app:app --reload
-```
-
-## Quick start
-
-Run the app locally (development, hot reload):
-
-```sh
-# inside a virtualenv with dependencies installed
-uv run uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
-```
-
-Run the unit tests:
-
-```sh
-make test
-```
-
-Example curl requests:
-
-```sh
-# Ingest a log (server will run on :8000 from above command)
-curl -sS -X POST http://localhost:8000/logs \
-   -H "Content-Type: application/json" \
-   -d '{"message": "critical: panic when allocating resource"}' | jq
-
-# List all incidents
-curl -sS http://localhost:8000/incidents | jq
-
-# Filter incidents by severity
-curl -sS "http://localhost:8000/incidents?severity=high" | jq
-```
-
-Notes:
-- The API uses Pydantic schemas (`LogIn`, `LogOut`, `IncidentOut`) and OpenAPI is available at `http://localhost:8000/docs` or `http://localhost:8000/openapi.json`.
-- For integration with Postgres (production-like), run via Docker Compose.
+*For security reporting instructions, please see [SECURITY.md](docs/SECURITY.md).*
