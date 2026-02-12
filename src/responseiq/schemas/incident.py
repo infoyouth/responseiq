@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -9,3 +9,5 @@ class IncidentOut(BaseModel):
     severity: Optional[str] = None
     description: Optional[str] = None
     source: Optional[str] = "unknown"
+    impact_score: Optional[float] = None
+    impact_factors: Optional[dict[str, Any]] = None

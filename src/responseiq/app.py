@@ -13,6 +13,7 @@ from .models import Incident, Log
 from .routers.blueprints import router as blueprints_router
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut
+from .services.impact import assess_impact
 from .services.incident_service import process_log_ingestion
 
 # Initialize logging/telemetry early
@@ -36,6 +37,40 @@ app = FastAPI(
     title="ResponseIQ",
     lifespan=lifespan,
 )
+
+
+def _build_incident_outputs(items: List[Incident]) -> List[IncidentOut]:
+    recurrences: dict[tuple[str, str], int] = {}
+    for incident in items:
+        title = incident.description or incident.severity or "incident"
+        key = ((incident.severity or "medium").lower(), title)
+        recurrences[key] = recurrences.get(key, 0) + 1
+
+    incidents: List[IncidentOut] = []
+    for incident in items:
+        title = incident.description or incident.severity or "incident"
+        key = ((incident.severity or "medium").lower(), title)
+        impact = assess_impact(
+            severity=incident.severity,
+            title=title,
+            description=incident.description,
+            source=incident.source,
+            recurrence=recurrences.get(key, 1),
+        )
+        incidents.append(
+            IncidentOut(
+                id=incident.id,
+                title=title,
+                severity=incident.severity,
+                description=incident.description or "",
+                source=incident.source or "unknown",
+                impact_score=impact.score,
+                impact_factors=impact.factors,
+            )
+        )
+
+    incidents.sort(key=lambda current: current.impact_score or 0.0, reverse=True)
+    return incidents
 
 
 # Global Exception Handler for reliability
@@ -127,18 +162,7 @@ def list_incidents(
     if severity:
         q = q.where(Incident.severity == severity)
     results = session.exec(q).all()
-    incidents: List[IncidentOut] = []
-    for i in results:
-        title = i.description or i.severity or "incident"
-        incidents.append(
-            IncidentOut(
-                id=i.id,
-                title=title,
-                severity=i.severity,
-                description=i.description or "",
-            )
-        )
-    return incidents
+    return _build_incident_outputs(results)
 
 
 # ...existing code above handles app and endpoints
