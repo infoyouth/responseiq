@@ -2,6 +2,20 @@
 
 <!-- version list -->
 
+## v1.3.1 (2026-02-12)
+
+### Bug Fixes
+
+- **ci**: Inject PYPI_TOKEN env var into release workflow
+  ([`06d5b86`](https://github.com/infoyouth/responseiq/commit/06d5b86264e7edc5d1d3393a8af52a1a48e0eec9))
+
+- **ci**: Remove path filters to ensure release workflow runs on all main commits
+  ([`8732d6f`](https://github.com/infoyouth/responseiq/commit/8732d6f7c1bc374078b429f7f9b7c4912374f056))
+
+- **ci**: Update release committer identity to Youth Innovations
+  ([`d1cb58b`](https://github.com/infoyouth/responseiq/commit/d1cb58b382dbbd08457cf19a059aec5ccb219979))
+
+
 ## v1.3.0 (2026-02-12)
 
 ### Chores
