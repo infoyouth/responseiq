@@ -36,10 +36,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           git_committer_name: "Youth Innovations"
           git_committer_email: "info.youthinno@gmail.com"
-        env:
-          # Standard Twine variables for PyPI Upload
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Publish to PyPI
+        if: steps.semantic.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
 
   docker-publish:
     name: Build & Push Docker
