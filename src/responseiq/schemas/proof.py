@@ -139,6 +139,10 @@ class EvidenceIntegrity:
         sealing metadata on the instance. Returns `self` so callers can use
         the returned `sealed` object in assertions.
         """
+        # Build a new sealed object so callers receive an immutable snapshot
+        # of the sealing operation (tests expect separate sealed instances).
+        sealed = EvidenceIntegrity()
+
         # Derive contents from Evidence if provided
         if evidence is not None:
             content_str = self._content_to_canonical_str(evidence.content)
@@ -148,34 +152,35 @@ class EvidenceIntegrity:
         pre_canonical = self._content_to_canonical_str(pre_fix_content) if pre_fix_content else None
         post_canonical = self._content_to_canonical_str(post_fix_content) if post_fix_content else None
 
-        # Compute individual hashes (hex without prefix)
+        # Compute individual hashes (hex without prefix) on the sealed snapshot
         if pre_canonical:
-            self.pre_fix_hash = self.generate_hash(pre_canonical)
+            sealed.pre_fix_hash = self.generate_hash(pre_canonical)
         if post_canonical:
-            self.post_fix_hash = self.generate_hash(post_canonical)
+            sealed.post_fix_hash = self.generate_hash(post_canonical)
 
-        # Compute primary integrity hash (prefer pre_fix_hash, else post_fix_hash)
-        primary = self.pre_fix_hash or self.post_fix_hash or ""
-        self.integrity_hash = primary or self.generate_hash(
-            self._content_to_canonical_str(evidence.content) if evidence else ""
-        )
+        # Deterministic integrity hash: when an Evidence object is supplied,
+        # derive integrity_hash directly from its canonicalized content so that
+        # different evidence yields different integrity hashes (security test
+        # requirement). Otherwise fall back to pre/post hashes.
+        if evidence is not None:
+            payload = self._content_to_canonical_str(evidence.content)
+            sealed.integrity_hash = self.generate_hash(payload)
+        else:
+            sealed.integrity_hash = sealed.pre_fix_hash or sealed.post_fix_hash or self.generate_hash("")
 
         # Chain hash combines integrity + previous (if provided)
-        if previous_hash:
-            combined = f"{self.integrity_hash}{previous_hash}"
-        else:
-            combined = f"{self.integrity_hash}"
-        self.chain_hash = hashlib.sha256(combined.encode()).hexdigest()
+        combined = f"{sealed.integrity_hash}{previous_hash or ''}"
+        sealed.chain_hash = hashlib.sha256(combined.encode()).hexdigest()
 
         # Timestamps / metadata
-        self.sealed_at = datetime.now()
-        self.algorithm = "SHA-256"
+        sealed.sealed_at = datetime.now()
+        sealed.algorithm = "SHA-256"
 
         # Flags
-        self.tamper_proof = bool(self.pre_fix_hash or self.post_fix_hash)
-        self.chain_verified = bool(self.pre_fix_hash and self.post_fix_hash)
+        sealed.tamper_proof = bool(sealed.pre_fix_hash or sealed.post_fix_hash)
+        sealed.chain_verified = bool(sealed.pre_fix_hash and sealed.post_fix_hash)
 
-        return self
+        return sealed
 
     def verify_evidence_integrity(self, sealed, evidence: "Evidence") -> bool:
         """Verify that `sealed` matches the given `evidence` content.

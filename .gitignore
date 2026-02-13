@@ -221,3 +221,13 @@ semantic_job.txt
 jobs.json
 release_v*.log
 run_failure.txt
+
+# Copilot instructions
+.github/copilot-instructions.md
+
+# Generated Rollbacks
+rollbacks/
+
+# Generated Tests
+tests/repro/test_incident_*.py
+tests/repro/test_test_*.py

@@ -98,9 +98,37 @@ class ProjectedValueReport:
         return f"{hours}.{minutes} hours"
 
     @property
+    def period_days(self) -> int:
+        """Number of days in the reporting period."""
+        try:
+            delta = self.period_end - self.period_start
+            return max(0, delta.days)
+        except Exception:
+            return 0
+
+    @property
     def total_incidents(self) -> int:
         """Total incidents analyzed (alias for compatibility)."""
         return self.total_incidents_analyzed
+
+    def dict(self) -> Dict[str, Any]:
+        """Serialize report to plain dict for JSON/CLI output."""
+        return {
+            "period_start": self.period_start.isoformat(),
+            "period_end": self.period_end.isoformat(),
+            "period_days": self.period_days,
+            "total_incidents": self.total_incidents_analyzed,
+            "automation_candidates": self.automation_candidates,
+            "projected_annual_savings": self.projected_annual_savings,
+            "avg_time_saved_minutes": self.avg_time_saved_minutes,
+            "roi_projection": self.roi_projection,
+            "executive_summary": self.generate_executive_summary(),
+        }
+
+    @property
+    def executive_summary(self) -> str:
+        """Convenience property for templates/tests."""
+        return self.generate_executive_summary()
 
     @property
     def automation_candidates(self) -> int:
@@ -122,46 +150,39 @@ class ProjectedValueReport:
         return (self.projected_time_saved_hours * 60) / self.total_incidents_analyzed
 
     @property
-    def roi_projection(self) -> Dict[str, Any]:
-        """Calculate ROI metrics for management presentation."""
+    def roi_projection(self) -> float:
+        """Return a simple ROI indicator (0-1) representing shadow success rate.
+
+        Tests and CLI expect a numeric ROI value that can be formatted as a
+        percentage. For management-level details, use `dict()` on the report.
+        """
         if self.total_incidents_analyzed == 0:
-            return {"error": "No incidents analyzed"}
+            return 0.0
 
-        # Assume average SRE hourly cost of $150 (loaded cost for Fortune 500)
-        sre_hourly_cost = 150
-        projected_cost_savings = self.projected_time_saved_hours * sre_hourly_cost
-
-        return {
-            "incidents_analyzed": self.total_incidents_analyzed,
-            "auto_fixable_incidents": self.successful_analyses,
-            "potential_time_savings": self.potential_manual_toil_saved,
-            "projected_monthly_savings": f"${projected_cost_savings:,.2f}",
-            "success_rate": f"{(self.successful_analyses / self.total_incidents_analyzed) * 100:.1f}%",
-            "p2_adoption_readiness": "HIGH" if self.shadow_success_rate > 0.9 else "MEDIUM",
-        }
+        # Use shadow success rate as a conservative ROI proxy
+        return float(self.shadow_success_rate)
 
     def generate_executive_summary(self) -> str:
         """Generate executive summary for C-level presentation."""
-        roi = self.roi_projection()
+        roi = self.roi_projection
         return f"""
-🎯 ResponseIQ Shadow Mode Analysis - Executive Summary
+ResponseIQ Shadow Mode Analysis - Executive Summary
 
-📊 Period: {self.period_start.strftime('%Y-%m-%d')} to {self.period_end.strftime('%Y-%m-%d')}
+Period: {self.period_start.strftime('%Y-%m-%d')} to {self.period_end.strftime('%Y-%m-%d')}
 
-💰 PROJECTED VALUE:
-   • Manual Toil Saved: {self.potential_manual_toil_saved}
-   • Cost Savings: {roi.get('projected_monthly_savings', 'N/A')}
-   • Auto-Fix Success Rate: {roi.get('success_rate', 'N/A')}
+PROJECTED VALUE:
+  - Manual Toil Saved: {self.potential_manual_toil_saved}
+  - Cost Savings: ${self.projected_annual_savings:,.2f}
+  - Auto-Fix Success Rate: {roi:.1%}
 
-🚀 ADOPTION READINESS:
-   • Total Incidents: {self.total_incidents_analyzed}
-   • AI-Fixable: {self.successful_analyses} incidents
-   • P2 Trust Level: {roi.get('p2_adoption_readiness', 'UNKNOWN')}
+ADOPTION READINESS:
+  - Total Incidents: {self.total_incidents_analyzed}
+  - AI-Fixable: {self.successful_analyses} incidents
+  - P2 Trust Level: {"HIGH" if self.shadow_success_rate > 0.9 else "MEDIUM"}
 
-📈 RECOMMENDATION:
-   Enable auto-apply for {self.successful_analyses} incident types
-   to realize immediate productivity gains.
-        """.strip()
+RECOMMENDATION:
+  - Enable auto-apply for {self.successful_analyses} incident types to realize immediate productivity gains.
+""".strip()
 
 
 class ShadowAnalyticsService:
@@ -238,12 +259,16 @@ class ShadowAnalyticsService:
 
             # This simulates the full P2 workflow but doesn't apply anything
             recommendation = await self.remediation_service.remediate_incident(incident_dict)
-            if recommendation and recommendation.allowed:
+            # Shadow analytics must *return* the analysis even when the Trust Gate
+            # denies automatic application. Tests and reporting expect to see
+            # confidence/plan metadata regardless of `allowed`.
+            if recommendation:
                 return {
                     "title": recommendation.title,
                     "confidence": recommendation.confidence,
                     "blast_radius": recommendation.blast_radius,
                     "remediation_plan": recommendation.remediation_plan,
+                    "allowed": recommendation.allowed,
                 }
             return None
         except Exception as e:
@@ -274,16 +299,22 @@ class ShadowAnalyticsService:
         # Default estimate for unknown types
         return 40.0
 
-    def generate_period_report(
+    async def generate_period_report(
         self, days_back: int = 7, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
     ) -> ProjectedValueReport:
-        """Generate value report for the last N days or specified period."""
-        if start_date and end_date:
-            # Use provided dates
+        """Generate value report for the last N days or specified period.
+
+        Accepts either the (days_back=int) form OR (start_date: datetime, end_date: datetime)
+        as the first two positional arguments (tests call both styles).
+        """
+        # Allow positional (start_date, end_date) call-style
+        if isinstance(days_back, datetime) and isinstance(start_date, datetime):
+            report_start = days_back
+            report_end = start_date
+        elif start_date and end_date:
             report_start = start_date
             report_end = end_date
         else:
-            # Default to last N days
             report_end = datetime.now()
             report_start = report_end - timedelta(days=days_back)
 

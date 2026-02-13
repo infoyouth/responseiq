@@ -135,6 +135,19 @@ class ExecutableRollbackGenerator:
         for change in proposed_changes:
             change_type = change.get("type", "unknown")
 
+            # Support lightweight/raw commands generated from positional helpers
+            if change_type in ("mock", "raw", "command") or change.get("command"):
+                cmd = change.get("command") or change.get("cmd") or str(change)
+                actions.append(
+                    RollbackAction(
+                        "manual",
+                        f"Run command rollback: {cmd}",
+                        f"subprocess.run(r'''{cmd}''', shell=True, check=True)",
+                        "True",
+                    )
+                )
+                continue
+
             if change_type == "file_modification":
                 # File changes - git revert
                 actions.append(
@@ -223,31 +236,41 @@ class ExecutableRollbackGenerator:
         for i, action in enumerate(actions, 1):
             action_impl = textwrap.indent(
                 textwrap.dedent(f'''
-                def rollback_step_{i}():
-                    """
-                    {action.description}
-                    Type: {action.action_type}
-                    """
-                    print(f"Step {i}: {action.description}")
-                    try:
-                        {action.command}
+def rollback_step_{i}(self):
+    """{action.description}
 
-                        # Validation check
-                        {self._generate_validation_code(action)}
+    Type: {action.action_type}
+    """
+    print(f"Step {i}: {action.description}")
+    try:
+{textwrap.indent(action.command, '        ')}
 
-                        print(f"  ✅ Success")
-                        return True
-                    except Exception as e:
-                        print(f"  ❌ Failed: {{e}}")
-                        {"return False" if action.critical else "print('  ⚠️  Non-critical failure, continuing')"}
-                        {"" if action.critical else "return True"}
-                ''').strip(),
+        # Validation check
+        validation_result = {action.validation_check}
+        if not validation_result:
+            raise Exception("Validation check failed")
+
+        print("  ✅ Success")
+        return True
+    except Exception as e:
+        print(f"  ❌ Failed: {{e}}")
+        {"return False" if action.critical else "print('  ⚠️  Non-critical failure, continuing')"}
+        {"" if action.critical else "return True"}
+'''),
                 "    ",
             )
             action_implementations.append(action_impl)
 
         # Generate main execution logic
         main_execution = self._generate_main_execution(actions)
+
+        # Add a `main()` wrapper so generated scripts are easier to test and import
+        main_wrapper = textwrap.dedent('''
+        def main():
+            """Entry point for the rollback script."""
+            executor = RollbackExecutor()
+            return executor.execute_rollback()
+        ''').strip()
 
         script_template = f'''#!/usr/bin/env python3
 """
@@ -265,6 +288,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime
 
 
 class RollbackExecutor:
@@ -315,22 +339,24 @@ class RollbackExecutor:
             print("   Status: ❌ PARTIAL - Manual intervention may be required")
 
 
-if __name__ == "__main__":
+{main_wrapper}
+
+if __name__ == '__main__':
     import datetime
 
     print("""
-⚠️  ROLLBACK SCRIPT WARNING:
+ROLLBACK SCRIPT WARNING:
 This script will revert changes made by ResponseIQ remediation.
 Ensure you have reviewed the changes and have proper backups.
 
-Continue? (y/N): """, end="")
+Confirm continuation? (y/N): """, end="")
 
     if input().lower() != 'y':
         print("Rollback cancelled by user")
         sys.exit(0)
 
-    executor = RollbackExecutor()
-    executor.execute_rollback()
+    # Execute the main entrypoint (wrapped for testability)
+    main()
 '''
 
         return script_template
