@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_16f77fbe",
+  "script_path": "rollbacks/rollback_auto_16f77fbe.py",
+  "generated_at": "2026-02-13T12:25:45.096364",
+  "remediation_title": "Pod CrashLoopBackOff",
+  "confidence": 0.85,
+  "blast_radius": "unknown",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}

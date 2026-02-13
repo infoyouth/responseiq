@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_75863f17",
+  "script_path": "rollbacks/rollback_auto_75863f17.py",
+  "generated_at": "2026-02-13T12:05:17.442728",
+  "remediation_title": "Application Logic Error",
+  "confidence": 0.795,
+  "blast_radius": "unknown",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}

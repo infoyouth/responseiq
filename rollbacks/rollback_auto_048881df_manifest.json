@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_048881df",
+  "script_path": "rollbacks/rollback_auto_048881df.py",
+  "generated_at": "2026-02-13T12:25:45.068109",
+  "remediation_title": "Kubernetes Config Corruption",
+  "confidence": 0.95,
+  "blast_radius": "unknown",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}

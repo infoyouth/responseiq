@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_bdf3ada0",
+  "script_path": "rollbacks/rollback_auto_bdf3ada0.py",
+  "generated_at": "2026-02-13T12:32:27.098915",
+  "remediation_title": "Kubernetes Config Corruption",
+  "confidence": 0.95,
+  "blast_radius": "unknown",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}

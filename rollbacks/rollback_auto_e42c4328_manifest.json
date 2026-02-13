@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_e42c4328",
+  "script_path": "rollbacks/rollback_auto_e42c4328.py",
+  "generated_at": "2026-02-13T12:25:45.092519",
+  "remediation_title": "Cluster-wide DNS Failure",
+  "confidence": 0.9,
+  "blast_radius": "env_wide",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}

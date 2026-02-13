@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_fa298d63",
+  "script_path": "rollbacks/rollback_auto_fa298d63.py",
+  "generated_at": "2026-02-13T12:25:45.017754",
+  "remediation_title": "Application Logic Error",
+  "confidence": 0.795,
+  "blast_radius": "unknown",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}

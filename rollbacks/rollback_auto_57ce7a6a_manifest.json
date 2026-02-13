@@ -1,0 +1,11 @@
+{
+  "incident_id": "auto_57ce7a6a",
+  "script_path": "rollbacks/rollback_auto_57ce7a6a.py",
+  "generated_at": "2026-02-13T12:26:37.008027",
+  "remediation_title": "Cluster-wide DNS Failure",
+  "confidence": 0.9,
+  "blast_radius": "env_wide",
+  "rollback_capability": "EXECUTABLE",
+  "manual_steps_required": false,
+  "validation_included": true
+}
