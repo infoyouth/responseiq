@@ -6,7 +6,7 @@ Enterprise-ready remediation with policy enforcement, safety checks, and structu
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +15,7 @@ from responseiq.config.policy_config import PolicyMode
 from responseiq.schemas.proof import ProofBundle
 from responseiq.services.impact import assess_impact
 from responseiq.services.reproduction_service import ReproductionService
+from responseiq.services.rollback_generator import ExecutableRollbackGenerator
 from responseiq.services.trust_gate import (
     RemediationRequest,
     TrustGateValidator,
@@ -84,6 +85,9 @@ class RemediationRecommendation:
             "checks_failed": self.checks_failed,
             "required_actions": self.required_actions,
             "next_steps": self.next_steps,
+            "proof_bundle": (
+                asdict(self.proof_bundle) if self.proof_bundle else None
+            ),  # P2: Include proof in audit trail
         }
 
 
@@ -97,6 +101,7 @@ class RemediationService:
         self.k8s_patcher = KubernetesPatcher()
         self.trust_gate = TrustGateValidator(environment=environment)
         self.reproduction_service = ReproductionService()  # P2: Proof-oriented testing
+        self.rollback_generator = ExecutableRollbackGenerator()  # P2.1: Executable rollbacks
         self.environment = environment
 
         logger.info(f"RemediationService initialized for {environment} environment")
@@ -153,6 +158,19 @@ class RemediationService:
                 )
                 if proof_bundle.reproduction_test:
                     logger.info(f"✅ Reproduction test generated: {proof_bundle.reproduction_test.test_path}")
+
+                    # P2.1 Sovereign Audit: Execute "Negative Proof" (Pre-fix validation)
+                    # We run the test immediately to prove failure before any remediation is applied.
+                    logger.info(f"🔬 Executing Negative Proof test: {proof_bundle.reproduction_test.test_path}")
+                    proof_bundle = await self.reproduction_service.execute_reproduction_test(proof_bundle)
+
+                    if proof_bundle.pre_fix_evidence:
+                        logger.info("📉 Negative Proof captured (Test failed as expected)")
+                        # Seal the evidence immediately for audit trail
+                        proof_bundle.seal_forensic_evidence()
+                    else:
+                        logger.warning("❓ Negative Proof failed: Test passed unexpectedly or errored")
+
                 else:
                     logger.warning("⚠️  Reproduction test generation completed but no test was created")
             except Exception as e:
@@ -166,7 +184,7 @@ class RemediationService:
         proposed_changes = analysis_result.get("proposed_changes", [])
 
         # Generate rollback and test plans
-        rollback_plan = self._generate_rollback_plan(analysis_result, affected_files)
+        rollback_plan = await self._generate_rollback_plan(analysis_result, affected_files, proposed_changes)
         test_plan = self._generate_test_plan(analysis_result, title)
 
         remediation_request = RemediationRequest(
@@ -241,13 +259,41 @@ class RemediationService:
             next_steps=["Check AI service availability", "Verify incident data quality"],
         )
 
-    def _generate_rollback_plan(self, analysis_result: dict, affected_files: List[str]) -> str:
-        """Generate executable rollback plan."""
+    async def _generate_rollback_plan(
+        self, analysis_result: dict, affected_files: List[str], proposed_changes: Optional[List[Dict[str, Any]]] = None
+    ) -> str:
+        """Generate executable rollback script and return reference."""
         if not affected_files:
             return "No file changes detected - no rollback required"
 
+        # Generate incident ID for the rollback script
+        incident_id = analysis_result.get("incident_id", f"auto_{uuid.uuid4().hex[:8]}")
+
+        # Use the executable rollback generator
+        try:
+            # Await the (now async) generator. It still supports the file-backed
+            # keyword-argument style and will return a Path for that usage.
+            script_path = await self.rollback_generator.generate_rollback_script(
+                incident_id=incident_id,
+                analysis_result=analysis_result,
+                affected_files=affected_files,
+                proposed_changes=proposed_changes or [],
+            )
+
+            # Create manifest for audit trail
+            manifest_path = self.rollback_generator.create_rollback_manifest(script_path, incident_id, analysis_result)
+
+            return f"Executable rollback script: {script_path}\nManifest: {manifest_path}"
+
+        except Exception as e:
+            logger.warning(f"Failed to generate executable rollback script: {e}")
+            # Fallback to text-based plan
+            return self._generate_text_rollback_plan(analysis_result, affected_files)
+
+    def _generate_text_rollback_plan(self, analysis_result: dict, affected_files: List[str]) -> str:
+        """Fallback text-based rollback plan."""
         rollback_steps = [
-            "# Rollback Plan",
+            "# Rollback Plan (Text-based fallback)",
             f"# Generated for incident analysis: {analysis_result.get('title', 'Unknown')}",
             "",
             "1. Create backup of current state:",

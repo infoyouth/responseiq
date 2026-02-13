@@ -8,12 +8,15 @@ to speed up test generation and ensure consistency.
 from __future__ import annotations
 
 import os
+import shutil
+import socket
 import tempfile
 from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import Mock
 
 import pytest
+import requests
 
 
 class ResponseIQReproBase:
@@ -37,8 +40,6 @@ class ResponseIQReproBase:
         yield
 
         # Cleanup after test
-        import shutil
-
         shutil.rmtree(self._temp_dir, ignore_errors=True)
 
         # Restore original environment
@@ -95,24 +96,18 @@ class ResponseIQReproBase:
 
     def mock_network_timeout(self, timeout_seconds: float = 5.0) -> Mock:
         """Return a mock that simulates network timeout."""
-        import requests
-
         mock = Mock()
         mock.side_effect = requests.exceptions.Timeout(f"Request timed out after {timeout_seconds} seconds")
         return mock
 
     def mock_connection_refused(self, host: str = "localhost", port: int = 8080) -> Mock:
         """Return a mock that simulates connection refused."""
-        import requests
-
         mock = Mock()
         mock.side_effect = requests.exceptions.ConnectionError(f"Connection refused: {host}:{port}")
         return mock
 
     def mock_dns_failure(self, hostname: str = "example.com") -> Mock:
         """Return a mock that simulates DNS resolution failure."""
-        import socket
-
         mock = Mock()
         mock.side_effect = socket.gaierror(f"Name or service not known: {hostname}")
         return mock
