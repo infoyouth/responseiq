@@ -6,7 +6,7 @@ Enterprise-ready remediation with policy enforcement, safety checks, and structu
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -85,6 +85,9 @@ class RemediationRecommendation:
             "checks_failed": self.checks_failed,
             "required_actions": self.required_actions,
             "next_steps": self.next_steps,
+            "proof_bundle": (
+                asdict(self.proof_bundle) if self.proof_bundle else None
+            ),  # P2: Include proof in audit trail
         }
 
 
@@ -155,6 +158,19 @@ class RemediationService:
                 )
                 if proof_bundle.reproduction_test:
                     logger.info(f"✅ Reproduction test generated: {proof_bundle.reproduction_test.test_path}")
+
+                    # P2.1 Sovereign Audit: Execute "Negative Proof" (Pre-fix validation)
+                    # We run the test immediately to prove failure before any remediation is applied.
+                    logger.info(f"🔬 Executing Negative Proof test: {proof_bundle.reproduction_test.test_path}")
+                    proof_bundle = await self.reproduction_service.execute_reproduction_test(proof_bundle)
+
+                    if proof_bundle.pre_fix_evidence:
+                        logger.info("📉 Negative Proof captured (Test failed as expected)")
+                        # Seal the evidence immediately for audit trail
+                        proof_bundle.seal_forensic_evidence()
+                    else:
+                        logger.warning("❓ Negative Proof failed: Test passed unexpectedly or errored")
+
                 else:
                     logger.warning("⚠️  Reproduction test generation completed but no test was created")
             except Exception as e:

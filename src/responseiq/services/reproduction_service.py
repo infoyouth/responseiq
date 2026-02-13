@@ -194,20 +194,20 @@ class ReproductionService:
         """
         Generate pytest content tailored to the environment dependency type.
         """
-        # Base imports and setup
+        # Base imports and setup (pre-indented for dedent compatibility)
         imports = [
-            "import pytest",
-            "from unittest.mock import Mock, patch, MagicMock",
-            "from .base import ResponseIQReproBase",
+            "        import pytest",
+            "        from unittest.mock import Mock, patch, MagicMock",
+            "        from .base import ResponseIQReproBase",
         ]
 
-        # Add environment-specific imports
+        # Add environment-specific imports (pre-indented)
         env_imports = {
-            "network": ["import requests", "from unittest.mock import AsyncMock"],
-            "filesystem": ["import tempfile", "import os", "from pathlib import Path"],
-            "permission": ["import tempfile", "import os", "import stat"],
-            "resource": ["import psutil", "from unittest.mock import patch"],
-            "version": ["import pkg_resources", "from unittest.mock import patch"],
+            "network": ["        import requests", "        from unittest.mock import AsyncMock"],
+            "filesystem": ["        import tempfile", "        import os", "        from pathlib import Path"],
+            "permission": ["        import tempfile", "        import os", "        import stat"],
+            "resource": ["        import psutil", "        from unittest.mock import patch"],
+            "version": ["        import pkg_resources", "        from unittest.mock import patch"],
             "generic": [],
         }
 
