@@ -250,7 +250,7 @@ class ProofBundle:
         if not self.integrity:
             self.integrity = EvidenceIntegrity()
 
-        self.integrity.seal_evidence(self.pre_fix_evidence, self.post_fix_evidence)
+        self.integrity.seal_evidence(pre_fix_content=self.pre_fix_evidence, post_fix_content=self.post_fix_evidence)
 
     def verify_evidence_integrity(self) -> bool:
         """Verify that evidence hasn't been tampered with since sealing."""

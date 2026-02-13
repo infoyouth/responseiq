@@ -45,7 +45,7 @@ class ExecutableRollbackGenerator:
     - Validate each step
     """
 
-    def __init__(self, output_dir: Path = None):
+    def __init__(self, output_dir: Optional[Path] = None):
         self.output_dir = output_dir or Path("rollbacks")
         self.output_dir.mkdir(exist_ok=True)
 

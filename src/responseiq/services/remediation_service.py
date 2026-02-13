@@ -244,7 +244,7 @@ class RemediationService:
         )
 
     async def _generate_rollback_plan(
-        self, analysis_result: dict, affected_files: List[str], proposed_changes: List[Dict[str, Any]] = None
+        self, analysis_result: dict, affected_files: List[str], proposed_changes: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """Generate executable rollback script and return reference."""
         if not affected_files:

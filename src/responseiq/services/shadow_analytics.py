@@ -198,12 +198,12 @@ class ShadowAnalyticsService:
         self.reproduction_service = ReproductionService()
         self.shadow_results: List[ShadowAnalyticsResult] = []
 
-    async def analyze_incident_shadow(self, incident: Dict[str, Any]) -> ShadowAnalyticsResult:
+    async def analyze_incident_shadow(self, incident: Any) -> ShadowAnalyticsResult:
         """
         Run shadow P2 analysis on a single incident.
 
         Args:
-            incident: Incident data with id, severity, description, etc.
+            incident: Incident data (object or dict) with id, severity, description, etc.
 
         Returns:
             ShadowAnalyticsResult with projected value metrics
