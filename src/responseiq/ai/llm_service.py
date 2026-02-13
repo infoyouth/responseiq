@@ -9,12 +9,35 @@ from responseiq.utils.logger import logger
 
 async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Dict[str, Any]]:
     """
-    Analyzes log using OpenAI API if available.
-    Returns structured data if successful, None if configured to skip or fails.
+    Analyzes log using OpenAI API if available, or local mock LLM as fallback.
+    Returns structured data if successful, None if disabled or fails.
     Asynchronous version for high-throughput processing.
     """
+    # Try OpenAI first if API key is available
+    if settings.openai_api_key:
+        result = await _analyze_with_openai(log_text, code_context)
+        if result is not None:
+            return result
+        logger.warning("OpenAI analysis failed, falling back to local mock LLM")
+
+    # Fall back to local mock LLM
+    use_local_fallback = getattr(settings, "use_local_llm_fallback", True)
+    if use_local_fallback:
+        logger.info("🤖 Using local mock LLM for incident analysis")
+        from responseiq.ai.local_llm_service import analyze_with_local_llm
+
+        return await analyze_with_local_llm(log_text, code_context)
+
+    logger.debug("AI analysis disabled - no OpenAI key and local fallback disabled")
+    return None
+
+
+async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optional[Dict[str, Any]]:
+    """
+    Internal function to analyze using OpenAI API specifically.
+    Returns structured data if successful, None if fails.
+    """
     if not settings.openai_api_key:
-        logger.debug("OpenAI API key not set. Skipping AI analysis.")
         return None
 
     api_key = settings.openai_api_key.get_secret_value()

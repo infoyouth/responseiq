@@ -63,8 +63,13 @@ def test_async_ingestion_creates_incident(client):
         statement = select(Incident).where(Incident.log_id == log_id)
         incident = session.exec(statement).first()
         assert incident is not None
-        # Incident model has no 'title', it stores reason in description
-        assert "OOMKilled" in incident.description
+        # With AI analysis, check that memory/OOM issue was detected properly
+        # Either the exact keyword or AI-analyzed memory issue description
+        assert (
+            "OOMKilled" in incident.description
+            or "Memory" in incident.description
+            or "Resource Exhaustion" in incident.description
+        )
         assert incident.severity == "high"
 
 

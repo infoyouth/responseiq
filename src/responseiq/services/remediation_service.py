@@ -12,7 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from responseiq.ai.llm_service import analyze_with_llm
 from responseiq.config.policy_config import PolicyMode
+from responseiq.schemas.proof import ProofBundle
 from responseiq.services.impact import assess_impact
+from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.trust_gate import (
     RemediationRequest,
     TrustGateValidator,
@@ -53,6 +55,7 @@ class RemediationRecommendation:
     evidence: Dict[str, Any] = field(default_factory=dict)
     checks_passed: List[str] = field(default_factory=list)
     checks_failed: List[str] = field(default_factory=list)
+    proof_bundle: Optional[ProofBundle] = None  # P2: Proof-oriented evidence
 
     # Execution guidance
     required_actions: List[str] = field(default_factory=list)
@@ -93,6 +96,7 @@ class RemediationService:
     def __init__(self, environment: str = "production"):
         self.k8s_patcher = KubernetesPatcher()
         self.trust_gate = TrustGateValidator(environment=environment)
+        self.reproduction_service = ReproductionService()  # P2: Proof-oriented testing
         self.environment = environment
 
         logger.info(f"RemediationService initialized for {environment} environment")
@@ -138,6 +142,21 @@ class RemediationService:
         impact_assessment = assess_impact(
             severity=severity, title=title, description=log_content, source="ai", confidence=ai_confidence
         )
+
+        # Step 3.5: Generate proof bundle for high-impact incidents (P2)
+        proof_bundle = None
+        if impact_assessment.score >= 40.0:
+            logger.info(f"High-impact incident ({impact_assessment.score:.1f} ≥ 40): Generating reproduction test")
+            try:
+                proof_bundle = await self.reproduction_service.analyze_and_generate_reproduction(
+                    incident=incident, context={"impact_assessment": impact_assessment, "ai_analysis": analysis_result}
+                )
+                if proof_bundle.reproduction_test:
+                    logger.info(f"✅ Reproduction test generated: {proof_bundle.reproduction_test.test_path}")
+                else:
+                    logger.warning("⚠️  Reproduction test generation completed but no test was created")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to generate reproduction test: {str(e)}")
 
         # Step 4: Build remediation request for trust gate
         blast_radius = impact_assessment.factors.get("affected_surface", "single_service")
@@ -187,6 +206,7 @@ class RemediationService:
             checks_passed=validation_result.checks_passed,
             checks_failed=validation_result.checks_failed,
             required_actions=validation_result.required_actions,
+            proof_bundle=proof_bundle,  # P2: Proof-oriented evidence
         )
 
         # Step 7: Add risk assessment
