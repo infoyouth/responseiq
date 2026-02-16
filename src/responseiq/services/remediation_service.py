@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from responseiq.ai.llm_service import analyze_with_llm
 from responseiq.config.policy_config import PolicyMode
-from responseiq.schemas.proof import ProofBundle
+from responseiq.schemas.proof import ProofBundle, ReproductionStatus
 from responseiq.services.impact import assess_impact
 from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.rollback_generator import ExecutableRollbackGenerator
@@ -189,10 +189,21 @@ class RemediationService:
 
         # P2: Truth in Labeling - Check proof quality before creating request
         if proof_bundle and proof_bundle.reproduction_test:
+            # P2 Hardening - Strict "Successful Failure" check
+            # If the reproduction test passed unexpectedly, IT'S NOT A BUG (or the test is bad).
+            if proof_bundle.reproduction_test.status == ReproductionStatus.PASSED_UNEXPECTEDLY:
+                logger.error(
+                    "🛑 INVALID PROOF: Reproduction test passed on buggy code. Aborting autonomous remediation."
+                )
+                ai_confidence = 0.0  # Force failure in trust gate due to invalid proof
+
             # If we only have static fallback, downgrade confidence for the trust gate logic
             # This forces human approval (PR_ONLY) instead of autonomous execution.
-            if proof_bundle.reproduction_test.repro_method == "static_fallback":
-                logger.warning("📉 Downgrading trust: Reproduction used static fallback (Low Confidence)")
+            elif proof_bundle.reproduction_test.repro_method == "static_fallback":
+                logger.warning(
+                    "📉 Reproduction achieved via Static Template (Basic Path Check). "
+                    "High-confidence logic verification was unavailable. Downgrading trust."
+                )
                 # Cap confidence below typical automation thresholds (usually 0.8+)
                 ai_confidence = min(ai_confidence, 0.5)
 
@@ -222,7 +233,10 @@ class RemediationService:
         ):
             logger.warning("🛡️ TRUST GATE OVERRIDE: Downgrading to PR_ONLY due to static_fallback proof.")
             validation_result.policy_mode = PolicyMode.PR_ONLY
-            validation_result.message += " (Downgraded to PR_ONLY: Weak proof evidence)"
+            validation_result.message += (
+                " | TRUST GATE: Reproduction achieved via Static Template (Basic Path Check). "
+                "High-confidence logic verification was unavailable. Downgrading to PR_ONLY."
+            )
 
         # Step 6: Build comprehensive recommendation
         recommendation = RemediationRecommendation(
@@ -261,6 +275,10 @@ class RemediationService:
             logger.info(f"✅ Remediation APPROVED for {incident_id}: {validation_result.message}")
         else:
             logger.warning(f"❌ Remediation DENIED for {incident_id}: {validation_result.message}")
+
+            # P2 Cleanup: If remediation is denied, we don't need the proof artifact anymore.
+            if proof_bundle:
+                await self.reproduction_service.cleanup_reproduction_test(proof_bundle)
 
         return recommendation
 

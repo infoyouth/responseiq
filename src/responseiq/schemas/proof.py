@@ -54,6 +54,10 @@ class ReproductionTest:
     mock_dependencies: List[str] = field(default_factory=list)
     repro_method: str = "unknown"  # 'llm_synthesis' or 'static_fallback'
 
+    # Forensic Integrity
+    test_file_hash: Optional[str] = None  # SHA-256 hash of the generated test file
+    execution_log_hash: Optional[str] = None  # SHA-256 hash of the execution output
+
 
 @dataclass
 class Evidence:
