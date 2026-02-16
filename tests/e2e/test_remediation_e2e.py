@@ -3,7 +3,7 @@ End-to-End tests for Trust Gate v1 remediation with policy enforcement.
 Validates P1 roadmap requirements for safe, policy-governed remediation.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -208,6 +208,11 @@ class TestTrustGateE2E:
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(production_policy)
 
+            # Mock reproduction service to avoid confidence downgrade
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+
             recommendation = await service.remediate_incident(critical_incident)
 
             # Verify denial due to missing rollback plan
@@ -233,6 +238,11 @@ class TestTrustGateE2E:
 
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(development_policy)
+
+            # Mock reproduction service to avoid confidence downgrade
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
 
             # Mock security scan failure
             with (
@@ -305,6 +315,11 @@ class TestTrustGateE2E:
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(suggest_only_policy)
 
+            # Mock reproduction service to avoid confidence downgrade
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+
             with (
                 patch.object(service.trust_gate, "_run_security_scan", return_value=True),
                 patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
@@ -342,6 +357,11 @@ class TestTrustGateE2E:
 
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(pr_only_policy)
+
+            # Mock reproduction service to avoid confidence downgrade
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
 
             with (
                 patch.object(service.trust_gate, "_run_security_scan", return_value=True),
@@ -383,6 +403,11 @@ class TestTrustGateE2E:
 
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(production_policy)
+
+            # Mock reproduction service to avoid confidence downgrade
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
 
             recommendation = await service.remediate_incident(critical_incident)
 

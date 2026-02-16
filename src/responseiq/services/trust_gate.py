@@ -6,7 +6,7 @@ Validates remediation actions against configured policies before execution.
 from __future__ import annotations
 
 import asyncio
-import subprocess  # nosec - Used for Trust Gate test validation in secure context
+import subprocess  # nosec B404
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
