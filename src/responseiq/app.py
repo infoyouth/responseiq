@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
 
 from .db import get_session, init_db
-from .models import Incident, Log
+from .models.base import Incident, Log
 from .routers.blueprints import router as blueprints_router
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut

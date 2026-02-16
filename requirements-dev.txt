@@ -3,3 +3,7 @@ opentelemetry-api
 opentelemetry-sdk
 opentelemetry-instrumentation
 opentelemetry-exporter-jaeger
+
+jinja2
+beautifulsoup4
+lxml
