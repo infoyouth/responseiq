@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 import aiofiles
+import tree_sitter_languages
 
 from responseiq.utils.logger import logger
 
@@ -18,6 +19,52 @@ PATTERNS = [
     # Java: at com.example.Main.main(Main.java:14) -> tough to map to file without package scan
     # skipping for now
 ]
+
+
+def _get_tree_sitter_language(file_path: Path):
+    """Detects parser language from file extension."""
+    suffix = file_path.suffix.lower()
+    mapping = {
+        ".py": "python",
+        ".js": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".go": "go",
+        ".java": "java",
+        ".c": "c",
+        ".cpp": "cpp",
+        ".rs": "rust",
+    }
+    lang_name = mapping.get(suffix)
+    if not lang_name:
+        return None
+    try:
+        return tree_sitter_languages.get_language(lang_name)
+    except Exception:
+        return None  # Fallback to lines if parser not found
+
+
+def _find_semantic_scope(node, target_line):
+    """
+    Traverses up the syntax tree to find the smallest 'scope' (Function/Class)
+    that contains the target line.
+    """
+    current = node
+    # Walk up the tree
+    while current:
+        # Check if this node covers the line
+        if current.start_point[0] <= target_line and current.end_point[0] >= target_line:
+            # Check for interesting node types
+            if current.type in [
+                "function_definition",
+                "class_definition",
+                "method_definition",
+                "arrow_function",
+                "function_declaration",
+            ]:
+                return current
+        current = current.parent
+    return None  # If no function scope found (e.g. top level), return None
 
 
 async def extract_context_from_log(log_text: str, root_path: Path = Path(".")) -> str:
@@ -86,33 +133,70 @@ def resolve_local_path(path_str: str, root: Path) -> Optional[Path]:
 
 async def read_code_around_line(file_path: Path, line_num: int, context_lines: int = 5) -> Optional[str]:
     """
-    Reads file effectively using async I/O and extracts a window around the line.
+    Reads file using Tree-sitter for semantic scope extraction.
+    Fallbacks to simple line-window if parsing fails.
     """
+    # Read full content
+    try:
+        async with aiofiles.open(file_path, mode="r", encoding="utf-8", errors="ignore") as f:
+            content = await f.read()
+    except Exception:
+        return None
+
+    if not content:
+        return None
+
+    # Tree-sitter Logic
+    try:
+        language = _get_tree_sitter_language(file_path)
+        if language:
+            parser = tree_sitter_languages.get_parser(language.name)
+            tree = parser.parse(bytes(content, "utf8"))
+            root_node = tree.root_node
+
+            # Find node at specific line/column (approximate column 0)
+            target_node = root_node.descendant_for_point_range((line_num - 1, 0), (line_num - 1, 100))
+
+            # Find semantic scope (Function or Class)
+            scope_node = _find_semantic_scope(target_node, line_num - 1)
+
+            if scope_node:
+                # Extract the full scope content
+                start_line = scope_node.start_point[0]
+                end_line = scope_node.end_point[0]
+
+                # Add a few lines buffer for context inside function if it's huge?
+                # For now, return the WHOLE function to ensure "Surgical Fix" has full context.
+                lines = content.splitlines()
+
+                # Ensure we don't go out of bounds
+                start_line = max(0, start_line)
+                end_line = min(len(lines) - 1, end_line)
+
+                formatted_lines = []
+                for i in range(start_line, end_line + 1):
+                    marker = ">> " if (i + 1) == line_num else "   "
+                    formatted_lines.append(f"{i + 1:4d} | {marker}{lines[i]}")
+
+                return "\n".join(formatted_lines)
+
+    except Exception as e:
+        logger.debug(f"Tree-sitter parsing failed for {file_path}: {e}")
+        # Fallback to default logic
+        pass
+
+    # Fallback Logic (Simple Window)
     start = max(1, line_num - context_lines)
     end = line_num + context_lines
 
-    lines = []
-    try:
-        async with aiofiles.open(file_path, mode="r", encoding="utf-8", errors="ignore") as f:
-            # We have to read lines to find the range.
-            # Optimization: If file is huge, this is slow. But source files are usually
-            # small (<1MB).
-            # For massive files, we'd want seek(), but text lines are variable length.
-            # Since source code files are small, reading all content into memory is
-            # reliable and fast enough.
-            content = await f.readlines()
+    file_lines = content.splitlines()
+    lines_out = []
 
-            if len(content) < 1:
-                return None
+    display_start = max(0, start - 1)
+    display_end = min(len(file_lines), end)
 
-            # Python lists are 0-indexed, lines are 1-indexed
-            display_start = max(0, start - 1)
-            display_end = min(len(content), end)
+    for i in range(display_start, display_end):
+        marker = ">> " if (i + 1) == line_num else "   "
+        lines_out.append(f"{i + 1:4d} | {marker}{file_lines[i]}")
 
-            for i in range(display_start, display_end):
-                marker = ">> " if (i + 1) == line_num else "   "
-                lines.append(f"{i + 1:4d} | {marker}{content[i].rstrip()}")
-
-        return "\n".join(lines)
-    except Exception:
-        return None
+    return "\n".join(lines_out)
