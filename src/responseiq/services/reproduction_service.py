@@ -8,8 +8,10 @@ error signature found in incident signals.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
+import shutil
 import sys
 import textwrap
 from datetime import datetime
@@ -176,11 +178,15 @@ class ReproductionService:
         with open(test_path, "w") as f:
             f.write(test_content)
 
+        # Generate initial file hash (Forensic Auditing)
+        file_hash = self._generate_file_hash(test_path)
+
         return ReproductionTest(
             test_id=test_id,
             test_path=f"tests/repro/{test_filename}",
             incident_signature=error_signature,
             environment_type=environment_type,
+            test_file_hash=file_hash,
             description=f"Reproduction test for: {incident.get('description', 'Unknown incident')[:100]}",
             rationale=f"Generated {environment_type} reproduction for error pattern: {error_signature}",
             mock_dependencies=self._get_mock_dependencies(environment_type),
@@ -302,12 +308,9 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
                 """Reproduce network-related incident."""
                 with patch('requests.get') as mock_get:
                     mock_get.side_effect = requests.exceptions.ConnectionError("{error_signature}")
-
-                    with pytest.raises(Exception) as exc_info:
-                        # TODO: Replace with actual incident trigger code
-                        requests.get("http://example.com/api")
-
-                    assert "{error_signature}" in str(exc_info.value)
+                    # Raise exception directly (Exit 1)
+                    # Expected error: {error_signature}
+                    requests.get("http://example.com/api")
             ''')
 
         elif environment_type == "filesystem":
@@ -317,12 +320,10 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
                 with tempfile.TemporaryDirectory() as tmpdir:
                     missing_file = Path(tmpdir) / "missing_config.json"
 
-                    with pytest.raises(FileNotFoundError) as exc_info:
-                        # TODO: Replace with actual incident trigger code
-                        with open(missing_file, 'r') as f:
-                            f.read()
-
-                    assert "No such file or directory" in str(exc_info.value)
+                    # Raise exception directly (Exit 1)
+                    # Expected error: FileNotFoundError
+                    with open(missing_file, 'r') as f:
+                        f.read()
             ''')
 
         elif environment_type == "permission":
@@ -334,12 +335,10 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
                     readonly_file.write_text("test")
                     readonly_file.chmod(0o444)  # Read-only
 
-                    with pytest.raises(PermissionError) as exc_info:
-                        # TODO: Replace with actual incident trigger code
-                        with open(readonly_file, 'w') as f:
-                            f.write("should fail")
-
-                    assert "Permission denied" in str(exc_info.value)
+                    # Raise exception directly (Exit 1)
+                    # Expected error: PermissionError
+                    with open(readonly_file, 'w') as f:
+                        f.write("data")
             ''')
 
         elif environment_type == "resource":
@@ -364,24 +363,18 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
                 with patch('pkg_resources.get_distribution') as mock_dist:
                     mock_dist.side_effect = pkg_resources.DistributionNotFound("missing_package")
 
-                    with pytest.raises(ModuleNotFoundError) as exc_info:
-                        # TODO: Replace with actual incident trigger code
-                        pkg_resources.get_distribution("missing_package")
-                        import missing_package  # This should fail
-
-                    assert "missing_package" in str(exc_info.value)
+                    # Raise exception directly (Exit 1)
+                    # Expected error: missing_package
+                    pkg_resources.get_distribution("missing_package")
             ''')
 
         else:  # generic
             return textwrap.dedent(f'''
             def test_{test_id}_generic_failure(self):
                 """Reproduce generic incident."""
-                with pytest.raises(Exception) as exc_info:
-                    # TODO: Replace with actual incident trigger code based on analysis
-                    # Current error signature: {error_signature}
-                    raise Exception("{error_signature}")
-
-                assert "{error_signature}" in str(exc_info.value)
+                # Raise exception directly without catching it to ensure Test Fails (Exit 1)
+                # Current error signature: {error_signature}
+                raise Exception("{error_signature}")
             ''')
 
     def _generate_test_id(self, incident: Dict[str, Any]) -> str:
@@ -422,6 +415,24 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
 
         return min(1.0, confidence)
 
+    def _generate_file_hash(self, file_path: Path) -> str:
+        """Generate SHA-256 hash of a file."""
+        if not file_path.exists():
+            return "hash_calc_failed_no_file"
+
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            # Read and update hash string value in blocks of 4K
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+
+    def _generate_text_hash(self, text: str) -> str:
+        """Generate SHA-256 hash of text content."""
+        if not text:
+            return "hash_calc_failed_no_text"
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
     async def execute_reproduction_test(self, proof_bundle: ProofBundle, keep_evidence: bool = False) -> ProofBundle:
         """
         Execute the reproduction test and update proof bundle with results.
@@ -430,11 +441,16 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
 
         Item 1 - Python Path: Injects current working dir into PYTHONPATH so tests can import user code.
         Item 3 - Exit Code Handler: Explicitly handles "Successful Failure" (Exit Code 1).
+        P2 Hardening - Timeout: Enforces 30s timeout to prevent infinite loops (ResponseIQ-351).
+        P2 Forensic - Hashing: Hashes execution output and test file for integrity.
         """
         if not proof_bundle.reproduction_test:
             return proof_bundle
 
         test_path = proof_bundle.reproduction_test.test_path
+
+        # P2 Forensic: Hash the test file itself before execution
+        proof_bundle.reproduction_test.test_file_hash = self._generate_file_hash(Path(test_path))
 
         # item 1: The "Python Path" Problem
         # Ensure the subprocess can find the user's source code
@@ -445,22 +461,42 @@ class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
         else:
             env["PYTHONPATH"] = start_cwd
 
+        # P2 - Test Isolation (Comment 1): Detect if project uses uv/poetry/pipenv
+        # Prefer 'uv run' to isolate execution environment from ResponseIQ's own venv
+        use_uv = (Path("pyproject.toml").exists() or Path("uv.lock").exists()) and shutil.which("uv")
+
+        cmd = []
+        if use_uv:
+            # Use project's own environment via uv
+            cmd = ["uv", "run", "pytest"]
+        else:
+            # Fallback to current python interpreter (potential contamination risk)
+            cmd = [sys.executable, "-m", "pytest"]
+
+        cmd.extend([str(test_path), "-v", "--tb=short"])
+
         try:
             # Run pytest on the specific test file
             process = await asyncio.create_subprocess_exec(
-                sys.executable,
-                "-m",
-                "pytest",
-                str(test_path),
-                "-v",
-                "--tb=short",
+                *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 env=env,
             )
 
-            stdout, _ = await process.communicate()
+            # P2 Hardening: 30s Timeout
+
+            try:
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=30.0)
+            except asyncio.TimeoutError:
+                process.kill()
+                stdout, _ = await process.communicate()
+                stdout += b"\n[ResponseIQ] Execution TIMED OUT after 30s."
+
             execution_output = stdout.decode("utf-8")
+
+            # P2 Forensic: Hash the execution log
+            proof_bundle.reproduction_test.execution_log_hash = self._generate_text_hash(execution_output)
 
             # Update reproduction test status
             # Item 3: The "Negative Proof" Exit Code Handler

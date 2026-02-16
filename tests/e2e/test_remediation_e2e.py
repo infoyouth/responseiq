@@ -3,6 +3,7 @@ End-to-End tests for Trust Gate v1 remediation with policy enforcement.
 Validates P1 roadmap requirements for safe, policy-governed remediation.
 """
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,6 +20,15 @@ from responseiq.services.remediation_service import RemediationService
 
 class TestTrustGateE2E:
     """E2E tests for Trust Gate policy enforcement."""
+
+    @pytest.fixture(autouse=True)
+    def clean_artifacts(self):
+        """Clean up generated reproduction files."""
+        yield
+        # Cleanup specific artifact ID
+        artifact = Path("tests/repro/test_test_incident_001.py")
+        if artifact.exists():
+            artifact.unlink()
 
     @pytest.fixture
     def mock_ai_analysis(self):
@@ -242,7 +252,9 @@ class TestTrustGateE2E:
             # Mock reproduction service to avoid confidence downgrade
             mock_proof = MagicMock()
             mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            mock_proof.reproduction_test.status = "FAILED_AS_EXPECTED"
             service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+            service.reproduction_service.execute_reproduction_test = AsyncMock(return_value=mock_proof)
 
             # Mock security scan failure
             with (
@@ -284,6 +296,13 @@ class TestTrustGateE2E:
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(production_policy)
 
+            # Mock reproduction service to avoid confidence downgrade
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            mock_proof.reproduction_test.status = "FAILED_AS_EXPECTED"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+            service.reproduction_service.execute_reproduction_test = AsyncMock(return_value=mock_proof)
+
             recommendation = await service.remediate_incident(critical_incident)
 
             # Verify denial due to insufficient confidence
@@ -318,7 +337,9 @@ class TestTrustGateE2E:
             # Mock reproduction service to avoid confidence downgrade
             mock_proof = MagicMock()
             mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            mock_proof.reproduction_test.status = "FAILED_AS_EXPECTED"
             service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+            service.reproduction_service.execute_reproduction_test = AsyncMock(return_value=mock_proof)
 
             with (
                 patch.object(service.trust_gate, "_run_security_scan", return_value=True),
@@ -361,7 +382,9 @@ class TestTrustGateE2E:
             # Mock reproduction service to avoid confidence downgrade
             mock_proof = MagicMock()
             mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            mock_proof.reproduction_test.status = "FAILED_AS_EXPECTED"
             service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+            service.reproduction_service.execute_reproduction_test = AsyncMock(return_value=mock_proof)
 
             with (
                 patch.object(service.trust_gate, "_run_security_scan", return_value=True),
@@ -432,7 +455,7 @@ class TestTrustGateE2E:
             patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
         ):
             mock_analyze.return_value = mock_ai_analysis
-            mock_gen_repro.return_value = "def test_repro(): pass"
+            mock_gen_repro.return_value = "def test_repro(): assert False"
             mock_api_key.get_secret_value.return_value = "test-key"
 
             service = RemediationService(environment="test")

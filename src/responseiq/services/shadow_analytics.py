@@ -249,13 +249,16 @@ class ShadowAnalyticsService:
         """Run remediation analysis without applying changes."""
         try:
             # Convert Pydantic model to dict for remediate_incident
-            if hasattr(incident, "dict"):
+            if hasattr(incident, "model_dump"):
+                incident_dict = incident.model_dump()
+            elif hasattr(incident, "dict"):
                 incident_dict = incident.dict()
-                # Handle enum serialization
-                if "severity" in incident_dict and hasattr(incident_dict["severity"], "value"):
-                    incident_dict["severity"] = incident_dict["severity"].value
             else:
                 incident_dict = {"id": getattr(incident, "id", "unknown")}
+
+            # Handle enum serialization (legacy support)
+            if "severity" in incident_dict and hasattr(incident_dict["severity"], "value"):
+                incident_dict["severity"] = incident_dict["severity"].value
 
             # This simulates the full P2 workflow but doesn't apply anything
             recommendation = await self.remediation_service.remediate_incident(incident_dict)
