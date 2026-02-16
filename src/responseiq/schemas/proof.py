@@ -52,6 +52,7 @@ class ReproductionTest:
     description: str = ""
     rationale: str = ""  # Why this reproduction approach was chosen
     mock_dependencies: List[str] = field(default_factory=list)
+    repro_method: str = "unknown"  # 'llm_synthesis' or 'static_fallback'
 
 
 @dataclass

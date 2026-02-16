@@ -8,12 +8,15 @@ error signature found in incident signals.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import sys
 import textwrap
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from responseiq.ai.llm_service import generate_reproduction_code
 from responseiq.schemas.proof import (
     ProofBundle,
     ReproductionStatus,
@@ -161,7 +164,7 @@ class ReproductionService:
         test_path = self.repro_base_path / test_filename
 
         # Generate test content based on environment type
-        test_content = self._generate_test_content(
+        test_content, repro_method = await self._generate_test_content(
             test_id=test_id,
             incident=incident,
             error_signature=error_signature,
@@ -181,9 +184,52 @@ class ReproductionService:
             description=f"Reproduction test for: {incident.get('description', 'Unknown incident')[:100]}",
             rationale=f"Generated {environment_type} reproduction for error pattern: {error_signature}",
             mock_dependencies=self._get_mock_dependencies(environment_type),
+            repro_method=repro_method,
         )
 
-    def _generate_test_content(
+    async def _generate_test_content(
+        self,
+        test_id: str,
+        incident: Dict[str, Any],
+        error_signature: str,
+        environment_type: str,
+        context: Dict[str, Any],
+    ) -> tuple[str, str]:
+        """
+        Generate pytest content using LLM, with fallback to static templates.
+        Returns: (test_content, repro_method)
+        """
+        incident_summary = (
+            f"ID: {test_id}\nError: {error_signature}\n"
+            f"Description: {incident.get('description', '')}\nEnv: {environment_type}"
+        )
+
+        relevant_code = ""
+        # Try to extract code context from various potential keys
+        if "file_content" in context:
+            relevant_code = context["file_content"]
+        elif "source_code" in context:
+            relevant_code = context["source_code"]
+
+        # Call LLM Service
+        generated_code = await generate_reproduction_code(incident_summary, relevant_code)
+
+        if generated_code:
+            return generated_code, "llm_synthesis"
+
+        # Fallback to static templates if LLM fails
+        return (
+            self._generate_static_test_content(
+                test_id=test_id,
+                incident=incident,
+                error_signature=error_signature,
+                environment_type=environment_type,
+                context=context,
+            ),
+            "static_fallback",
+        )
+
+    def _generate_static_test_content(
         self,
         test_id: str,
         incident: Dict[str, Any],
@@ -196,18 +242,18 @@ class ReproductionService:
         """
         # Base imports and setup (pre-indented for dedent compatibility)
         imports = [
-            "        import pytest",
-            "        from unittest.mock import Mock, patch, MagicMock",
-            "        from .base import ResponseIQReproBase",
+            "import pytest",
+            "from unittest.mock import Mock, patch, MagicMock",
+            "from .base import ResponseIQReproBase",
         ]
 
-        # Add environment-specific imports (pre-indented)
+        # Add environment-specific imports
         env_imports = {
-            "network": ["        import requests", "        from unittest.mock import AsyncMock"],
-            "filesystem": ["        import tempfile", "        import os", "        from pathlib import Path"],
-            "permission": ["        import tempfile", "        import os", "        import stat"],
-            "resource": ["        import psutil", "        from unittest.mock import patch"],
-            "version": ["        import pkg_resources", "        from unittest.mock import patch"],
+            "network": ["import requests", "from unittest.mock import AsyncMock"],
+            "filesystem": ["import tempfile", "import os", "from pathlib import Path"],
+            "permission": ["import tempfile", "import os", "import stat"],
+            "resource": ["import psutil", "from unittest.mock import patch"],
+            "version": ["import pkg_resources", "from unittest.mock import patch"],
             "generic": [],
         }
 
@@ -215,28 +261,29 @@ class ReproductionService:
 
         # Generate test method based on environment type
         test_method = self._generate_test_method(test_id, error_signature, environment_type, incident, context)
+        test_method = textwrap.indent(test_method, "    ")
 
-        return textwrap.dedent(f'''
-        """
-        Reproduction test for incident: {incident.get('id', test_id)}
+        return f'''
+"""
+Reproduction test for incident: {incident.get('id', test_id)}
 
-        Expected Error: {error_signature}
-        Environment Type: {environment_type}
-        Generated: {datetime.now().isoformat()}
-        """
+Expected Error: {error_signature}
+Environment Type: {environment_type}
+Generated: {datetime.now().isoformat()}
+"""
 
-        {chr(10).join(imports)}
+{chr(10).join(imports)}
 
 
-        class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
-            """
-            Minimal reproduction of {environment_type} incident.
+class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
+    """
+    Minimal reproduction of {environment_type} incident.
 
-            This test MUST fail before fix and pass after fix.
-            """
+    This test MUST fail before fix and pass after fix.
+    """
 
 {test_method}
-        ''').strip()
+'''.strip()
 
     def _generate_test_method(
         self,
@@ -249,7 +296,7 @@ class ReproductionService:
         """Generate the specific test method based on environment type."""
 
         if environment_type == "network":
-            return f'''
+            return textwrap.dedent(f'''
             @pytest.mark.asyncio
             async def test_{test_id}_network_failure(self):
                 """Reproduce network-related incident."""
@@ -261,10 +308,10 @@ class ReproductionService:
                         requests.get("http://example.com/api")
 
                     assert "{error_signature}" in str(exc_info.value)
-            '''
+            ''')
 
         elif environment_type == "filesystem":
-            return f'''
+            return textwrap.dedent(f'''
             def test_{test_id}_file_missing(self):
                 """Reproduce filesystem-related incident."""
                 with tempfile.TemporaryDirectory() as tmpdir:
@@ -276,10 +323,10 @@ class ReproductionService:
                             f.read()
 
                     assert "No such file or directory" in str(exc_info.value)
-            '''
+            ''')
 
         elif environment_type == "permission":
-            return f'''
+            return textwrap.dedent(f'''
             def test_{test_id}_permission_denied(self):
                 """Reproduce permission-related incident."""
                 with tempfile.TemporaryDirectory() as tmpdir:
@@ -293,10 +340,10 @@ class ReproductionService:
                             f.write("should fail")
 
                     assert "Permission denied" in str(exc_info.value)
-            '''
+            ''')
 
         elif environment_type == "resource":
-            return f'''
+            return textwrap.dedent(f'''
             def test_{test_id}_resource_exhaustion(self):
                 """Reproduce resource exhaustion incident."""
                 with patch('psutil.disk_usage') as mock_disk:
@@ -308,10 +355,10 @@ class ReproductionService:
                             raise OSError("No space left on device")
 
                     assert "space" in str(exc_info.value).lower()
-            '''
+            ''')
 
         elif environment_type == "version":
-            return f'''
+            return textwrap.dedent(f'''
             def test_{test_id}_version_conflict(self):
                 """Reproduce version/dependency incident."""
                 with patch('pkg_resources.get_distribution') as mock_dist:
@@ -323,10 +370,10 @@ class ReproductionService:
                         import missing_package  # This should fail
 
                     assert "missing_package" in str(exc_info.value)
-            '''
+            ''')
 
         else:  # generic
-            return f'''
+            return textwrap.dedent(f'''
             def test_{test_id}_generic_failure(self):
                 """Reproduce generic incident."""
                 with pytest.raises(Exception) as exc_info:
@@ -335,7 +382,7 @@ class ReproductionService:
                     raise Exception("{error_signature}")
 
                 assert "{error_signature}" in str(exc_info.value)
-            '''
+            ''')
 
     def _generate_test_id(self, incident: Dict[str, Any]) -> str:
         """Generate unique, descriptive test ID."""
@@ -375,44 +422,68 @@ class ReproductionService:
 
         return min(1.0, confidence)
 
-    async def execute_reproduction_test(self, proof_bundle: ProofBundle) -> ProofBundle:
+    async def execute_reproduction_test(self, proof_bundle: ProofBundle, keep_evidence: bool = False) -> ProofBundle:
         """
         Execute the reproduction test and update proof bundle with results.
 
         This is the "Verify Failure" step in the P2 sequence.
+
+        Item 1 - Python Path: Injects current working dir into PYTHONPATH so tests can import user code.
+        Item 3 - Exit Code Handler: Explicitly handles "Successful Failure" (Exit Code 1).
         """
         if not proof_bundle.reproduction_test:
             return proof_bundle
 
         test_path = proof_bundle.reproduction_test.test_path
 
+        # item 1: The "Python Path" Problem
+        # Ensure the subprocess can find the user's source code
+        env = os.environ.copy()
+        start_cwd = os.getcwd()
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{start_cwd}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = start_cwd
+
         try:
             # Run pytest on the specific test file
             process = await asyncio.create_subprocess_exec(
-                "python",
+                sys.executable,
                 "-m",
                 "pytest",
-                test_path,
+                str(test_path),
                 "-v",
                 "--tb=short",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                env=env,
             )
 
             stdout, _ = await process.communicate()
             execution_output = stdout.decode("utf-8")
 
             # Update reproduction test status
-            if process.returncode != 0:
+            # Item 3: The "Negative Proof" Exit Code Handler
+            # Exit Code 1 (Tests Failed) = ✅ SUCCESS (Bug Reproduced)
+            if process.returncode == 1:
                 proof_bundle.reproduction_test.status = ReproductionStatus.FAILED_AS_EXPECTED
                 proof_bundle.pre_fix_evidence = execution_output
                 # Remove PRE_FIX_FAILURE from missing evidence
                 if ValidationEvidence.PRE_FIX_FAILURE in proof_bundle.missing_evidence:
                     proof_bundle.missing_evidence.remove(ValidationEvidence.PRE_FIX_FAILURE)
-            else:
+            elif process.returncode == 0:
+                # Tests Passed = ❌ FAIL (Bug NOT Reproduced)
                 proof_bundle.reproduction_test.status = ReproductionStatus.PASSED_UNEXPECTEDLY
+                proof_bundle.reproduction_test.execution_output = (
+                    f"Test PASSED unexpectedly (Exit 0). Expected failure to reproduce bug.\n{execution_output}"
+                )
+            else:
+                # Other Exit Codes (Internal Error/Syntax Error)
+                proof_bundle.reproduction_test.status = ReproductionStatus.EXECUTION_ERROR
+                proof_bundle.reproduction_test.execution_output = (
+                    f"Test Execution Error (Exit {process.returncode}).\n{execution_output}"
+                )
 
-            proof_bundle.reproduction_test.execution_output = execution_output
             proof_bundle.reproduction_test.execution_time = datetime.now()
 
         except Exception as e:
@@ -420,7 +491,30 @@ class ReproductionService:
             proof_bundle.reproduction_test.execution_output = f"Execution failed: {str(e)}"
             proof_bundle.reproduction_test.execution_time = datetime.now()
 
+        # Item 2: Transient Artifact Cleanup
+        if not keep_evidence and proof_bundle.reproduction_test.status != ReproductionStatus.FAILED_AS_EXPECTED:
+            # Only cleanup if we failed to reproduce, otherwise we need it for the next step (Fix verification)
+            # actually, we usually keep it until the end of the session.
+            # For now, let's defer cleanup to an explicit cleanup method or separate call.
+            pass
+
         return proof_bundle
+
+    async def cleanup_reproduction_test(self, proof_bundle: ProofBundle) -> None:
+        """
+        Item 2: Transient Artifact Cleanup (Repo Hygiene)
+        Deletes the generated test file.
+        """
+        if not proof_bundle.reproduction_test or not proof_bundle.reproduction_test.test_path:
+            return
+
+        try:
+            path = Path(proof_bundle.reproduction_test.test_path)
+            if path.exists():
+                path.unlink()
+        except Exception as e:
+            # Non-blocking cleanup failure
+            print(f"Warning: Failed to cleanup reproduction test {path}: {e}")
 
     async def validate_fix_with_reproduction(self, proof_bundle: ProofBundle) -> ProofBundle:
         """
@@ -434,22 +528,31 @@ class ReproductionService:
         # Re-execute the same test
         test_path = proof_bundle.reproduction_test.test_path
 
+        # item 1: The "Python Path" Problem
+        env = os.environ.copy()
+        start_cwd = os.getcwd()
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{start_cwd}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = start_cwd
+
         try:
             process = await asyncio.create_subprocess_exec(
-                "python",
+                sys.executable,
                 "-m",
                 "pytest",
-                test_path,
+                str(test_path),
                 "-v",
                 "--tb=short",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
+                env=env,
             )
 
             stdout, _ = await process.communicate()
             execution_output = stdout.decode("utf-8")
 
-            # Test should now pass after fix
+            # Test should now pass after fix (Exit 0)
             if process.returncode == 0:
                 proof_bundle.post_fix_evidence = execution_output
                 proof_bundle.fix_confidence = 0.9  # High confidence if test now passes

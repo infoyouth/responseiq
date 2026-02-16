@@ -401,9 +401,13 @@ class TestTrustGateE2E:
 
         with (
             patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
+            patch(
+                "responseiq.services.reproduction_service.generate_reproduction_code", new_callable=AsyncMock
+            ) as mock_gen_repro,
             patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
         ):
             mock_analyze.return_value = mock_ai_analysis
+            mock_gen_repro.return_value = "def test_repro(): pass"
             mock_api_key.get_secret_value.return_value = "test-key"
 
             service = RemediationService(environment="test")
