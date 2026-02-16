@@ -61,6 +61,9 @@ dependencies = [
     "googleapis-common-protos>=1.63.0",
     "tree-sitter>=0.25.2",
     "tree-sitter-languages>=1.10.2",
+    "bs4>=0.0.2",
+    "lxml>=6.0.2",
+    "types-pyyaml>=6.0.12.20250915",
 ]
 
 [project.urls]
