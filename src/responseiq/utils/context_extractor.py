@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 import aiofiles
-import tree_sitter_languages
+import tree_sitter_languages  # type: ignore
 
 from responseiq.utils.logger import logger
 
