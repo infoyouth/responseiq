@@ -120,15 +120,39 @@ dev = [
 
 [tool.black]
 line-length = 120
+force-exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | tests/repro/test_incident_.*\.py
+  | tests/repro/test_test_.*\.py
+)/
+'''
 
 [tool.isort]
 profile = "black"
+skip_glob = ["**/tests/repro/test_incident_*.py", "**/tests/repro/test_test_*.py"]
 
 [tool.flake8]
 max-line-length = 120
+exclude = [
+    ".git", "__pycache__", "docs/source", "build", "dist",
+    "tests/repro/test_incident_*.py", "tests/repro/test_test_*.py"
+]
 
 [tool.ruff]
 line-length = 120
+exclude = [
+    "tests/repro/test_incident_*.py",
+    "tests/repro/test_test_*.py"
+]
 
 [tool.bandit]
 exclude_dirs = ["tests", "fixtures"]

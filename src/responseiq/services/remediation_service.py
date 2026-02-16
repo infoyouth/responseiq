@@ -187,6 +187,15 @@ class RemediationService:
         rollback_plan = await self._generate_rollback_plan(analysis_result, affected_files, proposed_changes)
         test_plan = self._generate_test_plan(analysis_result, title)
 
+        # P2: Truth in Labeling - Check proof quality before creating request
+        if proof_bundle and proof_bundle.reproduction_test:
+            # If we only have static fallback, downgrade confidence for the trust gate logic
+            # This forces human approval (PR_ONLY) instead of autonomous execution.
+            if proof_bundle.reproduction_test.repro_method == "static_fallback":
+                logger.warning("📉 Downgrading trust: Reproduction used static fallback (Low Confidence)")
+                # Cap confidence below typical automation thresholds (usually 0.8+)
+                ai_confidence = min(ai_confidence, 0.5)
+
         remediation_request = RemediationRequest(
             incident_id=incident_id,
             severity=severity,
@@ -202,6 +211,18 @@ class RemediationService:
 
         # Step 5: Trust gate validation
         validation_result = await self.trust_gate.validate_remediation(remediation_request)
+
+        # P2 Policy Enforcement: Downgrade execution mode if proof is weak
+        if (
+            validation_result.allowed
+            and validation_result.policy_mode == PolicyMode.GUARDED_APPLY
+            and proof_bundle
+            and proof_bundle.reproduction_test
+            and proof_bundle.reproduction_test.repro_method == "static_fallback"
+        ):
+            logger.warning("🛡️ TRUST GATE OVERRIDE: Downgrading to PR_ONLY due to static_fallback proof.")
+            validation_result.policy_mode = PolicyMode.PR_ONLY
+            validation_result.message += " (Downgraded to PR_ONLY: Weak proof evidence)"
 
         # Step 6: Build comprehensive recommendation
         recommendation = RemediationRecommendation(

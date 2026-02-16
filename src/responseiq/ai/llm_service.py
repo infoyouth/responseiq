@@ -107,3 +107,66 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
     except Exception as e:
         logger.exception(f"Unexpected error in LLM analysis: {str(e)}")
         return None
+
+
+async def generate_reproduction_code(incident_summary: str, relevant_code: str) -> Optional[str]:
+    """
+    Asks the LLM to generate a standalone pytest script that reproduces the incident.
+    Returns the raw Python code (string) or None if it fails.
+    """
+    if not settings.openai_api_key:
+        logger.warning("OpenAI API Key missing. Cannot generate reproduction code.")
+        return None
+
+    api_key = settings.openai_api_key.get_secret_value()
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    prompt = (
+        "You are an expert QA Automation Engineer. "
+        "Your goal is to write a standalone Python script using `pytest` that REPRODUCES the bug described below. "
+        "The test MUST FAIL when run against the current code (representing the bug), "
+        "and PASS only after the bug is fixed.\n\n"
+        f"INCIDENT SUMMARY:\n{incident_summary}\n\n"
+        f"RELEVANT SOURCE CODE:\n{relevant_code}\n\n"
+        "INSTRUCTIONS:\n"
+        "1. Return ONLY the python code. No markdown, no explanations.\n"
+        "2. Use standard `pytest` syntax.\n"
+        "3. Assert the specific error condition found in the incident summary.\n"
+        "4. Mock external dependencies (network, db, filesystem) where appropriate, using `unittest.mock`.\n"
+        "5. The test should be self-contained and ready to run."
+    )
+
+    payload = {
+        "model": "gpt-4-turbo-preview",  # Use a better model for code generation
+        "messages": [
+            {"role": "system", "content": "You are a Python focused QA Automation Expert."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 1500,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                # Clean up markdown if the LLM ignores instructions
+                if content.startswith("```python"):
+                    content = content.replace("```python", "").replace("```", "").strip()
+                elif content.startswith("```"):
+                    content = content.replace("```", "").strip()
+                return content
+            else:
+                logger.error(f"Failed to generate reproduction code: {response.text}")
+                return None
+
+    except Exception as e:
+        logger.exception(f"Error generating reproduction code: {e}")
+        return None

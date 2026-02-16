@@ -48,6 +48,9 @@ coverage.xml
 *.cover
 *.py.cover
 .hypothesis/
+tests/repro/test_incident_*.py
+tests/repro/test_test_*.py
+
 .pytest_cache/
 cover/
 
