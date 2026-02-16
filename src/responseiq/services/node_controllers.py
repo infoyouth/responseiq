@@ -1,3 +1,4 @@
+from responseiq.config import base as config
 from responseiq.models.agent_state import AgentState
 
 # Each node function takes AgentState and returns a string outcome
@@ -31,6 +32,6 @@ def critique_node(state: AgentState) -> str:
     if patch is not None:
         state.setdefault("attempt_history", []).append(patch)
     state["retry_count"] = state.get("retry_count", 0) + 1
-    if state["retry_count"] >= 3:
+    if state["retry_count"] >= config.REMEDIATION_MAX_RETRIES:
         return "max_retries"
     return "retry"
