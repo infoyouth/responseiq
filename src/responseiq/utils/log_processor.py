@@ -85,7 +85,9 @@ class ParallelLogProcessor:
             async with asyncio.Lock():  # Just to be safe if reused
                 return file_path.read_text(errors="ignore")[:50000]  # Safe cap
 
-        logger.info(f"Processing large log {file_path.name} ({file_size/1024/1024:.2f}MB) with {self.workers} cores.")
+        logger.info(
+            f"Processing large log {file_path.name} ({file_size / 1024 / 1024:.2f}MB) with {self.workers} cores."
+        )
 
         # 1. Create chunks
         chunks = []

@@ -130,7 +130,7 @@ class ResponseIQReproBase:
 
         # Basic substring match
         assert expected_signature.lower() in actual_error.lower(), (
-            f"Error signature mismatch:\n" f"Expected: {expected_signature}\n" f"Actual: {actual_error}"
+            f"Error signature mismatch:\nExpected: {expected_signature}\nActual: {actual_error}"
         )
 
     def get_incident_fixture(self, incident_type: str = "generic") -> Dict[str, Any]:

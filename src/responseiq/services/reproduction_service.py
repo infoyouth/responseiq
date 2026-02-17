@@ -271,7 +271,7 @@ class ReproductionService:
 
         return f'''
 """
-Reproduction test for incident: {incident.get('id', test_id)}
+Reproduction test for incident: {incident.get("id", test_id)}
 
 Expected Error: {error_signature}
 Environment Type: {environment_type}
@@ -281,7 +281,7 @@ Generated: {datetime.now().isoformat()}
 {chr(10).join(imports)}
 
 
-class Test{test_id.title().replace('_', '')}Reproduction(ResponseIQReproBase):
+class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
     """
     Minimal reproduction of {environment_type} incident.
 

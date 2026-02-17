@@ -153,7 +153,6 @@ class TestTrustGateE2E:
                 patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
                 patch.object(service.trust_gate, "_run_tests", return_value=True),
             ):
-
                 recommendation = await service.remediate_incident(low_impact_incident)
 
                 # Verify approval
@@ -262,7 +261,6 @@ class TestTrustGateE2E:
                 patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
                 patch.object(service.trust_gate, "_run_tests", return_value=True),
             ):
-
                 recommendation = await service.remediate_incident(critical_incident)
 
                 # Verify denial due to failed checks
@@ -346,7 +344,6 @@ class TestTrustGateE2E:
                 patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
                 patch.object(service.trust_gate, "_run_tests", return_value=True),
             ):
-
                 recommendation = await service.remediate_incident(critical_incident)
 
                 # Verify allowed but in suggestion mode
@@ -391,7 +388,6 @@ class TestTrustGateE2E:
                 patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
                 patch.object(service.trust_gate, "_run_tests", return_value=True),
             ):
-
                 recommendation = await service.remediate_incident(critical_incident)
 
                 # Verify PR workflow
@@ -467,7 +463,6 @@ class TestTrustGateE2E:
                 patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
                 patch.object(service.trust_gate, "_run_tests", return_value=True),
             ):
-
                 recommendation = await service.remediate_incident(critical_incident)
 
                 # Verify complete success

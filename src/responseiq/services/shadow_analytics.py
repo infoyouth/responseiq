@@ -168,7 +168,7 @@ class ProjectedValueReport:
         return f"""
 ResponseIQ Shadow Mode Analysis - Executive Summary
 
-Period: {self.period_start.strftime('%Y-%m-%d')} to {self.period_end.strftime('%Y-%m-%d')}
+Period: {self.period_start.strftime("%Y-%m-%d")} to {self.period_end.strftime("%Y-%m-%d")}
 
 PROJECTED VALUE:
   - Manual Toil Saved: {self.potential_manual_toil_saved}

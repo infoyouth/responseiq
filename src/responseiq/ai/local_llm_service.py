@@ -169,7 +169,7 @@ class LocalMockLLM:
                     "title": "Memory/Resource Exhaustion Issue",
                     "severity": "high",
                     "description": (
-                        "System resources (memory/CPU) are being exhausted, " "potentially causing container restarts"
+                        "System resources (memory/CPU) are being exhausted, potentially causing container restarts"
                     ),
                     "remediation": (
                         "1. Increase memory limits for affected containers\n"
