@@ -316,7 +316,6 @@ class TestTrustGateValidatorChecks:
             patch.object(validator_with_checks, "_run_syntax_check", return_value=True),
             patch.object(validator_with_checks, "_run_tests", return_value=True),
         ):
-
             success = await validator_with_checks._execute_required_checks(minimal_request, result)
 
             assert success is True
@@ -337,7 +336,6 @@ class TestTrustGateValidatorChecks:
             patch.object(validator_with_checks, "_run_syntax_check", return_value=True),
             patch.object(validator_with_checks, "_run_tests", return_value=True),
         ):
-
             success = await validator_with_checks._execute_required_checks(minimal_request, result)
 
             assert success is False
@@ -523,7 +521,6 @@ class TestTrustGateValidatorIntegration:
             patch.object(validator, "_run_syntax_check", return_value=True),
             patch.object(validator, "_run_tests", return_value=True),
         ):
-
             result = await validator.validate_remediation(request)
 
             assert result.allowed is True

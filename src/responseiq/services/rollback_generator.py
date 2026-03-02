@@ -243,7 +243,7 @@ def rollback_step_{i}(self):
     """
     print(f"Step {i}: {action.description}")
     try:
-{textwrap.indent(action.command, '        ')}
+{textwrap.indent(action.command, "        ")}
 
         # Validation check
         validation_result = {action.validation_check}
