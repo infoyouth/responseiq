@@ -24,7 +24,7 @@ Patterns covered:
 from __future__ import annotations
 
 import re
-from typing import Dict, Tuple
+from typing import Callable, Dict, Tuple
 
 # ---------------------------------------------------------------------------
 # Pattern registry — order matters: more specific patterns first
@@ -166,7 +166,14 @@ def scrub(text: str) -> Tuple[str, Dict[str, str]]:
 
             text = pattern.sub(_bearer_replace, text)
         else:
-            text = pattern.sub(lambda m, _l=label: _replace(m, _l), text)
+
+            def _make_replacer(lbl: str) -> Callable[[re.Match[str]], str]:
+                def _replacer(m: re.Match[str]) -> str:
+                    return _replace(m, lbl)
+
+                return _replacer
+
+            text = pattern.sub(_make_replacer(label), text)
 
     return text, mapping
 

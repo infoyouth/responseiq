@@ -1,7 +1,7 @@
 
 .PHONY: all install dev-install lint format test run build deploy mypy security docker-up ci
 
-all: install format lint test security build
+all: install format lint test mypy security build
 
 install:
 	uv sync
