@@ -1,0 +1,58 @@
+# .responseiq/rules.yaml — Sovereign Architectural Guardrails (P4)
+#
+# Each rule checked against proposed_changes content before Trust Gate allows execution.
+#
+# action values:
+#   block               → TrustGate DENIES the remediation outright
+#   downgrade_to_pr_only→ TrustGate silently forces PR_ONLY mode (no auto-apply)
+#   warn                → Logged in audit trail but does NOT block
+#
+# Set enabled: false to silence a rule without deleting it.
+
+version: "1"
+
+rules:
+  - id: no_bare_except
+    description: "No bare 'except:' clauses — always specify an exception type"
+    action: downgrade_to_pr_only
+    enabled: true
+
+  - id: require_type_annotations
+    description: "New function definitions should include return type annotations"
+    action: warn
+    enabled: true
+
+  - id: no_hardcoded_secrets
+    description: "No hardcoded secrets, API keys, passwords, or tokens in proposed code"
+    action: block
+    enabled: true
+
+  - id: no_print_statements
+    description: "Use structured logging (logger.*) instead of bare print() calls"
+    action: warn
+    enabled: true
+
+  - id: no_new_heavy_dependencies
+    description: "Proposed code must not introduce heavy ML/data science imports"
+    action: block
+    enabled: true
+    config:
+      blocked_imports:
+        - torch
+        - tensorflow
+        - sklearn
+        - keras
+        - numpy
+        - pandas
+        - scipy
+        - cv2
+
+  - id: no_direct_os_system
+    description: "os.system() and subprocess with shell=True are security risks"
+    action: block
+    enabled: true
+
+  - id: no_mutable_default_args
+    description: "Functions must not use mutable default arguments (list, dict, set)"
+    action: downgrade_to_pr_only
+    enabled: true

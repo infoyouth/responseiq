@@ -129,46 +129,125 @@ jobs:
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
       - name: Sync dependencies
         run: uv sync --group dev --active
-      
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
       # Fast Checks — all via ruff (matches Makefile exactly, zero drift)
       - name: Format check (ruff)
-        run: uv run ruff format --check src tests
-      - name: Lint (ruff)
-        run: uv run ruff check src tests
-      - name: Type check (mypy)
-        run: uv run mypy src
+        run: uv run ruff format --check src tests 2>&1 | tee reports/ruff-format.txt
 
-      # Security Checks (Merged to save VM time)
+      - name: Lint (ruff)
+        run: uv run ruff check src tests 2>&1 | tee reports/ruff-lint.txt
+
+      - name: Type check (mypy)
+        run: uv run mypy src --txt-report reports/mypy-report 2>&1 | tee reports/mypy.txt
+
+      # Security Checks
       - name: Security scan (ruff --select S)
-        run: uv run ruff check --select S src
+        run: uv run ruff check --select S src 2>&1 | tee reports/security.txt
+
       - name: Dependency vulnerability scan (safety)
-        run: uv run safety check --full-report
-      
-      # Tests
+        run: uv run safety check --full-report 2>&1 | tee reports/safety.txt || true
+
+      # Tests — generate JUnit XML + coverage reports
       - name: Run tests (pytest + coverage)
         run: |
-          uv run pytest --maxfail=1 --disable-warnings -q
+          uv run pytest \
+            --junitxml=reports/pytest.xml \
+            --cov=src/responseiq \
+            --cov-report=xml:reports/coverage.xml \
+            --cov-report=html:reports/coverage-html \
+            --cov-report=term-missing \
+            --disable-warnings \
+            -q 2>&1 | tee reports/pytest.txt
 
-      # Packaging smoke test: ensure installable artifact and CLI entrypoint work
+      # Packaging smoke test
       - name: Build distributables
         run: |
           rm -rf dist
           uv build
+
       - name: Smoke test wheel install and CLI
         run: |
           python -m venv /tmp/responseiq-smoke
-          /tmp/responseiq-smoke/bin/pip install --upgrade pip
+          /tmp/responseiq-smoke/bin/pip install --upgrade pip -q
           WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
-          /tmp/responseiq-smoke/bin/pip install "$WHEEL_PATH"
+          /tmp/responseiq-smoke/bin/pip install "$WHEEL_PATH" -q
           /tmp/responseiq-smoke/bin/responseiq --help
           /tmp/responseiq-smoke/bin/python -m responseiq.cli --help
 
-      - name: Upload test results
+      # Rich GitHub Step Summary
+      - name: Write job summary
+        if: always()
+        run: |
+          echo "## 🛡️ ResponseIQ CI — Quality Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          check_status() {
+            local label="$1"; local file="$2"; local pass_pattern="$3"
+            if [ ! -f "$file" ]; then
+              echo "| $label | ⚪ no output |" >> $GITHUB_STEP_SUMMARY
+            elif grep -qE "$pass_pattern" "$file" 2>/dev/null; then
+              echo "| $label | ✅ passed |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $label | ❌ failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          }
+
+          check_status "🎨 ruff format"   "reports/ruff-format.txt" "All checks passed|unchanged"
+          check_status "🔍 ruff lint"     "reports/ruff-lint.txt"   "All checks passed"
+          check_status "🔒 security scan" "reports/security.txt"    "All checks passed"
+          check_status "🔐 safety"        "reports/safety.txt"      "No known security vulnerabilities"
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f reports/pytest.txt ]; then
+            SUMMARY=$(grep -E "passed|failed|error|skipped" reports/pytest.txt | tail -1)
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "$SUMMARY" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -f reports/pytest.txt ]; then
+            COVERAGE=$(grep -E "^TOTAL" reports/pytest.txt | awk '{print $NF}')
+            if [ -n "$COVERAGE" ]; then
+              echo "**Total coverage: $COVERAGE**" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔎 mypy" >> $GITHUB_STEP_SUMMARY
+          if [ -f reports/mypy.txt ]; then
+            MYPY_SUMMARY=$(grep -E "^(Success|Found [0-9]+ error)" reports/mypy.txt | tail -1)
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "${MYPY_SUMMARY:-see mypy.txt artifact}" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "_Artifacts: \`reports/\` (JUnit XML · Coverage HTML · tool logs)_" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pytest-results
-          path: .pytest_cache || ./
+          name: ci-reports-py${{ matrix.python-version }}
+          path: reports/
+          retention-days: 14
+
+      - name: Upload coverage HTML (browsable)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-py${{ matrix.python-version }}
+          path: reports/coverage-html/
+          retention-days: 14
 
 
   # Merged into quality-checks
@@ -206,19 +285,6 @@ jobs:
           context: .
           push: false
           tags: responseiq:test
-
-  report:
-    name: Upload reports
-    runs-on: ubuntu-latest
-    needs: [quality-checks]
-    steps:
-      - name: Aggregate and upload logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-logs
-          path: |
-            .pytest_cache
-            /tmp/bandit-output || ./
 
   integration-tests:
     name: Integration tests

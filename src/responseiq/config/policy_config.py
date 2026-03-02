@@ -36,6 +36,7 @@ class DenyReason(str, Enum):
     PROTECTED_PATH = "protected_path"
     SEVERITY_TOO_LOW = "severity_too_low"
     INSUFFICIENT_CONFIDENCE = "insufficient_confidence"
+    GUARDRAIL_VIOLATION = "guardrail_violation"  # P4: Sovereign Architectural Guardrails
 
 
 @dataclass

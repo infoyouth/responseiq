@@ -157,6 +157,7 @@ class TestPolicyModeConfiguration:
             "protected_path",
             "severity_too_low",
             "insufficient_confidence",
+            "guardrail_violation",  # P4: Sovereign Architectural Guardrails
         }
         actual_reasons = {reason.value for reason in DenyReason}
         assert actual_reasons == expected_reasons
