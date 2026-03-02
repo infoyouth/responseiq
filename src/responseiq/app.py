@@ -11,6 +11,7 @@ from sqlmodel import select
 from .db import get_session, init_db
 from .models.base import Incident, Log
 from .routers.blueprints import router as blueprints_router
+from .routers.webhooks import router as webhooks_router
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut
 from .services.impact import assess_impact
@@ -86,6 +87,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # include routers
 
 app.include_router(blueprints_router)
+app.include_router(webhooks_router)
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"

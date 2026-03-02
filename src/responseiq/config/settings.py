@@ -59,6 +59,19 @@ class Settings(BaseSettings):
     github_token: Optional[SecretStr] = Field(default=None, description="GitHub Token for PR creation")
     openai_api_key: Optional[SecretStr] = Field(default=None, description="API Key for AI analysis")
 
+    # P5.1 Webhook Signing Secrets
+    # Set these to verify HMAC-SHA256 signatures on inbound webhooks.
+    # Leave unset (None) to skip signature verification (dev/local only).
+    datadog_webhook_secret: Optional[SecretStr] = Field(
+        default=None, description="Datadog webhook signing secret (X-Datadog-Webhook-Signature)"
+    )
+    pagerduty_webhook_secret: Optional[SecretStr] = Field(
+        default=None, description="PagerDuty v3 webhook signing secret (X-PagerDuty-Signature)"
+    )
+    sentry_webhook_secret: Optional[SecretStr] = Field(
+        default=None, description="Sentry webhook signing secret (sentry-hook-signature)"
+    )
+
     # LLM Model Configuration
     # LLM_ANALYSIS_MODEL — model used for incident analysis + patch synthesis
     llm_analysis_model: str = Field(default="gpt-4o", description="Model for incident analysis and patch synthesis")
