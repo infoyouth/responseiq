@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from responseiq.ai.llm_service import analyze_with_llm
 from responseiq.config.policy_config import PolicyMode
 from responseiq.schemas.proof import ProofBundle, ReproductionStatus
+from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
 from responseiq.services.impact import assess_impact
 from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.rollback_generator import ExecutableRollbackGenerator
@@ -57,6 +58,7 @@ class RemediationRecommendation:
     checks_passed: List[str] = field(default_factory=list)
     checks_failed: List[str] = field(default_factory=list)
     proof_bundle: Optional[ProofBundle] = None  # P2: Proof-oriented evidence
+    correlation: Optional[CorrelationResult] = None  # P3: Git change-to-incident correlation
 
     # Execution guidance
     required_actions: List[str] = field(default_factory=list)
@@ -88,6 +90,7 @@ class RemediationRecommendation:
             "proof_bundle": (
                 asdict(self.proof_bundle) if self.proof_bundle else None
             ),  # P2: Include proof in audit trail
+            "correlation": (self.correlation.to_dict() if self.correlation else None),  # P3: Git correlation result
         }
 
 
@@ -97,11 +100,12 @@ class RemediationService:
     Provides safe, policy-governed, explainable incident remediation.
     """
 
-    def __init__(self, environment: str = "production"):
+    def __init__(self, environment: str = "production", repo_path: Optional[Path] = None):
         self.k8s_patcher = KubernetesPatcher()
         self.trust_gate = TrustGateValidator(environment=environment)
         self.reproduction_service = ReproductionService()  # P2: Proof-oriented testing
         self.rollback_generator = ExecutableRollbackGenerator()  # P2.1: Executable rollbacks
+        self.git_correlation = GitCorrelationService(repo_path=repo_path)  # P3: Change correlation
         self.environment = environment
 
         logger.info(f"RemediationService initialized for {environment} environment")
@@ -142,6 +146,20 @@ class RemediationService:
             )
 
         logger.info(f"AI analysis complete for '{title}' with confidence: {ai_confidence}")
+
+        # Step 2.5: P3 — Git change-to-incident correlation
+        correlation = None
+        try:
+            correlation = await self.git_correlation.correlate(log_text=log_content, lookback_hours=24)
+            if correlation.suspect_commit:
+                logger.info(
+                    f"P3 correlation: suspect='{correlation.suspect_commit}' "
+                    f"confidence={correlation.confidence_score:.2f} method={correlation.method}"
+                )
+            else:
+                logger.debug("P3 correlation: no suspect commit identified")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Git correlation failed (non-fatal): {exc}")
 
         # Step 3: Assess incident impact
         impact_assessment = assess_impact(
@@ -260,6 +278,7 @@ class RemediationService:
             checks_failed=validation_result.checks_failed,
             required_actions=validation_result.required_actions,
             proof_bundle=proof_bundle,  # P2: Proof-oriented evidence
+            correlation=correlation,  # P3: Git change-to-incident correlation
         )
 
         # Step 7: Add risk assessment

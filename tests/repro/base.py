@@ -129,9 +129,9 @@ class ResponseIQReproBase:
         actual_error = str(exception_info.value)
 
         # Basic substring match
-        assert (
-            expected_signature.lower() in actual_error.lower()
-        ), f"Error signature mismatch:\nExpected: {expected_signature}\nActual: {actual_error}"
+        assert expected_signature.lower() in actual_error.lower(), (
+            f"Error signature mismatch:\nExpected: {expected_signature}\nActual: {actual_error}"
+        )
 
     def get_incident_fixture(self, incident_type: str = "generic") -> Dict[str, Any]:
         """Return mock incident data for testing."""

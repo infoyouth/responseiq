@@ -1,7 +1,7 @@
 import os
 import subprocess  # nosec B404
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from responseiq.utils.logger import logger
 
@@ -9,6 +9,56 @@ from responseiq.utils.logger import logger
 class GitClient:
     def __init__(self, cwd: Optional[Path] = None):
         self.cwd = cwd or Path(os.getcwd())
+
+    def run_with_output(self, args: List[str]) -> Optional[str]:
+        """Run a git command and return stdout, or None on failure."""
+        try:
+            cmd = ["git"] + args
+            result = subprocess.run(  # noqa: S603
+                cmd,
+                cwd=self.cwd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout
+        except subprocess.CalledProcessError as e:
+            logger.debug(f"Git command returned non-zero: {' '.join(cmd)}\nStderr: {e.stderr}")
+            return None
+
+    def get_recent_diff(self, since_hours: int = 24, max_commits: int = 10) -> Optional[str]:
+        """
+        Return a compact unified diff of up to *max_commits* non-merge commits
+        made in the last *since_hours* hours.  Output is suitable for LLM consumption.
+        """
+        return self.run_with_output(
+            [
+                "log",
+                f"--since={since_hours} hours ago",
+                "--patch",
+                "--unified=2",
+                "--no-merges",
+                f"--max-count={max_commits}",
+                "--format=COMMIT %H %s",
+                "--",
+            ]
+        )
+
+    def get_log_entries(self, since_hours: int = 24, max_commits: int = 20) -> Optional[str]:
+        """
+        Return one-line log with changed filenames for recent commits.
+        Useful for lightweight heuristic symbol matching.
+        """
+        return self.run_with_output(
+            [
+                "log",
+                f"--since={since_hours} hours ago",
+                "--oneline",
+                "--no-merges",
+                f"--max-count={max_commits}",
+                "--name-only",
+            ]
+        )
 
     def run(self, args: list) -> bool:
         try:

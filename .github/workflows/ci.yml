@@ -130,17 +130,17 @@ jobs:
       - name: Sync dependencies
         run: uv sync --group dev --active
       
-      # Fast Checks
-      - name: Lint (flake8)
-        run: uv run flake8 src tests
-      - name: Format check (black/isort)
-        run: uv run black --check src tests && uv run isort --check-only src tests
+      # Fast Checks — all via ruff (matches Makefile exactly, zero drift)
+      - name: Format check (ruff)
+        run: uv run ruff format --check src tests
+      - name: Lint (ruff)
+        run: uv run ruff check src tests
       - name: Type check (mypy)
         run: uv run mypy src
-      
+
       # Security Checks (Merged to save VM time)
-      - name: Bandit security scan
-        run: uv run bandit -r src -ll
+      - name: Security scan (ruff --select S)
+        run: uv run ruff check --select S src
       - name: Dependency vulnerability scan (safety)
         run: uv run safety check --full-report
       

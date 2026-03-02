@@ -128,9 +128,9 @@ async def test_llm_service_uses_configured_analysis_model():
             await _analyze_with_openai("some log text", "")
 
     assert len(captured) == 1
-    assert (
-        captured[0]["model"] == "gpt-4-turbo-custom"
-    ), f"Expected 'gpt-4-turbo-custom' but got '{captured[0].get('model')}'"
+    assert captured[0]["model"] == "gpt-4-turbo-custom", (
+        f"Expected 'gpt-4-turbo-custom' but got '{captured[0].get('model')}'"
+    )
     assert captured[0]["max_tokens"] == 3333
 
 
