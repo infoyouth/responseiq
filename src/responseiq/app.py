@@ -11,6 +11,7 @@ from sqlmodel import select
 from .db import get_session, init_db
 from .models.base import Incident, Log
 from .routers.blueprints import router as blueprints_router
+from .routers.conversations import router as conversations_router
 from .routers.feedback import router as feedback_router
 from .routers.webhooks import router as webhooks_router
 from .schemas.incident import IncidentOut
@@ -31,10 +32,21 @@ async def lifespan(app: FastAPI):
     setup_telemetry(app)
     # ARQ Redis pool — None when ARQ_REDIS_URL is not configured (BackgroundTasks fallback)
     app.state.arq_pool = await create_arq_pool()
+    # Temporal worker (P-F4) — only starts when TEMPORAL_ENABLED=true and temporalio installed
+    from .config.settings import settings as _settings
+
+    if _settings.temporal_enabled:
+        from .temporal.worker import start_temporal_worker
+
+        app.state.temporal_worker = await start_temporal_worker()
+    else:
+        app.state.temporal_worker = None
     logger.info("Service started successfully.")
     yield
     if app.state.arq_pool is not None:
         await app.state.arq_pool.aclose()
+    if getattr(app.state, "temporal_worker", None) is not None:
+        app.state.temporal_worker.cancel()
     flush_langfuse()
     logger.info("Service stopping.")
 
@@ -94,6 +106,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(blueprints_router)
 app.include_router(webhooks_router)
 app.include_router(feedback_router)
+app.include_router(conversations_router)
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"
