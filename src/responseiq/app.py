@@ -20,17 +20,21 @@ from .services.incident_service import process_log_ingestion
 # Initialize logging/telemetry early
 from .utils.logger import logger
 from .utils.telemetry import setup_telemetry
+from .utils.tracing import flush_langfuse
+from .worker import create_arq_pool
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    # Telemetry setup could happen here or at module level,
-    # but module level is often needed for instrumenting imports.
-    # We'll call the setup function on the app object.
     setup_telemetry(app)
+    # ARQ Redis pool — None when ARQ_REDIS_URL is not configured (BackgroundTasks fallback)
+    app.state.arq_pool = await create_arq_pool()
     logger.info("Service started successfully.")
     yield
+    if app.state.arq_pool is not None:
+        await app.state.arq_pool.aclose()
+    flush_langfuse()
     logger.info("Service stopping.")
 
 

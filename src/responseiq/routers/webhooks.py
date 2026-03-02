@@ -67,6 +67,27 @@ from ..schemas.webhooks import (
 from ..services.incident_service import process_log_ingestion
 from ..utils.logger import logger
 
+
+async def _enqueue_or_bg(
+    log_id: int,
+    background_tasks: BackgroundTasks,
+    request: Request,
+) -> None:
+    """
+    Enqueue ``process_log_ingestion`` as a durable ARQ job when a Redis pool
+    is available on ``app.state.arq_pool``, otherwise fall back to
+    FastAPI BackgroundTasks (fire-and-forget, no retry).
+    """
+    arq_pool = getattr(getattr(request, "app", None), "state", None)
+    arq_pool = getattr(arq_pool, "arq_pool", None) if arq_pool else None
+    if arq_pool is not None:
+        await arq_pool.enqueue_job("process_log_ingestion_job", log_id)
+        logger.info("ARQ job enqueued", log_id=log_id)
+    else:
+        background_tasks.add_task(process_log_ingestion, log_id)
+        logger.debug("BackgroundTasks fallback used (no ARQ pool)", log_id=log_id)
+
+
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 # ---------------------------------------------------------------------------
@@ -221,10 +242,11 @@ def _normalize_sentry(payload: SentryWebhookPayload) -> WebhookIncident:
 # ---------------------------------------------------------------------------
 
 
-def _ingest_webhook_incident(
+async def _ingest_webhook_incident(
     incident: WebhookIncident,
     background_tasks: BackgroundTasks,
     session: Session,
+    request: Request,
 ) -> WebhookAck:
     """
     Persist the normalised incident as a ``Log`` row and enqueue background
@@ -257,7 +279,7 @@ def _ingest_webhook_incident(
     if not log.id:
         raise HTTPException(status_code=500, detail="Database failure: Log ID not generated")
 
-    background_tasks.add_task(process_log_ingestion, log.id)
+    await _enqueue_or_bg(log.id, background_tasks, request)
 
     logger.info(
         "Webhook incident ingested",
@@ -305,7 +327,7 @@ async def ingest_datadog(
             status_code=422, detail=f"Invalid payload: {exc.error_count()} validation error(s)"
         ) from exc
     incident = _normalize_datadog(payload)
-    return _ingest_webhook_incident(incident, background_tasks, session)
+    return await _ingest_webhook_incident(incident, background_tasks, session, request)
 
 
 @router.post(
@@ -332,7 +354,7 @@ async def ingest_pagerduty(
             status_code=422, detail=f"Invalid payload: {exc.error_count()} validation error(s)"
         ) from exc
     incident = _normalize_pagerduty(payload)
-    return _ingest_webhook_incident(incident, background_tasks, session)
+    return await _ingest_webhook_incident(incident, background_tasks, session, request)
 
 
 @router.post(
@@ -359,7 +381,7 @@ async def ingest_sentry(
             status_code=422, detail=f"Invalid payload: {exc.error_count()} validation error(s)"
         ) from exc
     incident = _normalize_sentry(payload)
-    return _ingest_webhook_incident(incident, background_tasks, session)
+    return await _ingest_webhook_incident(incident, background_tasks, session, request)
 
 
 # ---------------------------------------------------------------------------

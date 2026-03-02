@@ -1,21 +1,91 @@
-import json
+"""
+src/responseiq/ai/llm_service.py
+
+LLM analysis and reproduction-code generation.
+
+Stack
+-----
+* openai SDK      — async-first official client; replaces hand-rolled httpx calls.
+* instructor 1.7  — Pydantic-enforced structured outputs.  The LLM is constrained
+                    to return a valid ``IncidentAnalysis`` or ``ReproductionCode``
+                    object; no ``json.loads`` gamble, no silent JSON parse failures.
+* langfuse (opt)  — LLM call tracing + eval flywheel (no-op when keys absent).
+
+Mocking in tests
+----------------
+Patch ``responseiq.ai.llm_service._get_instructor_client`` to inject a mock:
+
+    mock_client.chat.completions.create = AsyncMock(
+        return_value=IncidentAnalysis(title="T", severity="low", ...)
+    )
+"""
+
+from __future__ import annotations
+
 from typing import Any, Dict, Optional
 
-import httpx
+import instructor  # type: ignore[import-untyped]
+from openai import AsyncOpenAI
 
+from responseiq.ai.schemas import IncidentAnalysis, ReproductionCode
 from responseiq.config.settings import settings
 from responseiq.utils.log_scrubber import restore, scrub
 from responseiq.utils.logger import logger
+from responseiq.utils.tracing import get_langfuse
+
+# ---------------------------------------------------------------------------
+# System prompts (constants so they can be swapped / optimised with DSPy later)
+# ---------------------------------------------------------------------------
+
+_ANALYSIS_SYSTEM_PROMPT = (
+    "You are a senior DevOps / SRE Incident Analyzer. "
+    "Analyze the log AND the provided source code context. "
+    "Pinpoint the exact function and line of code causing the issue when visible. "
+    "Return a structured JSON object with keys: title, severity, description, remediation."
+)
+
+_REPRO_SYSTEM_PROMPT = "You are a Python focused QA Automation Expert."
+
+_REPRO_USER_TEMPLATE = (
+    "You are an expert QA Automation Engineer. "
+    "Your goal is to write a standalone Python script using `pytest` that REPRODUCES the bug "
+    "described below. The test MUST FAIL against the buggy code and PASS only after the fix.\n\n"
+    "INCIDENT SUMMARY:\n{incident_summary}\n\n"
+    "RELEVANT SOURCE CODE:\n{relevant_code}\n\n"
+    "INSTRUCTIONS:\n"
+    "1. Return ONLY the python code inside the `code` field. No markdown, no explanations.\n"
+    "2. Use standard `pytest` syntax.\n"
+    "3. Assert the specific error condition found in the incident summary.\n"
+    "4. Mock external dependencies (network, db, filesystem) where appropriate.\n"
+    "5. The test should be self-contained and ready to run."
+)
+
+# ---------------------------------------------------------------------------
+# Client factory — single injection point for all tests
+# ---------------------------------------------------------------------------
+
+
+def _get_instructor_client() -> instructor.AsyncInstructor:
+    """
+    Create and return an instructor-wrapped AsyncOpenAI client.
+
+    Extracted as a standalone function so unit tests can patch it:
+        patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock)
+    """
+    api_key = settings.openai_api_key.get_secret_value()  # type: ignore[union-attr]
+    return instructor.from_openai(AsyncOpenAI(api_key=api_key))
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Dict[str, Any]]:
     """
-    Analyzes log using OpenAI API if available, or local mock LLM as fallback.
-    Returns structured data if successful, None if disabled or fails.
-    Asynchronous version for high-throughput processing.
+    Analyse log using OpenAI (instructor-enforced schema) or fall back to local mock LLM.
 
-    PII scrubbing is applied to both log_text and code_context before any
-    external API call when settings.scrub_enabled is True.
+    PII scrubbing is applied before any external call when settings.scrub_enabled is True.
     """
     # --- P2.3: PII / secret scrubbing before any external call ---
     scrub_mapping: Dict[str, str] = {}
@@ -54,111 +124,68 @@ async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Di
 
 async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optional[Dict[str, Any]]:
     """
-    Internal function to analyze using OpenAI API specifically.
-    Returns structured data if successful, None if fails.
+    Instructor-backed OpenAI call that returns a validated ``IncidentAnalysis`` dict.
+
+    instructor enforces the Pydantic schema at the token level — no ``json.loads``,
+    no silent parse failures, no unvalidated severity literals.
     """
     if not settings.openai_api_key:
         return None
 
-    api_key = settings.openai_api_key.get_secret_value()
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    # Enrich the prompt with source code if available
     final_user_content = f"Log content: {log_text}"
     if code_context:
         final_user_content += f"\n\n{code_context}"
         logger.info("Enriched AI Prompt with Source Code Context")
 
-    # Prompt asking for specific JSON format to ensure compatibility
-    payload = {
-        "model": settings.llm_analysis_model,  # P2.2: configurable via LLM_ANALYSIS_MODEL env var
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a senior DevOps / SRE Incident Analyzer. "
-                    "Analyze the log AND the provided source code context. "
-                    "Pinpoint the exact function and line of code causing the issue when visible. "
-                    "Return ONLY a valid JSON object with these keys:\n"
-                    "  'title' (string, one-line incident headline)\n"
-                    "  'severity' (exactly one of: low, medium, high, critical)\n"
-                    "  'description' (string, root-cause explanation referencing specific log lines)\n"
-                    "  'remediation' (string, precise code change or operational action; "
-                    "prefer a diff-style snippet when source code is provided)\n"
-                    "Do NOT add markdown fences, preamble, or trailing text outside the JSON object."
-                ),
-            },
-            {"role": "user", "content": final_user_content},
-        ],
-        "temperature": 0.0,
-        "max_tokens": settings.llm_max_tokens,  # P2.2: configurable via LLM_MAX_TOKENS env var
-    }
+    # Langfuse generation span (no-op when not configured)
+    lf = get_langfuse()
+    lf_generation = None
+    if lf:
+        lf_generation = lf.start_generation(
+            name="analyze_incident",
+            model=settings.llm_analysis_model,
+            input=[
+                {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
+                {"role": "user", "content": final_user_content},
+            ],
+        )
 
     try:
-        # Use Async Client with context manager
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                json=payload,
-                headers=headers,
-            )
+        client = _get_instructor_client()
+        result: IncidentAnalysis = await client.chat.completions.create(
+            model=settings.llm_analysis_model,
+            response_model=IncidentAnalysis,
+            messages=[
+                {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
+                {"role": "user", "content": final_user_content},
+            ],
+            temperature=0.0,
+            max_tokens=settings.llm_max_tokens,
+        )
 
-            if response.status_code == 200:
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                    logger.warning("LLM returned non-JSON response", response=content)
-                    return {
-                        "title": "AI Insight (Unstructured)",
-                        "severity": "medium",
-                        "description": content,
-                        "remediation": "Check logs for details",
-                    }
+        if lf_generation:
+            lf_generation.update(output=result.model_dump())
+            lf_generation.end()
 
-            elif response.status_code == 401:
-                logger.error("OpenAI API Key Invalid. Please check configuration.")
-                return None
-            else:
-                logger.warning(f"OpenAI API Error: {response.status_code}")
-                return None
+        return result.model_dump()
 
-    except httpx.RequestError as e:
-        logger.warning(f"LLM Connection Error: {str(e)}. Falling back to local parsers.")
-        return None
     except Exception as e:
-        logger.exception(f"Unexpected error in LLM analysis: {str(e)}")
+        if lf_generation:
+            lf_generation.update(level="ERROR", status_message=str(e))
+            lf_generation.end()
+        logger.warning(f"LLM analysis failed: {e}. Falling back to local parsers.")
         return None
 
 
 async def generate_reproduction_code(incident_summary: str, relevant_code: str) -> Optional[str]:
     """
-    Asks the LLM to generate a standalone pytest script that reproduces the incident.
-    Returns the raw Python code (string) or None if it fails.
+    Ask the LLM to generate a standalone pytest script that reproduces the incident.
+
+    Returns the validated Python code string (via ``ReproductionCode.code``) or None.
     """
     if not settings.openai_api_key:
         logger.warning("OpenAI API Key missing. Cannot generate reproduction code.")
         return None
-
-    api_key = settings.openai_api_key.get_secret_value()
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    prompt = (
-        "You are an expert QA Automation Engineer. "
-        "Your goal is to write a standalone Python script using `pytest` that REPRODUCES the bug described below. "
-        "The test MUST FAIL when run against the current code (representing the bug), "
-        "and PASS only after the bug is fixed.\n\n"
-        f"INCIDENT SUMMARY:\n{incident_summary}\n\n"
-        f"RELEVANT SOURCE CODE:\n{relevant_code}\n\n"
-        "INSTRUCTIONS:\n"
-        "1. Return ONLY the python code. No markdown, no explanations.\n"
-        "2. Use standard `pytest` syntax.\n"
-        "3. Assert the specific error condition found in the incident summary.\n"
-        "4. Mock external dependencies (network, db, filesystem) where appropriate, using `unittest.mock`.\n"
-        "5. The test should be self-contained and ready to run."
-    )
 
     # P2.3: scrub before sending to LLM
     scrub_mapping: Dict[str, str] = {}
@@ -172,37 +199,43 @@ async def generate_reproduction_code(incident_summary: str, relevant_code: str) 
                 redacted_count=len(scrub_mapping),
             )
 
-    payload = {
-        "model": settings.llm_repro_model,  # P2.2: configurable via LLM_REPRO_MODEL env var
-        "messages": [
-            {"role": "system", "content": "You are a Python focused QA Automation Expert."},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.2,
-        "max_tokens": settings.llm_repro_max_tokens,  # P2.2: configurable via LLM_REPRO_MAX_TOKENS env var
-    }
+    prompt = _REPRO_USER_TEMPLATE.format(
+        incident_summary=incident_summary,
+        relevant_code=relevant_code,
+    )
+
+    # Langfuse generation span
+    lf = get_langfuse()
+    lf_generation = None
+    if lf:
+        lf_generation = lf.start_generation(
+            name="generate_reproduction_code",
+            model=settings.llm_repro_model,
+            input=prompt,
+        )
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                json=payload,
-                headers=headers,
-            )
+        client = _get_instructor_client()
+        result: ReproductionCode = await client.chat.completions.create(
+            model=settings.llm_repro_model,
+            response_model=ReproductionCode,
+            messages=[
+                {"role": "system", "content": _REPRO_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=settings.llm_repro_max_tokens,
+        )
 
-            if response.status_code == 200:
-                data = response.json()
-                content = data["choices"][0]["message"]["content"]
-                # Clean up markdown if the LLM ignores instructions
-                if content.startswith("```python"):
-                    content = content.replace("```python", "").replace("```", "").strip()
-                elif content.startswith("```"):
-                    content = content.replace("```", "").strip()
-                return content
-            else:
-                logger.error(f"Failed to generate reproduction code: {response.text}")
-                return None
+        if lf_generation:
+            lf_generation.update(output=result.code[:200])
+            lf_generation.end()
+
+        return result.code
 
     except Exception as e:
+        if lf_generation:
+            lf_generation.update(level="ERROR", status_message=str(e))
+            lf_generation.end()
         logger.exception(f"Error generating reproduction code: {e}")
         return None

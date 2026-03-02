@@ -117,6 +117,25 @@ class Settings(BaseSettings):
     # Local LLM fallback
     use_local_llm_fallback: bool = Field(default=True, description="Fall back to local mock LLM when no OpenAI key")
 
+    # ---------------------------------------------------------------------------
+    # ARQ — async durable task queue (requires Redis)
+    # ---------------------------------------------------------------------------
+    # ARQ_REDIS_URL — Redis DSN.  Leave unset to fall back to FastAPI BackgroundTasks.
+    arq_redis_url: Optional[str] = Field(
+        default=None,
+        description="Redis DSN for ARQ durable task queue (e.g. redis://localhost:6379/0)",
+    )
+
+    # ---------------------------------------------------------------------------
+    # Langfuse — LLM call tracing + eval flywheel
+    # ---------------------------------------------------------------------------
+    # Self-hosted at LANGFUSE_HOST for EU data-residency; cloud.langfuse.com by default.
+    langfuse_public_key: Optional[str] = Field(default=None, description="Langfuse project public key")
+    langfuse_secret_key: Optional[SecretStr] = Field(default=None, description="Langfuse project secret key")
+    langfuse_host: Optional[str] = Field(
+        default=None, description="Langfuse host URL (default: https://cloud.langfuse.com)"
+    )
+
     # Observability
     otel_exporter_otlp_endpoint: Optional[str] = None
 
