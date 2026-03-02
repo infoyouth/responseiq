@@ -10,6 +10,9 @@ import subprocess  # nosec B404
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from pathlib import Path
+
+from responseiq.config.guardrails import GuardrailChecker, GuardrailsConfig
 from responseiq.config.policy_config import (
     DenyReason,
     PolicyConfig,
@@ -59,6 +62,17 @@ class TrustGateValidator:
         self.environment = environment
         logger.info(f"TrustGate initialized with policy mode: {self.policy.mode.value}")
 
+        # P4: Load sovereign architectural guardrails from .responseiq/rules.yaml
+        guardrails_path = Path(".responseiq/rules.yaml")
+        if guardrails_path.exists():
+            self._guardrails_config: Optional[GuardrailsConfig] = GuardrailsConfig.load(guardrails_path)
+            self._guardrail_checker: Optional[GuardrailChecker] = GuardrailChecker(self._guardrails_config)
+            logger.info(f"P4 Guardrails loaded: {len(self._guardrails_config.rules)} rules from {guardrails_path}")
+        else:
+            self._guardrails_config = None
+            self._guardrail_checker = None
+            logger.debug("P4 Guardrails: no .responseiq/rules.yaml found — skipping")
+
     async def validate_remediation(self, request: RemediationRequest) -> ValidationResult:
         """
         Main validation entry point. Validates remediation request against all policy rules.
@@ -84,6 +98,7 @@ class TrustGateValidator:
             self._validate_protected_paths,
             self._validate_rollback_plan,
             self._validate_test_plan,
+            self._validate_guardrails,  # P4: Sovereign Architectural Guardrails
         ]
 
         for step in validation_steps:
@@ -199,6 +214,41 @@ class TrustGateValidator:
             result.message = "Test plan is required but not provided"
             result.required_actions.append("Provide validation test plan")
             return False
+        return True
+
+    async def _validate_guardrails(self, request: RemediationRequest, result: ValidationResult) -> bool:
+        """P4: Check proposed changes against sovereign architectural guardrails.
+
+        - Blocking violations → deny with DenyReason.GUARDRAIL_VIOLATION.
+        - Downgrade violations → force result.policy_mode to PR_ONLY (non-fatal).
+        - Warnings → logged in audit evidence, never block.
+        """
+        if not self._guardrail_checker:
+            return True  # No guardrails configured — transparent pass-through
+
+        gr = self._guardrail_checker.check(request.proposed_changes, request.affected_files)
+        result.evidence["guardrails"] = gr.to_dict()
+
+        # Warnings: audit trail only
+        for w in gr.warnings:
+            result.checks_passed.append(f"guardrail:warn:{w.rule_id}")
+
+        # Downgrades: non-fatal — but force PR_ONLY so a human reviews
+        for d in gr.downgrades:
+            logger.warning(f"P4 Guardrail downgrade [{d.rule_id}]: {d.description} → forcing PR_ONLY")
+            result.checks_failed.append(f"guardrail:downgrade:{d.rule_id}")
+            result.policy_mode = PolicyMode.PR_ONLY
+
+        # Blocking violations: hard deny
+        if gr.has_blocking_violations:
+            violation_summary = "; ".join(f"[{v.rule_id}] {v.description}" for v in gr.violations)
+            result.reason = DenyReason.GUARDRAIL_VIOLATION
+            result.message = f"Proposed changes violate architectural guardrails: {violation_summary}"
+            result.checks_failed.extend(f"guardrail:block:{v.rule_id}" for v in gr.violations)
+            result.required_actions.append("Fix all guardrail violations before re-attempting remediation.")
+            logger.error(f"P4 Guardrails BLOCKED incident {request.incident_id}: {violation_summary}")
+            return False
+
         return True
 
     async def _execute_required_checks(self, request: RemediationRequest, result: ValidationResult) -> bool:
