@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -28,6 +28,43 @@ class ValidationEvidence(Enum):
     SECURITY_SCAN = "security_scan"
     TYPE_CHECK = "type_check"
     INTEGRATION_TEST = "integration_test"
+
+
+class ContextResolutionReason(str, Enum):
+    """Why context extraction failed for a particular stack-trace reference."""
+
+    REPO_NOT_CONFIGURED = "repo_not_configured"
+    LOCAL_NOT_FOUND = "local_not_found"
+    REMOTE_CLONE_FAILED = "remote_clone_failed"
+    FILE_NOT_FOUND = "file_not_found"
+    PARSE_ERROR = "parse_error"
+
+
+@dataclass
+class ContextResolutionFailure:
+    """
+    Records why a stack-trace file reference could not be resolved.
+
+    Appended to ``ProofBundle.context_failures`` so the downstream
+    LLM prompt and audit trail know exactly which frames had no source.
+    """
+
+    path: str  # Raw path string from the stack trace
+    line_num: int
+    reason: ContextResolutionReason
+    attempted_repos: List[str] = field(default_factory=list)
+    detail: str = ""  # Human-readable extra info (e.g. git error)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": self.path,
+            "line_num": self.line_num,
+            "reason": self.reason.value,
+            "attempted_repos": self.attempted_repos,
+            "detail": self.detail,
+            "timestamp": self.timestamp.isoformat(),
+        }
 
 
 @dataclass
@@ -228,6 +265,10 @@ class ProofBundle:
 
     # Forensic integrity (P2.1 feature)
     integrity: Optional[EvidenceIntegrity] = field(default_factory=EvidenceIntegrity)
+
+    # Multi-repo context resolution failures (P2.4)
+    # Populated when stack-trace paths could not be resolved to source files.
+    context_failures: List[ContextResolutionFailure] = field(default_factory=list)
 
     @property
     def has_complete_proof(self) -> bool:

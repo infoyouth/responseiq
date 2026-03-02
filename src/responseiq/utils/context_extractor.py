@@ -1,10 +1,11 @@
 import re
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import aiofiles
 import tree_sitter_languages  # type: ignore
 
+from responseiq.schemas.proof import ContextResolutionFailure, ContextResolutionReason
 from responseiq.utils.logger import logger
 
 # Regex patterns for common stack traces (Python, Node, Go, Java mostly)
@@ -67,10 +68,32 @@ def _find_semantic_scope(node, target_line):
     return None  # If no function scope found (e.g. top level), return None
 
 
-async def extract_context_from_log(log_text: str, root_path: Path = Path(".")) -> str:
+async def extract_context_from_log(
+    log_text: str,
+    root_path: Path = Path("."),
+    *,
+    resolver: Optional["MultiRepoResolver"] = None,  # type: ignore[name-defined]  # noqa: F821
+    context_failures: Optional[List[ContextResolutionFailure]] = None,
+) -> str:
     """
-    Scans log text for file references, reads the local source code around those lines,
-    and returns a formatted context block for the AI.
+    Scans log text for file references, reads the local source code around
+    those lines, and returns a formatted context block for the AI.
+
+    Parameters
+    ----------
+    log_text:
+        Raw log / stack trace text.
+    root_path:
+        Local root to resolve relative paths against when no resolver is given.
+    resolver:
+        Optional :class:`~responseiq.utils.multi_repo_resolver.MultiRepoResolver`.
+        When supplied it is tried *first*; only if it returns a failure the
+        legacy ``resolve_local_path`` logic is attempted as a fallback so that
+        callers without a ``repo_map`` keep working transparently.
+    context_failures:
+        Mutable list; any :class:`~responseiq.schemas.proof.ContextResolutionFailure`
+        objects produced for paths that could not be resolved are appended here
+        so callers can surface them in ``ProofBundle.context_failures``.
     """
     context_blocks = []
     seen_refs = set()
@@ -81,26 +104,59 @@ async def extract_context_from_log(log_text: str, root_path: Path = Path(".")) -
             file_path_str = match.group(1)
             line_num = int(match.group(2))
 
-            # Normalize path
-            # Some logs have absolute paths "/app/src/..." that map to local "src/..."
             try:
-                # Naive stripping of common prefixes if file not found
-                local_file = resolve_local_path(file_path_str, root_path)
+                local_file: Optional[Path] = None
 
-                if not local_file or not local_file.exists():
-                    continue
+                # 1. Try multi-repo resolver when available
+                if resolver is not None:
+                    result = await resolver.resolve(file_path_str, line_num)
+                    if result.ok:
+                        local_file = result.resolved_path
+                    elif result.failure is not None:
+                        # Resolver returned a structured failure — fall through to
+                        # the legacy path resolver before recording the failure.
+                        legacy = resolve_local_path(file_path_str, root_path)
+                        if legacy and legacy.exists():
+                            local_file = legacy
+                        else:
+                            if context_failures is not None:
+                                context_failures.append(result.failure)
+                            continue
+
+                # 2. Legacy resolver (no multi-repo resolver configured)
+                if local_file is None:
+                    local_file = resolve_local_path(file_path_str, root_path)
+                    if not local_file or not local_file.exists():
+                        if context_failures is not None:
+                            context_failures.append(
+                                ContextResolutionFailure(
+                                    path=file_path_str,
+                                    line_num=line_num,
+                                    reason=ContextResolutionReason.LOCAL_NOT_FOUND,
+                                    detail="resolve_local_path returned None or file absent.",
+                                )
+                            )
+                        continue
 
                 ref_key = f"{local_file}:{line_num}"
                 if ref_key in seen_refs:
                     continue
                 seen_refs.add(ref_key)
 
-                # Read distinct block (Async I/O for speed)
                 code_snippet = await read_code_around_line(local_file, line_num)
                 if code_snippet:
                     context_blocks.append(f"--- Source: {local_file} (Line {line_num}) ---\n{code_snippet}\n")
             except Exception as e:
                 logger.debug(f"Failed to extract context for {file_path_str}: {e}")
+                if context_failures is not None:
+                    context_failures.append(
+                        ContextResolutionFailure(
+                            path=file_path_str,
+                            line_num=line_num,
+                            reason=ContextResolutionReason.PARSE_ERROR,
+                            detail=str(e),
+                        )
+                    )
 
     if not context_blocks:
         return ""
