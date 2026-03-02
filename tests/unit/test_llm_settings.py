@@ -94,44 +94,34 @@ async def test_llm_service_uses_configured_analysis_model():
     Verify _analyze_with_openai sends the model name from settings, not a
     hardcoded string.
     """
-    captured: list[dict] = []
-
-    async def fake_post(url, *, json=None, headers=None):
-        captured.append(json or {})
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"title":"T","severity":"low","description":"d","remediation":"r"}'}}]
-        }
-        return mock_resp
+    from pydantic import SecretStr
 
     from responseiq.ai.llm_service import _analyze_with_openai
+    from responseiq.ai.schemas import IncidentAnalysis
     from responseiq.config.settings import Settings
 
     mock_settings = Settings()
     mock_settings.llm_analysis_model = "gpt-4-turbo-custom"
     mock_settings.llm_max_tokens = 3333
+    mock_settings.openai_api_key = SecretStr("sk-fake")
+
+    mock_instructor = AsyncMock()
+    mock_instructor.chat = AsyncMock()
+    mock_instructor.chat.completions = AsyncMock()
+    mock_instructor.chat.completions.create = AsyncMock(
+        return_value=IncidentAnalysis(title="T", severity="low", description="d", remediation="r")
+    )
 
     with patch("responseiq.ai.llm_service.settings", mock_settings):
-        # Give it a fake secret so the key check passes
-        from pydantic import SecretStr
-
-        mock_settings.openai_api_key = SecretStr("sk-fake")
-
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post = fake_post
-            mock_cls.return_value = mock_client
-
+        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
             await _analyze_with_openai("some log text", "")
 
-    assert len(captured) == 1
-    assert captured[0]["model"] == "gpt-4-turbo-custom", (
-        f"Expected 'gpt-4-turbo-custom' but got '{captured[0].get('model')}'"
+    mock_instructor.chat.completions.create.assert_called_once()
+    call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs
+    assert call_kwargs["model"] == "gpt-4-turbo-custom", (
+        f"Expected 'gpt-4-turbo-custom' but got '{call_kwargs.get('model')}'"
     )
-    assert captured[0]["max_tokens"] == 3333
+    assert call_kwargs["max_tokens"] == 3333
 
 
 @pytest.mark.asyncio
@@ -139,18 +129,10 @@ async def test_llm_service_uses_configured_repro_model():
     """
     Verify generate_reproduction_code uses llm_repro_model, not a hardcoded value.
     """
-    captured: list[dict] = []
-
-    async def fake_post(url, *, json=None, headers=None):
-        captured.append(json or {})
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"choices": [{"message": {"content": "def test_repro(): pass"}}]}
-        return mock_resp
-
     from pydantic import SecretStr
 
     from responseiq.ai.llm_service import generate_reproduction_code
+    from responseiq.ai.schemas import ReproductionCode
     from responseiq.config.settings import Settings
 
     mock_settings = Settings()
@@ -158,19 +140,19 @@ async def test_llm_service_uses_configured_repro_model():
     mock_settings.llm_repro_max_tokens = 2048
     mock_settings.openai_api_key = SecretStr("sk-fake")
 
-    with patch("responseiq.ai.llm_service.settings", mock_settings):
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post = fake_post
-            mock_cls.return_value = mock_client
+    mock_instructor = AsyncMock()
+    mock_instructor.chat = AsyncMock()
+    mock_instructor.chat.completions = AsyncMock()
+    mock_instructor.chat.completions.create = AsyncMock(return_value=ReproductionCode(code="def test_repro(): pass"))
 
+    with patch("responseiq.ai.llm_service.settings", mock_settings):
+        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
             await generate_reproduction_code("NullPointerError in worker", "def worker(): pass")
 
-    assert len(captured) == 1
-    assert captured[0]["model"] == "o3-mini"
-    assert captured[0]["max_tokens"] == 2048
+    mock_instructor.chat.completions.create.assert_called_once()
+    call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs
+    assert call_kwargs["model"] == "o3-mini"
+    assert call_kwargs["max_tokens"] == 2048
 
 
 @pytest.mark.asyncio
@@ -179,34 +161,25 @@ async def test_no_hardcoded_gpt35_in_analysis_path():
     Regression guard: gpt-3.5-turbo must never be sent to OpenAI from the
     analysis path once this feature is shipped.
     """
-    captured: list[dict] = []
-
-    async def fake_post(url, *, json=None, headers=None):
-        captured.append(json or {})
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"title":"T","severity":"low","description":"d","remediation":"r"}'}}]
-        }
-        return mock_resp
-
     from pydantic import SecretStr
 
     from responseiq.ai.llm_service import _analyze_with_openai
+    from responseiq.ai.schemas import IncidentAnalysis
     from responseiq.config.settings import Settings
 
     mock_settings = Settings()
     mock_settings.openai_api_key = SecretStr("sk-fake")
 
-    with patch("responseiq.ai.llm_service.settings", mock_settings):
-        with patch("httpx.AsyncClient") as mock_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post = fake_post
-            mock_cls.return_value = mock_client
+    mock_instructor = AsyncMock()
+    mock_instructor.chat = AsyncMock()
+    mock_instructor.chat.completions = AsyncMock()
+    mock_instructor.chat.completions.create = AsyncMock(
+        return_value=IncidentAnalysis(title="T", severity="low", description="d", remediation="r")
+    )
 
+    with patch("responseiq.ai.llm_service.settings", mock_settings):
+        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
             await _analyze_with_openai("test log", "")
 
-    assert len(captured) == 1
-    assert captured[0]["model"] != "gpt-3.5-turbo", "REGRESSION: gpt-3.5-turbo is hardcoded again in the analysis path!"
+    call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs
+    assert call_kwargs["model"] != "gpt-3.5-turbo", "REGRESSION: gpt-3.5-turbo is hardcoded again in the analysis path!"

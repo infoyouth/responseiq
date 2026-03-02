@@ -228,21 +228,9 @@ async def test_analyze_with_llm_scrubs_before_openai_call():
     Verifies that when settings.scrub_enabled is True (default), the payload
     sent to OpenAI never contains raw PII.
     """
-    captured_payloads = []
-
-    async def fake_post(url, *, json=None, headers=None):
-        captured_payloads.append(json)
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [
-                {"message": {"content": '{"title":"Test","severity":"low","description":"test","remediation":"none"}'}}
-            ]
-        }
-        return mock_resp
-
     from pydantic import SecretStr
 
+    from responseiq.ai.schemas import IncidentAnalysis
     from responseiq.config.settings import Settings
 
     mock_settings = Settings()
@@ -250,23 +238,25 @@ async def test_analyze_with_llm_scrubs_before_openai_call():
     mock_settings.openai_api_key = SecretStr("sk-fake")
     mock_settings.use_local_llm_fallback = False
 
-    with patch("responseiq.ai.llm_service.settings", mock_settings):
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post = fake_post
-            mock_client_cls.return_value = mock_client
+    mock_instructor = AsyncMock()
+    mock_instructor.chat = AsyncMock()
+    mock_instructor.chat.completions = AsyncMock()
+    mock_instructor.chat.completions.create = AsyncMock(
+        return_value=IncidentAnalysis(title="Test", severity="low", description="test", remediation="none")
+    )
 
+    with patch("responseiq.ai.llm_service.settings", mock_settings):
+        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
             from responseiq.ai.llm_service import analyze_with_llm
 
             log_with_pii = "Error for user admin@secret.com from 10.10.10.10"
             await analyze_with_llm(log_with_pii, code_context="")
 
-    if captured_payloads:
-        sent_content = str(captured_payloads[0])
-        assert "admin@secret.com" not in sent_content, "Raw email leaked to LLM"
-        assert "10.10.10.10" not in sent_content, "Raw IP leaked to LLM"
+    mock_instructor.chat.completions.create.assert_called_once()
+    call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs
+    sent_content = str(call_kwargs.get("messages", []))
+    assert "admin@secret.com" not in sent_content, "Raw email leaked to LLM"
+    assert "10.10.10.10" not in sent_content, "Raw IP leaked to LLM"
 
 
 @pytest.mark.asyncio
@@ -274,19 +264,9 @@ async def test_analyze_with_llm_scrub_disabled_passes_raw():
     """
     When scrub_enabled is False, raw PII is forwarded (opt-out for on-prem).
     """
-    captured_payloads = []
-
-    async def fake_post(url, *, json=None, headers=None):
-        captured_payloads.append(json)
-        mock_resp = AsyncMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {
-            "choices": [{"message": {"content": '{"title":"T","severity":"low","description":"d","remediation":"r"}'}}]
-        }
-        return mock_resp
-
     from pydantic import SecretStr
 
+    from responseiq.ai.schemas import IncidentAnalysis
     from responseiq.config.settings import Settings
 
     mock_settings = Settings()
@@ -294,19 +274,21 @@ async def test_analyze_with_llm_scrub_disabled_passes_raw():
     mock_settings.openai_api_key = SecretStr("sk-fake")
     mock_settings.use_local_llm_fallback = False
 
-    with patch("responseiq.ai.llm_service.settings", mock_settings):
-        with patch("httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post = fake_post
-            mock_client_cls.return_value = mock_client
+    mock_instructor = AsyncMock()
+    mock_instructor.chat = AsyncMock()
+    mock_instructor.chat.completions = AsyncMock()
+    mock_instructor.chat.completions.create = AsyncMock(
+        return_value=IncidentAnalysis(title="T", severity="low", description="d", remediation="r")
+    )
 
+    with patch("responseiq.ai.llm_service.settings", mock_settings):
+        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
             from responseiq.ai.llm_service import analyze_with_llm
 
             log_with_pii = "Error for user admin@secret.com"
             await analyze_with_llm(log_with_pii, code_context="")
 
-    if captured_payloads:
-        sent_content = str(captured_payloads[0])
-        assert "admin@secret.com" in sent_content, "Expected raw PII when scrub disabled"
+    mock_instructor.chat.completions.create.assert_called_once()
+    call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs
+    sent_content = str(call_kwargs.get("messages", []))
+    assert "admin@secret.com" in sent_content, "Expected raw PII when scrub disabled"
