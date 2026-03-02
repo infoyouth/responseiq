@@ -5,7 +5,7 @@
 export UV_FROZEN := 1
 
 
-all: sync check build  ## Install, check, and build everything
+all: sync check build format lint test mypy security ## Install, check, and build everything
 
 
 sync:  ## Sync environment from lockfile (Hermetic)

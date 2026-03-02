@@ -13,7 +13,7 @@ class GitClient:
     def run(self, args: list) -> bool:
         try:
             cmd = ["git"] + args
-            subprocess.run(  # nosec
+            subprocess.run(  # noqa: S603
                 cmd,
                 cwd=self.cwd,
                 capture_output=True,
@@ -49,8 +49,8 @@ class GitClient:
         # (Though our current run implementation logs stderr which might
         # contain it if git echoes it back)
         try:
-            subprocess.run(  # nosec
-                ["git", "push", remote_url, branch_name],
+            subprocess.run(  # noqa: S603
+                ["git", "push", remote_url, branch_name],  # noqa: S607
                 cwd=self.cwd,
                 check=True,
                 capture_output=True,

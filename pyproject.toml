@@ -224,6 +224,12 @@ insecure = false
 dist_glob_patterns = ["dist/*"]
 upload_to_vcs_release = true
 
+[tool.pytest.ini_options]
+# Run only the proper test suite; demo_utils_local requires optional dev deps
+testpaths = ["tests"]
+asyncio_mode = "strict"
+norecursedirs = ["demo_utils_local", "rollbacks", "scripts", "docs", "fixtures", "terraform", "helm"]
+
 [tool.responseiq]
 # Configure what ResponseIQ scans/ignores.
 ignore_dirs = [

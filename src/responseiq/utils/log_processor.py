@@ -60,7 +60,7 @@ def _scan_chunk_for_errors(args: Tuple[str, int, int]) -> List[str]:
                     span_end = min(len(text_chunk), match.end() + 200)
                     matches.append(text_chunk[span_start:span_end].strip())
 
-    except Exception:  # nosec B110
+    except Exception:  # noqa: S110
         # Silently fail in worker to avoid crashing main loop
         pass
 
