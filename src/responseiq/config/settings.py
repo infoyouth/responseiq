@@ -136,6 +136,13 @@ class Settings(BaseSettings):
         default=None, description="Langfuse host URL (default: https://cloud.langfuse.com)"
     )
 
+    # Temporal durable workflows (P-F4) — feature-flagged, disabled by default.
+    # Enable only when a Temporal server is running at TEMPORAL_HOST.
+    temporal_enabled: bool = Field(default=False, description="Enable Temporal workflow worker")
+    temporal_host: str = Field(default="localhost:7233", description="Temporal server gRPC endpoint")
+    temporal_namespace: str = Field(default="responseiq", description="Temporal namespace")
+    temporal_task_queue: str = Field(default="responseiq-remediation", description="Temporal task queue name")
+
     # Observability
     otel_exporter_otlp_endpoint: Optional[str] = None
 

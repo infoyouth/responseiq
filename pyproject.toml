@@ -80,6 +80,9 @@ Changelog = "https://github.com/infoyouth/responseiq/blob/main/CHANGELOG.md"
 [project.scripts]
 responseiq = "responseiq.cli:main"
 
+[project.optional-dependencies]
+temporal = ["temporalio>=1.0.0"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/responseiq"]
 
@@ -191,6 +194,9 @@ insecure = false
 [tool.semantic_release.publish]
 dist_glob_patterns = ["dist/*"]
 upload_to_vcs_release = true
+
+[tool.mypy]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 # Run only the proper test suite; demo_utils_local requires optional dev deps
