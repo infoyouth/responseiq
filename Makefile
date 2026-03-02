@@ -1,6 +1,7 @@
 
 
-.PHONY: all sync install dev-install lint format test run build deploy mypy security docker-up ci check help
+.PHONY: all sync install dev-install lint format test run build deploy mypy security docker-up ci check help \
+        sand sand-v sand-payment sand-auth sand-inventory sand-fastapi sand-flask sand-setup
 
 export UV_FROZEN := 1
 
@@ -40,6 +41,31 @@ mypy:  ## Type-check code with mypy
 
 security:  ## Run security checks (Bandit-equivalent via Ruff)
 	uv run ruff check --select S src
+
+
+sand:  ## Run local sandbox end-to-end demo (never pushed to remote)
+	uv run python sandbox/run_demo.py
+
+sand-v:  ## Run sandbox demo with verbose JSON output
+	uv run python sandbox/run_demo.py --verbose
+
+sand-payment:  ## Run sandbox: INC-001 payment silent failure
+	uv run python sandbox/run_demo.py --incident payment
+
+sand-auth:  ## Run sandbox: INC-002 auth KeyError + PII scrubbing
+	uv run python sandbox/run_demo.py --incident auth
+
+sand-inventory:  ## Run sandbox: INC-003 inventory pool exhaustion
+	uv run python sandbox/run_demo.py --incident inventory
+
+sand-fastapi:  ## Run sandbox: INC-004 FastAPI template (requires setup.sh)
+	uv run python sandbox/run_demo.py --incident fastapi
+
+sand-flask:  ## Run sandbox: INC-005 Flask 3.1.2 stream_with_context (requires setup.sh)
+	uv run python sandbox/run_demo.py --incident flask
+
+sand-setup:  ## Clone real GitHub repos for sandbox incidents #4 and #5
+	bash sandbox/setup.sh
 
 
 build:  ## Build Python package (wheel/sdist)

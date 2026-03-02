@@ -234,3 +234,6 @@ rollbacks/
 # Generated Tests
 tests/repro/test_incident_*.py
 tests/repro/test_test_*.py
+
+# Local-only sandbox (reusable test framework — never push to remote)
+sandbox/
