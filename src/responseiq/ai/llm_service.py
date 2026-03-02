@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from responseiq.config.settings import settings
+from responseiq.utils.log_scrubber import restore, scrub
 from responseiq.utils.logger import logger
 
 
@@ -12,18 +13,37 @@ async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Di
     Analyzes log using OpenAI API if available, or local mock LLM as fallback.
     Returns structured data if successful, None if disabled or fails.
     Asynchronous version for high-throughput processing.
+
+    PII scrubbing is applied to both log_text and code_context before any
+    external API call when settings.scrub_enabled is True.
     """
+    # --- P2.3: PII / secret scrubbing before any external call ---
+    scrub_mapping: Dict[str, str] = {}
+    if settings.scrub_enabled:
+        log_text, log_mapping = scrub(log_text)
+        code_context, code_mapping = scrub(code_context)
+        scrub_mapping = {**log_mapping, **code_mapping}
+        if scrub_mapping:
+            logger.info(
+                "PII scrubber redacted tokens before LLM call",
+                redacted_count=len(scrub_mapping),
+            )
+
     # Try OpenAI first if API key is available
     if settings.openai_api_key:
         result = await _analyze_with_openai(log_text, code_context)
         if result is not None:
+            # Restore placeholders in display fields so local UI shows real values
+            if scrub_mapping:
+                for field in ("title", "description", "remediation"):
+                    if field in result and isinstance(result[field], str):
+                        result[field] = restore(result[field], scrub_mapping)
             return result
         logger.warning("OpenAI analysis failed, falling back to local mock LLM")
 
     # Fall back to local mock LLM
-    use_local_fallback = getattr(settings, "use_local_llm_fallback", True)
-    if use_local_fallback:
-        logger.info("🤖 Using local mock LLM for incident analysis")
+    if settings.use_local_llm_fallback:
+        logger.info("Using local mock LLM for incident analysis")
         from responseiq.ai.local_llm_service import analyze_with_local_llm
 
         return await analyze_with_local_llm(log_text, code_context)
@@ -52,23 +72,27 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
 
     # Prompt asking for specific JSON format to ensure compatibility
     payload = {
-        "model": "gpt-3.5-turbo",
+        "model": settings.llm_analysis_model,  # P2.2: configurable via LLM_ANALYSIS_MODEL env var
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "You are a DevOps Incident Analyzer. Analyze the log AND the provided source code context. "
-                    "Pinpoint the exact line of code causing the issue if visible. "
-                    "Return a JSON object with keys: 'title' (string), "
-                    "'severity' (low/medium/high), 'description' (string), "
-                    "'remediation' (string). The remediation should be a precise code change if possible. "
-                    "Do not add markdown formatting."
+                    "You are a senior DevOps / SRE Incident Analyzer. "
+                    "Analyze the log AND the provided source code context. "
+                    "Pinpoint the exact function and line of code causing the issue when visible. "
+                    "Return ONLY a valid JSON object with these keys:\n"
+                    "  'title' (string, one-line incident headline)\n"
+                    "  'severity' (exactly one of: low, medium, high, critical)\n"
+                    "  'description' (string, root-cause explanation referencing specific log lines)\n"
+                    "  'remediation' (string, precise code change or operational action; "
+                    "prefer a diff-style snippet when source code is provided)\n"
+                    "Do NOT add markdown fences, preamble, or trailing text outside the JSON object."
                 ),
             },
             {"role": "user", "content": final_user_content},
         ],
         "temperature": 0.0,
-        "max_tokens": 300,  # Increased tokens for detailed code fixes
+        "max_tokens": settings.llm_max_tokens,  # P2.2: configurable via LLM_MAX_TOKENS env var
     }
 
     try:
@@ -136,14 +160,26 @@ async def generate_reproduction_code(incident_summary: str, relevant_code: str) 
         "5. The test should be self-contained and ready to run."
     )
 
+    # P2.3: scrub before sending to LLM
+    scrub_mapping: Dict[str, str] = {}
+    if settings.scrub_enabled:
+        incident_summary, s_map = scrub(incident_summary)
+        relevant_code, c_map = scrub(relevant_code)
+        scrub_mapping = {**s_map, **c_map}
+        if scrub_mapping:
+            logger.info(
+                "PII scrubber redacted tokens before reproduction code generation",
+                redacted_count=len(scrub_mapping),
+            )
+
     payload = {
-        "model": "gpt-4-turbo-preview",  # Use a better model for code generation
+        "model": settings.llm_repro_model,  # P2.2: configurable via LLM_REPRO_MODEL env var
         "messages": [
             {"role": "system", "content": "You are a Python focused QA Automation Expert."},
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
-        "max_tokens": 1500,
+        "max_tokens": settings.llm_repro_max_tokens,  # P2.2: configurable via LLM_REPRO_MAX_TOKENS env var
     }
 
     try:
