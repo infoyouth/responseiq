@@ -60,6 +60,39 @@ async def process_log_ingestion_job(ctx: dict, log_id: int) -> None:
     logger.info("ARQ job completed: process_log_ingestion", log_id=log_id)
 
 
+async def generate_embedding_job(ctx: dict, incident_id: int) -> None:
+    """
+    ARQ job (P-F2): generate and store a semantic embedding for *incident_id*.
+
+    Runs after ``process_log_ingestion_job`` creates the Incident row.
+    Calls ``SemanticSearchService.generate_and_store(incident_id)`` which:
+      1. Calls OpenAI ``text-embedding-3-small`` for the incident text.
+      2. Persists the vector to ``IncidentEmbedding`` (JSON blob, pgvector-ready).
+
+    No-op and does not fail when OpenAI is unavailable (returns early).
+    """
+    logger.info("ARQ job started: generate_embedding", incident_id=incident_id)
+    try:
+        from sqlmodel import Session
+
+        from responseiq.db import get_engine
+        from responseiq.services.semantic_search_service import SemanticSearchService
+
+        engine = get_engine()
+        with Session(engine) as session:
+            svc = SemanticSearchService(session)
+            result = svc.generate_and_store(incident_id)
+            if result:
+                logger.info("ARQ job completed: generate_embedding", incident_id=incident_id)
+            else:
+                logger.debug(
+                    "ARQ job: generate_embedding skipped (no API key or no incident)",
+                    incident_id=incident_id,
+                )
+    except Exception as exc:
+        logger.warning("ARQ job: generate_embedding error: %s", exc, incident_id=incident_id)
+
+
 # ---------------------------------------------------------------------------
 # Worker settings
 # ---------------------------------------------------------------------------
@@ -82,7 +115,7 @@ class WorkerSettings:
     Start with:  arq responseiq.worker.WorkerSettings
     """
 
-    functions = [process_log_ingestion_job]
+    functions = [process_log_ingestion_job, generate_embedding_job]
 
     # Limit concurrent jobs to avoid hammering the LLM API rate limits.
     max_jobs: int = 10

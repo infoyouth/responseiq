@@ -4,7 +4,7 @@ from sqlmodel import Session, SQLModel, create_engine
 from .config.settings import settings
 
 # Reuse models from responseiq.models to avoid duplicate table definitions
-from .models.base import Incident, Log  # noqa: F401
+from .models.base import FeedbackRecord, Incident, IncidentEmbedding, Log  # noqa: F401
 
 _engine = None
 

@@ -87,3 +87,33 @@ def flush_langfuse() -> None:
             _langfuse_client.flush()
         except Exception as exc:  # pragma: no cover
             logger.debug("Langfuse flush error (non-fatal): %s", exc)
+
+
+def score_langfuse(
+    trace_name: str,
+    score_name: str,
+    value: float,
+    comment: Optional[str] = None,
+) -> None:
+    """
+    Create a Langfuse score labelling an LLM generation span (P-F1).
+
+    Used by the feedback endpoint to label approved/rejected remediations.
+    Links the score via ``comment`` which includes the trace_name
+    (``log_{log_id}``).  Pass ``trace_id`` directly to ``create_score``
+    when it becomes available from the generation span store.
+
+    No-op when Langfuse is not configured or if the call fails.
+    """
+    lf = get_langfuse()
+    if lf is None:
+        return
+    try:
+        full_comment = f"trace:{trace_name}" + (f" | {comment}" if comment else "")
+        lf.create_score(
+            name=score_name,
+            value=value,
+            comment=full_comment,
+        )
+    except Exception as exc:  # pragma: no cover
+        logger.debug("Langfuse score call failed (non-fatal): %s", exc)
