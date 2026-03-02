@@ -1,49 +1,75 @@
 
-.PHONY: all install dev-install lint format test run build deploy mypy security docker-up ci
 
-all: install format lint test mypy security build
+.PHONY: all sync install dev-install lint format test run build deploy mypy security docker-up ci check help
 
-install:
-	uv sync
+export UV_FROZEN := 1
 
-dev-install:
+
+all: sync check build format lint test mypy security ## Install, check, and build everything
+
+
+sync:  ## Sync environment from lockfile (Hermetic)
+	uv sync --frozen
+
+install: sync  ## Install all dependencies (frozen)
+
+
+dev-install:  ## Install dev dependencies
 	uv sync --group dev
 
-run:
+
+run:  ## Run the API server (dev mode)
 	uv run uvicorn responseiq.app:app --reload
 
-test:
+
+test:  ## Run all tests
 	uv run pytest
 
-lint:
-	uv run flake8 src tests
 
-format:
-	uv run black src tests && uv run isort src tests && uv run ruff check src tests --fix
+lint:  ## Lint code with Ruff
+	uv run ruff check src tests
 
-mypy:
+
+format:  ## Format code with Ruff
+	uv run ruff format src tests
+
+
+mypy:  ## Type-check code with mypy
 	uv run mypy src
 
-security:
-	uv run bandit -r src
 
-build:
+security:  ## Run security checks (Bandit-equivalent via Ruff)
+	uv run ruff check --select S src
+
+
+build:  ## Build Python package (wheel/sdist)
 	uv build
 
-docker-build:
+
+docker-build:  ## Build Docker image
 	docker build -t responseiq:latest .
 
-docker-up:
+
+docker-up:  ## Start Docker Compose stack
 	docker compose up
 
-deploy:
+
+deploy:  ## Deploy with Helm
 	helm upgrade --install responseiq ./helm
 
 
-# run the same checks as CI locally
-ci:
-	uv run flake8 src tests
-	uv run black --check src tests
-	uv run isort --check-only src tests
+# run the same checks as CI locally (Immutable Gate)
+ci:  ## Run CI pipeline (lock, lint, type, test)
+	uv lock --check
+	uv run ruff check src tests --no-fix
 	uv run mypy src
 	uv run pytest --maxfail=1 --disable-warnings -q
+
+# Guard: run all local checks before push
+check: format lint mypy test  ## Run all local checks (format, lint, type, test)
+
+# Self-documenting help
+help:  ## Show this help message
+	@echo "Available targets:"; \
+	grep -E '^[a-zA-Z0-9_-]+:.*?##' $(MAKEFILE_LIST) | \
+	awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'

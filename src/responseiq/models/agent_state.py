@@ -9,3 +9,5 @@ class AgentState(TypedDict, total=False):
     current_patch: Optional[str]
     last_verification: Optional[str]
     status: Optional[str]
+    trace_id: Optional[str]
+    context: Optional[dict]

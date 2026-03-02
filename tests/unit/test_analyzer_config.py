@@ -6,7 +6,7 @@ from responseiq.services import analyzer
 
 def test_reload_config_and_mapping(tmp_path, monkeypatch):
     cfg = tmp_path / "k.json"
-    cfg.write_text('{"simple": ["timeout"], "events": {}, ' '"mapping": {"high": ["timeout"]}}')
+    cfg.write_text('{"simple": ["timeout"], "events": {}, "mapping": {"high": ["timeout"]}}')
 
     # Patch settings to point to our temp file
     monkeypatch.setattr(settings, "keywords_config_path", cfg)

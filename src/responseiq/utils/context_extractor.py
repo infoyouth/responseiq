@@ -98,7 +98,7 @@ async def extract_context_from_log(log_text: str, root_path: Path = Path(".")) -
                 # Read distinct block (Async I/O for speed)
                 code_snippet = await read_code_around_line(local_file, line_num)
                 if code_snippet:
-                    context_blocks.append(f"--- Source: {local_file} (Line {line_num}) ---\n" f"{code_snippet}\n")
+                    context_blocks.append(f"--- Source: {local_file} (Line {line_num}) ---\n{code_snippet}\n")
             except Exception as e:
                 logger.debug(f"Failed to extract context for {file_path_str}: {e}")
 

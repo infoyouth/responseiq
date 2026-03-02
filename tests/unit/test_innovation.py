@@ -17,7 +17,6 @@ async def test_context_extraction_regex():
     # Mock read_code_around_line since we don't have the file
     with patch("responseiq.utils.context_extractor.read_code_around_line", new_callable=AsyncMock) as mock_read:
         with patch("responseiq.utils.context_extractor.resolve_local_path") as mock_resolve:
-
             mock_read.return_value = "15 | >> print('hello')"
             # Return a MagicMock that behaves like a Path but allows attribute setting
             mock_path = MagicMock(spec=Path)
