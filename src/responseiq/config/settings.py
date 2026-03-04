@@ -163,6 +163,24 @@ class Settings(BaseSettings):
     temporal_namespace: str = Field(default="responseiq", description="Temporal namespace")
     temporal_task_queue: str = Field(default="responseiq-remediation", description="Temporal task queue name")
 
+    # Post-apply watchdog (#3 v2.18.0) — feature-flagged, disabled by default.
+    # Enable to start automatic error-rate monitoring after guarded_apply.
+    watchdog_enabled: bool = Field(
+        default=False,
+        description="Enable post-apply watchdog (env: RESPONSEIQ_WATCHDOG_ENABLED)",
+    )
+    watchdog_error_threshold: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="Error rate (0.0–1.0) that triggers auto-rollback (env: RESPONSEIQ_WATCHDOG_ERROR_THRESHOLD)",
+    )
+    watchdog_window_seconds: int = Field(
+        default=300,
+        ge=30,
+        description="Post-apply monitoring window in seconds (env: RESPONSEIQ_WATCHDOG_WINDOW_SECONDS)",
+    )
+
     # Observability
     otel_exporter_otlp_endpoint: Optional[str] = None
 

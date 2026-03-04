@@ -53,3 +53,53 @@ class IncidentEmbedding(SQLModel, table=True):  # type: ignore[call-arg]
     embedding_json: str = Field(description="JSON-encoded float array.")
     model: str = Field(default="text-embedding-3-small")
     created_at: datetime = Field(default_factory=_now)
+
+
+class ProofBundleRecord(SQLModel, table=True):  # type: ignore[call-arg]
+    """#2 v2.18.0: Persistent SOC2-ready audit record for a sealed ProofBundle.
+
+    Written by ``proof_persistence_service.persist_proof_bundle()`` immediately
+    after ``ProofBundle.seal_forensic_evidence()`` finalises the post-fix chain.
+    Readable via ``GET /api/v1/incidents/{incident_id}/proof``.
+
+    Fields mirror the ``EvidenceIntegrity`` snapshot so the record is fully
+    self-contained and does not require the in-memory ProofBundle to be present.
+    """
+
+    __table_args__ = {"extend_existing": True}
+    id: int | None = Field(default=None, primary_key=True)
+    incident_id: str = Field(index=True, description="String incident identifier (uuid or slug)")
+    # Cryptographic integrity fields (copied from EvidenceIntegrity)
+    integrity_hash: Optional[str] = Field(default=None, description="SHA-256 hex of evidence payload")
+    chain_hash: Optional[str] = Field(default=None, description="SHA-256(integrity_hash + prev_hash)")
+    algorithm: str = Field(default="SHA-256")
+    sealed_at: Optional[datetime] = Field(default=None, description="When ProofBundle.seal_forensic_evidence() ran")
+    pre_fix_hash: Optional[str] = Field(default=None, description="SHA-256 of pre-fix test output")
+    post_fix_hash: Optional[str] = Field(default=None, description="SHA-256 of post-fix validation output")
+    chain_verified: bool = Field(default=False)
+    tamper_proof: bool = Field(default=False)
+    # Confidence scores from the ProofBundle
+    reproduction_confidence: float = Field(default=0.0)
+    fix_confidence: float = Field(default=0.0)
+    # Record housekeeping
+    created_at: datetime = Field(default_factory=_now)
+
+
+class WatchdogRecord(SQLModel, table=True):  # type: ignore[call-arg]
+    """#3 v2.18.0: Audit record for each post-apply watchdog run.
+
+    Written by ``WatchdogService`` when a monitoring window concludes,
+    whether or not the rollback threshold was breached.
+    """
+
+    __table_args__ = {"extend_existing": True}
+    id: int | None = Field(default=None, primary_key=True)
+    incident_id: str = Field(index=True)
+    triggered: bool = Field(default=False, description="True if error-rate threshold was breached")
+    reason: Optional[str] = Field(default=None)
+    error_rate_observed: float = Field(default=0.0, description="Peak error rate during window")
+    error_threshold: float = Field(default=0.05)
+    window_seconds: int = Field(default=300)
+    rollback_script_path: Optional[str] = Field(default=None)
+    started_at: datetime = Field(default_factory=_now)
+    completed_at: Optional[datetime] = Field(default=None)
