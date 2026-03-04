@@ -72,6 +72,16 @@ class Settings(BaseSettings):
         default=None, description="Sentry webhook signing secret (sentry-hook-signature)"
     )
 
+    # P8: GitHub App webhook secret + bot identity
+    github_webhook_secret: Optional[SecretStr] = Field(
+        default=None,
+        description="GitHub App webhook secret for HMAC-SHA256 signature verification (X-Hub-Signature-256)",
+    )
+    github_bot_login: str = Field(
+        default="responseiq-bot[bot]",
+        description="GitHub login of the ResponseIQ bot account — used to suppress reply loops",
+    )
+
     # LLM Model Configuration
     # LLM_BASE_URL — OpenAI-compatible base URL.  Set to http://localhost:11434/v1 for Ollama
     #               or https://api.groq.com/openai/v1 for Groq (free tier).  When set,

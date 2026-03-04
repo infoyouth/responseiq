@@ -299,8 +299,12 @@ class ProofBundle:
         """Seal evidence with cryptographic hashes for audit trail."""
         if not self.integrity:
             self.integrity = EvidenceIntegrity()
-
-        self.integrity.seal_evidence(pre_fix_content=self.pre_fix_evidence, post_fix_content=self.post_fix_evidence)
+        # IMPORTANT: seal_evidence() returns a *new* EvidenceIntegrity snapshot.
+        # Assign it back so ProofBundle.integrity carries the populated hashes.
+        self.integrity = self.integrity.seal_evidence(
+            pre_fix_content=self.pre_fix_evidence,
+            post_fix_content=self.post_fix_evidence,
+        )
 
     def verify_evidence_integrity(self) -> bool:
         """Verify that evidence hasn't been tampered with since sealing."""

@@ -17,6 +17,7 @@ from responseiq.models.base import Incident, IncidentEmbedding, Log
 from responseiq.services.semantic_search_service import (
     SemanticSearchService,
     _cosine_similarity,
+    _is_pgvector_available,
 )
 
 
@@ -249,3 +250,65 @@ def test_api_similar_threshold_param_respected(client: TestClient, session: Sess
     resp = client.get("/api/v1/incidents/300/similar?threshold=0.9999")
     assert resp.status_code == 200
     assert resp.json()["results"] == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# P-F2 pgvector: _is_pgvector_available() + _find_similar_python() path
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_pgvector_not_available_on_sqlite(session: Session):
+    """SQLite never has pgvector — must return False."""
+    assert _is_pgvector_available(session) is False
+
+
+def test_find_similar_uses_python_fallback_on_sqlite(session: Session):
+    """On SQLite, find_similar() must use _find_similar_python path transparently."""
+    _seed_incident(session, 400)
+    _seed_incident(session, 401)
+    base_vec = _make_vector(1.0, dims=8)
+    near_vec_raw = [x + 0.0001 for x in base_vec]
+    mag = math.sqrt(sum(x * x for x in near_vec_raw))
+    near_vec = [x / mag for x in near_vec_raw]
+
+    _store_embedding(session, 400, base_vec)
+    _store_embedding(session, 401, near_vec)
+
+    svc = SemanticSearchService(session)
+    result = svc.find_similar(400, threshold=0.9)
+    assert len(result.results) >= 1
+    assert result.results[0].incident_id == 401
+
+
+def test_pgvector_available_mock(session: Session):
+    """When pgvector detection returns True, find_similar routes to pgvector path."""
+    _seed_incident(session, 500)
+    _seed_incident(session, 501)
+    base_vec = _make_vector(2.0, dims=8)
+    _store_embedding(session, 500, base_vec)
+    _store_embedding(session, 501, base_vec)
+
+    svc = SemanticSearchService(session)
+
+    # Mock the pgvector path to ensure dispatch happens; the pgvector SQL won't
+    # execute on SQLite, so we mock the private method to return a known result.
+    from responseiq.schemas.semantic import SimilarIncidentOut, SimilaritySearchResult
+
+    expected = SimilaritySearchResult(
+        query_incident_id=500,
+        threshold=0.9,
+        results=[
+            SimilarIncidentOut(incident_id=501, log_id=1, similarity_score=0.9999, model="text-embedding-3-small")
+        ],
+    )
+    with (
+        patch(
+            "responseiq.services.semantic_search_service._is_pgvector_available",
+            return_value=True,
+        ),
+        patch.object(svc, "_find_similar_pgvector", return_value=expected) as mock_pg,
+    ):
+        result = svc.find_similar(500, threshold=0.9)
+
+    mock_pg.assert_called_once()
+    assert result.results[0].incident_id == 501

@@ -13,6 +13,7 @@ from .models.base import Incident, Log
 from .routers.blueprints import router as blueprints_router
 from .routers.conversations import router as conversations_router
 from .routers.feedback import router as feedback_router
+from .routers.github_pr import router as github_pr_router
 from .routers.webhooks import router as webhooks_router
 from .schemas.incident import IncidentOut
 from .schemas.log import LogIn, LogOut
@@ -107,6 +108,7 @@ app.include_router(blueprints_router)
 app.include_router(webhooks_router)
 app.include_router(feedback_router)
 app.include_router(conversations_router)
+app.include_router(github_pr_router)
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"
