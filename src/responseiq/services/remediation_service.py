@@ -12,7 +12,9 @@ from typing import Any, Dict, List, Optional
 
 from responseiq.ai.llm_service import analyze_with_llm
 from responseiq.config.policy_config import PolicyMode
+from responseiq.schemas.causal_graph import CausalGraph
 from responseiq.schemas.proof import ProofBundle, ReproductionStatus
+from responseiq.services.causal_graph_service import build_causal_graph
 from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
 from responseiq.services.impact import assess_impact
 from responseiq.services.performance_gate import PerformanceGateResult, gate as _perf_gate, measure_latency
@@ -60,6 +62,7 @@ class RemediationRecommendation:
     checks_failed: List[str] = field(default_factory=list)
     proof_bundle: Optional[ProofBundle] = None  # P2: Proof-oriented evidence
     correlation: Optional[CorrelationResult] = None  # P3: Git change-to-incident correlation
+    causal_graph: Optional[CausalGraph] = None  # P6: Causal root-cause graph
 
     # P5.3: LLM audit trail — which model was used for this analysis
     llm_model_used: Optional[str] = None
@@ -111,6 +114,7 @@ class RemediationRecommendation:
                 else None
             ),  # P2 Integrity Gate: forensic SHA-256 chain for SOC2/compliance
             "correlation": (self.correlation.to_dict() if self.correlation else None),  # P3: Git correlation result
+            "causal_graph": (self.causal_graph.to_dict() if self.causal_graph else None),  # P6: causal chain
             "llm_model_used": self.llm_model_used,  # P5.3: audit trail
         }
 
@@ -364,6 +368,16 @@ class RemediationService:
 
         # Step 8: Generate next steps based on validation result
         recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
+
+        # Step 9: P6 — Build causal root-cause graph from all pipeline signals
+        recommendation.causal_graph = build_causal_graph(
+            incident_id=incident_id,
+            analysis_result=analysis_result,
+            correlation=correlation,
+            impact_score=impact_assessment.score,
+            perf_result=perf_result,
+            proof_bundle=proof_bundle,
+        )
 
         # Log final decision
         if validation_result.allowed:

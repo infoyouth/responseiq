@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "responseiq"
-version = "2.15.0"
+version = "2.16.0"
 description = "AI-Powered Infrastructure Copilot: The Self-Healing SRE."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -83,6 +83,7 @@ responseiq = "responseiq.cli:main"
 [project.optional-dependencies]
 temporal = ["temporalio>=1.0.0"]
 pgvector = ["pgvector>=0.3.0"]
+ner = ["spacy>=3.7.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/responseiq"]
