@@ -60,6 +60,9 @@ class RemediationRecommendation:
     proof_bundle: Optional[ProofBundle] = None  # P2: Proof-oriented evidence
     correlation: Optional[CorrelationResult] = None  # P3: Git change-to-incident correlation
 
+    # P5.3: LLM audit trail — which model was used for this analysis
+    llm_model_used: Optional[str] = None
+
     # Execution guidance
     required_actions: List[str] = field(default_factory=list)
     next_steps: List[str] = field(default_factory=list)
@@ -91,6 +94,7 @@ class RemediationRecommendation:
                 asdict(self.proof_bundle) if self.proof_bundle else None
             ),  # P2: Include proof in audit trail
             "correlation": (self.correlation.to_dict() if self.correlation else None),  # P3: Git correlation result
+            "llm_model_used": self.llm_model_used,  # P5.3: audit trail
         }
 
 
@@ -279,6 +283,7 @@ class RemediationService:
             required_actions=validation_result.required_actions,
             proof_bundle=proof_bundle,  # P2: Proof-oriented evidence
             correlation=correlation,  # P3: Git change-to-incident correlation
+            llm_model_used=analysis_result.get("llm_model_used"),  # P5.3: audit trail
         )
 
         # Step 7: Add risk assessment

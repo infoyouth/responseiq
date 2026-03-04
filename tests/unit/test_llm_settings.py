@@ -115,8 +115,9 @@ async def test_llm_service_uses_configured_analysis_model():
     )
 
     with patch("responseiq.ai.llm_service.settings", mock_settings):
-        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
-            await _analyze_with_openai("some log text", "")
+        with patch("responseiq.ai.model_utils.settings", mock_settings):
+            with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
+                await _analyze_with_openai("some log text", "")
 
     mock_instructor.chat.completions.create.assert_called_once()
     call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs
@@ -148,8 +149,9 @@ async def test_llm_service_uses_configured_repro_model():
     mock_instructor.chat.completions.create = AsyncMock(return_value=ReproductionCode(code="def test_repro(): pass"))
 
     with patch("responseiq.ai.llm_service.settings", mock_settings):
-        with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
-            await generate_reproduction_code("NullPointerError in worker", "def worker(): pass")
+        with patch("responseiq.ai.model_utils.settings", mock_settings):
+            with patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock_instructor):
+                await generate_reproduction_code("NullPointerError in worker", "def worker(): pass")
 
     mock_instructor.chat.completions.create.assert_called_once()
     call_kwargs = mock_instructor.chat.completions.create.call_args.kwargs

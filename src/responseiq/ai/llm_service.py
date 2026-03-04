@@ -27,6 +27,7 @@ from typing import Any, Dict, Optional
 import instructor  # type: ignore[import-untyped]
 from openai import AsyncOpenAI
 
+from responseiq.ai.model_utils import router as _router
 from responseiq.ai.schemas import IncidentAnalysis, ReproductionCode
 from responseiq.config.settings import settings
 from responseiq.utils.log_scrubber import restore, scrub
@@ -167,10 +168,11 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
     # Langfuse generation span (no-op when not configured)
     lf = get_langfuse()
     lf_generation = None
+    _analysis_model = _router.model_for("analyze")
     if lf:
         lf_generation = lf.start_generation(
             name="analyze_incident",
-            model=settings.llm_analysis_model,
+            model=_analysis_model,
             input=[
                 {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
                 {"role": "user", "content": final_user_content},
@@ -180,7 +182,7 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
     try:
         client = _get_instructor_client()
         result: IncidentAnalysis = await client.chat.completions.create(
-            model=settings.llm_analysis_model,
+            model=_analysis_model,
             response_model=IncidentAnalysis,
             messages=[
                 {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
@@ -194,7 +196,9 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
             lf_generation.update(output=result.model_dump())
             lf_generation.end()
 
-        return result.model_dump()
+        result_dict = result.model_dump()
+        result_dict["llm_model_used"] = _analysis_model
+        return result_dict
 
     except Exception as e:
         if lf_generation:
@@ -236,17 +240,18 @@ async def generate_reproduction_code(incident_summary: str, relevant_code: str) 
     # Langfuse generation span
     lf = get_langfuse()
     lf_generation = None
+    _repro_model = _router.model_for("generate_repro")
     if lf:
         lf_generation = lf.start_generation(
             name="generate_reproduction_code",
-            model=settings.llm_repro_model,
+            model=_repro_model,
             input=prompt,
         )
 
     try:
         client = _get_instructor_client()
         result: ReproductionCode = await client.chat.completions.create(
-            model=settings.llm_repro_model,
+            model=_repro_model,
             response_model=ReproductionCode,
             messages=[
                 {"role": "system", "content": _REPRO_SYSTEM_PROMPT},
