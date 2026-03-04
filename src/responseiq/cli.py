@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import sys
 
@@ -121,7 +120,7 @@ def _print_result(mode: str, state: dict) -> None:
         target = state.get("context", {}).get("args", {}).get("target", "unknown")
 
         print(sep)
-        print(f"  ResponseIQ Scan Report")
+        print("  ResponseIQ Scan Report")
         print(f"  Target : {target}")
         print(f"  Status : {result.upper()}")
         print(sep)
@@ -155,7 +154,8 @@ def _print_result(mode: str, state: dict) -> None:
             if description:
                 # Wrap long descriptions
                 words = description.split()
-                line, lines = [], []
+                line: list[str] = []
+                lines: list[str] = []
                 for w in words:
                     if sum(len(x) + 1 for x in line) + len(w) > 70:
                         lines.append(" ".join(line))
@@ -165,8 +165,8 @@ def _print_result(mode: str, state: dict) -> None:
                 if line:
                     lines.append(" ".join(line))
                 print(f"     Description: {lines[0]}")
-                for l in lines[1:]:
-                    print(f"                  {l}")
+                for line_part in lines[1:]:
+                    print(f"                  {line_part}")
             remediation = inc.get("remediation")
             if remediation:
                 print(f"     Fix        : {remediation[:120]}")

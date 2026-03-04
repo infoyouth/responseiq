@@ -1,9 +1,12 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import List
 
 from .base import BasePlugin
+
+logger = logging.getLogger(__name__)
 
 
 class ScanPlugin(BasePlugin):
@@ -64,6 +67,6 @@ class ScanPlugin(BasePlugin):
             else:
                 # Plain log — analyse each non-empty line, cap at 50
                 return [line.strip() for line in content.splitlines() if line.strip()][:50]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Failed to read %s: %s", path, exc)
         return []
