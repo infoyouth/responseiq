@@ -7,6 +7,8 @@ without applying fixes, generating "Projected Value Reports" for enterprise adop
 
 from __future__ import annotations
 
+import csv
+import io
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -183,6 +185,160 @@ ADOPTION READINESS:
 RECOMMENDATION:
   - Enable auto-apply for {self.successful_analyses} incident types to realize immediate productivity gains.
 """.strip()
+
+    # ------------------------------------------------------------------
+    # Export helpers (v2.17.0 — PDF/CSV Pilot Report)
+    # ------------------------------------------------------------------
+
+    def to_csv(self) -> str:
+        """Serialise the report as a UTF-8 CSV string ready for download.
+
+        Produces two sections:
+        1. A KPI summary row (single row + header).
+        2. A blank separator, then a footer row with the executive summary
+           text (quoted).
+
+        The result can be streamed directly as
+        ``Content-Type: text/csv; charset=utf-8``.
+        """
+        output = io.StringIO()
+        writer = csv.writer(output, quoting=csv.QUOTE_NONNUMERIC)
+
+        # --- KPI header + values ---
+        headers = [
+            "period_start",
+            "period_end",
+            "period_days",
+            "total_incidents",
+            "automation_candidates",
+            "avg_time_saved_minutes",
+            "projected_annual_savings_usd",
+            "shadow_success_rate_pct",
+            "average_confidence",
+        ]
+        writer.writerow(headers)
+        writer.writerow(
+            [
+                self.period_start.strftime("%Y-%m-%d"),
+                self.period_end.strftime("%Y-%m-%d"),
+                self.period_days,
+                self.total_incidents_analyzed,
+                self.automation_candidates,
+                round(self.avg_time_saved_minutes, 2),
+                round(self.projected_annual_savings, 2),
+                round(self.shadow_success_rate * 100, 1),
+                round(self.average_confidence, 4),
+            ]
+        )
+
+        # --- Executive summary as a trailing note ---
+        writer.writerow([])
+        writer.writerow(["executive_summary"])
+        writer.writerow([self.generate_executive_summary()])
+
+        return output.getvalue()
+
+    def to_pdf_bytes(self) -> bytes:
+        """Render the report as a PDF binary using ``fpdf2``.
+
+        Requires the ``reports`` optional-dependency group::
+
+            pip install "responseiq[reports]"
+
+        Raises:
+            ImportError: when ``fpdf2`` is not installed.
+
+        Returns:
+            Raw PDF bytes suitable for streaming with
+            ``Content-Type: application/pdf``.
+        """
+        try:
+            from fpdf import FPDF, XPos, YPos  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise ImportError(
+                'fpdf2 is required for PDF export. Install it with: pip install "responseiq[reports]"'
+            ) from exc
+
+        pdf = FPDF(orientation="P", unit="mm", format="A4")
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # ---- Title block ----
+        pdf.set_font("Helvetica", "B", 20)
+        pdf.set_fill_color(30, 64, 175)  # Brand blue
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 14, "ResponseIQ Pilot Report", new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True, align="C")
+        pdf.ln(4)
+
+        # ---- Period subtitle ----
+        pdf.set_font("Helvetica", "", 11)
+        pdf.set_text_color(80, 80, 80)
+        period_line = (
+            f"Period: {self.period_start.strftime('%Y-%m-%d')} "
+            f"-> {self.period_end.strftime('%Y-%m-%d')} "
+            f"({self.period_days} days)"
+        )
+        pdf.cell(0, 8, period_line, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        pdf.ln(6)
+
+        # ---- KPI table ----
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(30, 64, 175)
+        pdf.cell(0, 8, "Key Performance Indicators", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+
+        kpis: List[tuple[str, str]] = [
+            ("Total Incidents Analysed", str(self.total_incidents_analyzed)),
+            ("Automation Candidates (AI-Fixable)", str(self.automation_candidates)),
+            ("Avg Time Saved / Incident", f"{self.avg_time_saved_minutes:.1f} min"),
+            ("Projected Manual Toil Saved", self.potential_manual_toil_saved),
+            ("Projected Annual Cost Savings", f"${self.projected_annual_savings:,.2f}"),
+            ("Shadow Success Rate", f"{self.shadow_success_rate:.1%}"),
+            ("Average AI Confidence", f"{self.average_confidence:.1%}"),
+            ("P2 Trust Level", "HIGH" if self.shadow_success_rate > 0.9 else "MEDIUM"),
+        ]
+
+        col_label_w = 110
+        col_value_w = 80
+
+        for i, (label, value) in enumerate(kpis):
+            fill = i % 2 == 0
+            if fill:
+                pdf.set_fill_color(243, 244, 246)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            pdf.set_text_color(40, 40, 40)
+            pdf.set_font("Helvetica", "", 11)
+            pdf.cell(col_label_w, 9, f"  {label}", fill=fill)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(col_value_w, 9, value, fill=fill, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+        pdf.ln(8)
+
+        # ---- Executive summary block ----
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(30, 64, 175)
+        pdf.cell(0, 8, "Executive Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        pdf.set_draw_color(200, 200, 200)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+
+        pdf.set_font("Courier", "", 9)
+        pdf.set_text_color(50, 50, 50)
+        summary_text = self.generate_executive_summary()
+        pdf.multi_cell(0, 5, summary_text)
+
+        # ---- Footer ----
+        pdf.set_y(-18)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(150, 150, 150)
+        generated_at = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
+        pdf.cell(0, 8, f"Generated by ResponseIQ  |  {generated_at}", align="C")
+
+        # fpdf2 ≥ 2.7: output() returns bytes directly
+        return bytes(pdf.output())
 
 
 class ShadowAnalyticsService:
