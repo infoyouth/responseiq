@@ -40,46 +40,74 @@ For developers who want to fix bugs in their local environment or CI pipeline.
 pip install responseiq
 ```
 
-### 2. Configure Credentials
-ResponseIQ requires access to an LLM provider to reason about your code.
+### 2. Configure an LLM
 
-*Currently supported: OpenAI*
+Choose one option:
 
+**Option A: Ollama (free, fully local — recommended)**
 ```bash
-export OPENAI_API_KEY="sk-..."
+# Install Ollama: https://ollama.com
+ollama serve &
+ollama pull llama3.2
+
+# Add to .env in your project root:
+echo "LLM_BASE_URL=http://localhost:11434/v1" >> .env
+echo "LLM_ANALYSIS_MODEL=llama3.2" >> .env
 ```
 
-### 3. Usage Examples
-
-**Example A: Analyze Local Logs**
-Scan a directory of log files and get a report of active incidents.
+**Option B: OpenAI**
 ```bash
+echo "OPENAI_API_KEY=sk-..." >> .env
+```
+
+**Option C: No config (rule-engine fallback)**
+Works out of the box with no API key — uses a local heuristic parser.
+
+### 3. Scan Your Logs
+
+```bash
+# Single file (JSON or .log or .txt)
+responseiq --mode scan --target ./logs/error.log
+
+# Whole directory
 responseiq --mode scan --target ./var/log/app/
 ```
 
-**Example B: The "Magic Fix"**
-Analyze logs AND the current source code to generate a patch.
-```bash
-# Finds errors in logs, locates the source file, and explains the fix
-responseiq --mode fix --target ./logs/error.log
+**Example output:**
+```
+------------------------------------------------------------
+  ResponseIQ Scan Report
+  Target : logs/error.log
+  Status : SUCCESS
+------------------------------------------------------------
+  Scanned  : 1 message(s)
+  Incidents: 1 found
+------------------------------------------------------------
+  1. [CRITICAL] Out of Memory Error
+     Source     : ai
+     Description: The system is experiencing a critical error due to an out of
+                  memory condition caused by a resource leak or excessive allocation.
+------------------------------------------------------------
+  Tip: run with --mode fix to apply safe remediations.
+------------------------------------------------------------
 ```
 
-**Example C: CI/CD Pipeline Integration**
-Run ResponseIQ as a step in your GitHub Action to auto-triage build failures.
+### 4. Shadow Mode (zero-risk demo)
+
+Analyse all incidents and get a projected MTTR savings report — nothing is changed:
 ```bash
-# In your workflow
-responseiq --mode scan --target ./build_logs.txt >> summary.md
+responseiq --mode shadow --target ./logs/ --shadow-report
 ```
 
 ---
 
 ## 🏢 Platform Server (Self-Hosted)
 
-For Platform Engineers who want to host a centralized incident response API (Webhook receiver for Datadog, PagerDuty, etc.).
+For Platform Engineers who want a centralized incident response API (webhooks for Datadog, PagerDuty, Sentry etc.).
 
 ### Prerequisites
 - Docker & Docker Compose
-- OpenAI API Key configured in `.env`
+- LLM configured via `.env` (Ollama or OpenAI — see Quick Start above)
 
 ### Running with Docker
 ```bash

@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     )
 
     # LLM Model Configuration
+    # LLM_BASE_URL — OpenAI-compatible base URL.  Set to http://localhost:11434/v1 for Ollama
+    #               or https://api.groq.com/openai/v1 for Groq (free tier).  When set,
+    #               openai_api_key is optional (Ollama ignores it; Groq needs its own key).
+    llm_base_url: Optional[str] = Field(
+        default=None,
+        description="Base URL for OpenAI-compatible LLM endpoint (e.g. Ollama: http://localhost:11434/v1)",
+    )
     # LLM_ANALYSIS_MODEL — model used for incident analysis + patch synthesis
     llm_analysis_model: str = Field(default="gpt-4o", description="Model for incident analysis and patch synthesis")
     # LLM_FAST_MODEL — cheaper model for detection/classification tasks
