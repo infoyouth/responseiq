@@ -110,13 +110,25 @@ def scrub(text: str) -> Tuple[str, Dict[str, str]]:
                        in local memory so upstream code can call restore() on
                        the LLM response if needed.
 
+    When ``settings.ner_scrub_enabled`` is True, a spaCy NER pass runs first
+    (P7) replacing PERSON/ORG/GPE/MONEY/DATE entities before the regex layer.
+
     Example::
 
         safe_text, mapping = scrub(raw_log)
         llm_response = await call_llm(safe_text)
         display_text = restore(llm_response, mapping)
     """
+    # P7: NER pass (spaCy) — runs before regex so named entities are caught first.
+    from responseiq.config.settings import settings as _settings  # local import avoids circular dep
+
     mapping: Dict[str, str] = {}
+    if _settings.ner_scrub_enabled:
+        from responseiq.utils.ner_scrubber import scrub_with_ner
+
+        text, ner_mapping = scrub_with_ner(text)
+        mapping.update(ner_mapping)
+
     counter: Dict[str, int] = {}
 
     def _replace(match: re.Match[str], label: str) -> str:

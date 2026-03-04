@@ -11,6 +11,7 @@ from sqlmodel import select
 from .db import get_session, init_db
 from .models.base import Incident, Log
 from .routers.blueprints import router as blueprints_router
+from .routers.causal_graph import router as causal_graph_router
 from .routers.conversations import router as conversations_router
 from .routers.feedback import router as feedback_router
 from .routers.github_pr import router as github_pr_router
@@ -109,6 +110,7 @@ app.include_router(webhooks_router)
 app.include_router(feedback_router)
 app.include_router(conversations_router)
 app.include_router(github_pr_router)
+app.include_router(causal_graph_router)  # P6: Causal Root-Cause Graph
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"

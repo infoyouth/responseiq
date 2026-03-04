@@ -104,6 +104,9 @@ class Settings(BaseSettings):
     # PII / Secret Scrubbing
     # SCRUB_ENABLED — set to false only in fully air-gapped/on-prem deployments
     scrub_enabled: bool = Field(default=True, description="Scrub PII and secrets from log payloads before LLM calls")
+    # P7: NER-level PII scrubbing via spaCy en_core_web_sm (healthcare/finance).
+    # Set RESPONSEIQ_NER_SCRUB=true to activate; requires `pip install spacy && python -m spacy download en_core_web_sm`.
+    ner_scrub_enabled: bool = Field(default=False, description="Enable spaCy NER scrubbing on top of regex (P7)")
 
     # Multi-Repo Context Resolution (P2.4)
     # RESPONSEIQ_REPO_MAP — JSON dict: { "service_name": { "local_path": "...", ... } }
