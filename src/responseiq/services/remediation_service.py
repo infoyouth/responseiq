@@ -94,6 +94,22 @@ class RemediationRecommendation:
             "proof_bundle": (
                 asdict(self.proof_bundle) if self.proof_bundle else None
             ),  # P2: Include proof in audit trail
+            "proof_integrity": (
+                {
+                    "integrity_hash": self.proof_bundle.integrity.integrity_hash,
+                    "chain_hash": self.proof_bundle.integrity.chain_hash,
+                    "algorithm": self.proof_bundle.integrity.algorithm,
+                    "sealed_at": (
+                        self.proof_bundle.integrity.sealed_at.isoformat()
+                        if self.proof_bundle.integrity.sealed_at
+                        else None
+                    ),
+                    "chain_verified": self.proof_bundle.integrity.chain_verified,
+                    "tamper_proof": self.proof_bundle.integrity.tamper_proof,
+                }
+                if self.proof_bundle and self.proof_bundle.integrity and self.proof_bundle.integrity.integrity_hash
+                else None
+            ),  # P2 Integrity Gate: forensic SHA-256 chain for SOC2/compliance
             "correlation": (self.correlation.to_dict() if self.correlation else None),  # P3: Git correlation result
             "llm_model_used": self.llm_model_used,  # P5.3: audit trail
         }
@@ -288,6 +304,32 @@ class RemediationService:
                 f" | PERF GATE: Latency regression detected (+{perf_result.delta_pct:.1f}%). "
                 "Autonomous apply blocked until regression is investigated."
             )
+
+        # P2 Integrity Gate v2.15.0: populate post_fix_evidence and re-seal with full pre+post context.
+        # The validation result (security scan, policy checks) constitutes the "post-fix" proof
+        # artifact: it shows the fix was validated before any production apply.
+        if proof_bundle is not None:
+            if proof_bundle.post_fix_evidence is None:
+                import json as _json
+
+                proof_bundle.post_fix_evidence = _json.dumps(
+                    {
+                        "checks_passed": validation_result.checks_passed,
+                        "checks_failed": validation_result.checks_failed,
+                        "policy_mode": validation_result.policy_mode.value if validation_result.policy_mode else None,
+                        "allowed": validation_result.allowed,
+                        "security_scan": proof_bundle.security_scan_output or "n/a",
+                    },
+                    sort_keys=True,
+                )
+            # Re-seal with both pre+post evidence — produces chain_hash + integrity_hash
+            proof_bundle.seal_forensic_evidence()
+            if proof_bundle.integrity and proof_bundle.integrity.integrity_hash:
+                logger.info(
+                    "\U0001f512 Integrity Gate: evidence sealed",
+                    integrity_hash=proof_bundle.integrity.integrity_hash[:16] + "...",
+                    chain_verified=proof_bundle.integrity.chain_verified,
+                )
 
         # Step 6: Build comprehensive recommendation
         recommendation = RemediationRecommendation(
