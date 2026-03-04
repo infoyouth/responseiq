@@ -88,78 +88,112 @@ def main():
     plugin = plugin_cls()
     try:
         updated_state = plugin.run(agent_state)
-        # Output actionable result to STDOUT (JSON if --json, else summary)
-        if getattr(args, "json", False):
-            print(json.dumps(updated_state, indent=2))
-        else:
-            print(f"{mode.title()} completed. State: {updated_state}")
+        _print_result(mode, updated_state)
         sys.exit(0)
     except Exception as e:
         telemetry.emit_event("PluginError", {"plugin": mode, "error": str(e)})
         print(f"Error running plugin {mode}: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # (Removed duplicate/partial main() and misplaced code after main block)
 
-    # Ignored args that might be passed by action.yml but handled via ENV
-    parser.add_argument("--github-token", help=argparse.SUPPRESS)
-    parser.add_argument("--openai-api-key", help=argparse.SUPPRESS)
+# ---------------------------------------------------------------------------
+# Human-readable output formatter
+# ---------------------------------------------------------------------------
 
-    args, unknown = parser.parse_known_args()
+_SEVERITY_ICON = {
+    "critical": "[CRITICAL]",
+    "high": "[HIGH]   ",
+    "medium": "[MEDIUM] ",
+    "low": "[LOW]    ",
+    "info": "[INFO]   ",
+}
 
-    # Determine log level: --debug > --log-level > default WARNING
-    log_level = "DEBUG" if args.debug else (args.log_level or "WARNING")
-    # Route logs to STDERR only
-    import logging
 
-    logging.basicConfig(
-        stream=sys.stderr,
-        level=getattr(logging, log_level),
-        format="%(asctime)s | %(levelname)s | %(message)s",
-    )
+def _print_result(mode: str, state: dict) -> None:
+    """Render a clean, human-readable summary to stdout."""
+    sep = "-" * 60
 
-    # Map Action inputs to CLI args
-    mode = args.action if args.action else args.mode
-    if args.shadow_mode or args.shadow_report:
-        mode = "shadow"
+    if mode == "scan":
+        result = state.get("scan_result", "unknown")
+        error = state.get("scan_error")
+        incidents = state.get("incidents", [])
+        total = state.get("total_scanned", 0)
+        target = state.get("context", {}).get("args", {}).get("target", "unknown")
 
-    # Set Env vars from args if provided
-    if args.token:
-        os.environ["GITHUB_TOKEN"] = args.token
-    if args.url:
-        if "github.com/" in args.url:
-            repo_slug = args.url.split("github.com/")[-1].replace(".git", "")
-            os.environ["GITHUB_REPOSITORY"] = repo_slug
+        print(sep)
+        print(f"  ResponseIQ Scan Report")
+        print(f"  Target : {target}")
+        print(f"  Status : {result.upper()}")
+        print(sep)
 
-    # Initialize AgentState with global context and trace_id
-    trace_id = os.environ.get("TRACEPARENT") or os.environ.get("TRACE_ID")
-    agent_state: AgentState = {
-        "context": {
-            "args": vars(args),
-            "env": dict(os.environ),
-        },
-        "trace_id": trace_id,
-    }
+        if error:
+            print(f"  ERROR: {error}")
+            print(sep)
+            return
 
-    # Plugin loading and execution
-    registry = PluginRegistry()
-    if mode not in registry.plugins:
-        print(f"Unknown command: {mode}", file=sys.stderr)
-        sys.exit(1)
-    plugin_cls = registry.get_plugin(mode)
-    plugin = plugin_cls()
-    try:
-        updated_state = plugin.run(agent_state)
-        # Output actionable result to STDOUT (JSON if --json, else summary)
-        if getattr(args, "json", False):
-            print(json.dumps(updated_state, indent=2))
-        else:
-            print(f"{mode.title()} completed. State: {updated_state}")
-        sys.exit(0)
-    except Exception as e:
-        telemetry.emit_event("PluginError", {"plugin": mode, "error": str(e)})
-        print(f"Error running plugin {mode}: {e}", file=sys.stderr)
-        sys.exit(1)
+        if not incidents:
+            print("  No incidents detected.")
+            print(sep)
+            return
+
+        print(f"  Scanned  : {total} message(s)")
+        print(f"  Incidents: {len(incidents)} found")
+        print(sep)
+
+        for i, inc in enumerate(incidents, 1):
+            severity = (inc.get("severity") or "unknown").lower()
+            icon = _SEVERITY_ICON.get(severity, f"[{severity.upper()[:6]}]")
+            title = inc.get("title") or "Untitled Incident"
+            description = inc.get("description") or ""
+            source = inc.get("source") or "unknown"
+            impact = inc.get("impact_score")
+
+            print(f"  {i}. {icon} {title}")
+            print(f"     Source     : {source}")
+            if impact is not None:
+                print(f"     Impact     : {impact:.1f}/100")
+            if description:
+                # Wrap long descriptions
+                words = description.split()
+                line, lines = [], []
+                for w in words:
+                    if sum(len(x) + 1 for x in line) + len(w) > 70:
+                        lines.append(" ".join(line))
+                        line = [w]
+                    else:
+                        line.append(w)
+                if line:
+                    lines.append(" ".join(line))
+                print(f"     Description: {lines[0]}")
+                for l in lines[1:]:
+                    print(f"                  {l}")
+            remediation = inc.get("remediation")
+            if remediation:
+                print(f"     Fix        : {remediation[:120]}")
+            print()
+
+        print(sep)
+        print("  Tip: run with --mode fix to apply safe remediations.")
+        print(sep)
+
+    elif mode == "fix":
+        print(sep)
+        print("  ResponseIQ Fix Report")
+        print(sep)
+        for k, v in state.items():
+            if k not in ("context", "trace_id") and v is not None:
+                print(f"  {k}: {v}")
+        print(sep)
+
+    else:
+        # Shadow or unknown — print non-env keys
+        print(sep)
+        print(f"  ResponseIQ {mode.title()} Report")
+        print(sep)
+        for k, v in state.items():
+            if k not in ("context", "trace_id") and v is not None:
+                print(f"  {k}: {v}")
+        print(sep)
 
 
 if __name__ == "__main__":

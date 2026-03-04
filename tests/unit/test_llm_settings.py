@@ -21,16 +21,18 @@ from responseiq.config.settings import Settings
 
 
 class TestLLMSettingsDefaults:
-    def test_analysis_model_default(self):
-        s = Settings()
+    def test_analysis_model_default(self, monkeypatch):
+        monkeypatch.delenv("LLM_ANALYSIS_MODEL", raising=False)
+        s = Settings(_env_file=None)
         assert s.llm_analysis_model == "gpt-4o"
 
     def test_fast_model_default(self):
         s = Settings()
         assert s.llm_fast_model == "gpt-4o-mini"
 
-    def test_repro_model_default(self):
-        s = Settings()
+    def test_repro_model_default(self, monkeypatch):
+        monkeypatch.delenv("LLM_REPRO_MODEL", raising=False)
+        s = Settings(_env_file=None)
         assert s.llm_repro_model == "gpt-4o"
 
     def test_max_tokens_default(self):

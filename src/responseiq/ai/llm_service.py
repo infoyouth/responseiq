@@ -69,10 +69,37 @@ def _get_instructor_client() -> instructor.AsyncInstructor:
     """
     Create and return an instructor-wrapped AsyncOpenAI client.
 
+    Supports three backends controlled by env vars:
+
+    1. OpenAI (default):
+       Set RESPONSEIQ_OPENAI_API_KEY.
+
+    2. Ollama (free, local):
+       RESPONSEIQ_LLM_BASE_URL=http://localhost:11434/v1
+       RESPONSEIQ_LLM_ANALYSIS_MODEL=llama3.2  (or any model pulled via `ollama pull`)
+       No API key required.
+
+    3. Groq (free cloud tier, fast):
+       RESPONSEIQ_LLM_BASE_URL=https://api.groq.com/openai/v1
+       RESPONSEIQ_OPENAI_API_KEY=gsk_...  (your Groq key)
+       RESPONSEIQ_LLM_ANALYSIS_MODEL=llama-3.1-70b-versatile
+
     Extracted as a standalone function so unit tests can patch it:
         patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock)
     """
-    api_key = settings.openai_api_key.get_secret_value()  # type: ignore[union-attr]
+    api_key = (
+        settings.openai_api_key.get_secret_value()
+        if settings.openai_api_key
+        else "ollama"  # Ollama/local endpoints ignore the key; a non-empty string is required by the SDK
+    )
+
+    if settings.llm_base_url:
+        # OpenAI-compatible endpoint (Ollama, Groq, LM Studio, vLLM, …)
+        # instructor.Mode.JSON avoids function-calling which many local models don't support
+        client = AsyncOpenAI(api_key=api_key, base_url=settings.llm_base_url)
+        return instructor.from_openai(client, mode=instructor.Mode.JSON)
+
+    # Standard OpenAI
     return instructor.from_openai(AsyncOpenAI(api_key=api_key))
 
 
@@ -99,8 +126,8 @@ async def analyze_with_llm(log_text: str, code_context: str = "") -> Optional[Di
                 redacted_count=len(scrub_mapping),
             )
 
-    # Try OpenAI first if API key is available
-    if settings.openai_api_key:
+    # Try LLM if a key OR a custom base_url (Ollama/Groq/…) is configured
+    if settings.openai_api_key or settings.llm_base_url:
         result = await _analyze_with_openai(log_text, code_context)
         if result is not None:
             # Restore placeholders in display fields so local UI shows real values
@@ -129,7 +156,7 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
     instructor enforces the Pydantic schema at the token level — no ``json.loads``,
     no silent parse failures, no unvalidated severity literals.
     """
-    if not settings.openai_api_key:
+    if not settings.openai_api_key and not settings.llm_base_url:
         return None
 
     final_user_content = f"Log content: {log_text}"
@@ -183,8 +210,10 @@ async def generate_reproduction_code(incident_summary: str, relevant_code: str) 
 
     Returns the validated Python code string (via ``ReproductionCode.code``) or None.
     """
-    if not settings.openai_api_key:
-        logger.warning("OpenAI API Key missing. Cannot generate reproduction code.")
+    if not settings.openai_api_key and not settings.llm_base_url:
+        logger.warning(
+            "No LLM configured. Set RESPONSEIQ_OPENAI_API_KEY or RESPONSEIQ_LLM_BASE_URL. Cannot generate reproduction code."
+        )
         return None
 
     # P2.3: scrub before sending to LLM
