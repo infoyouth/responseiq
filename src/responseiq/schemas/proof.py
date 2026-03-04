@@ -270,6 +270,10 @@ class ProofBundle:
     # Populated when stack-trace paths could not be resolved to source files.
     context_failures: List[ContextResolutionFailure] = field(default_factory=list)
 
+    # P5: Performance regression gate result
+    # Populated after gate.evaluate() is called during post-fix verification.
+    perf_gate_result: Optional[object] = None  # PerformanceGateResult (avoid circular import)
+
     @property
     def has_complete_proof(self) -> bool:
         """True if we have both pre-fix failure and post-fix success evidence.

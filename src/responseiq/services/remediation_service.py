@@ -15,6 +15,7 @@ from responseiq.config.policy_config import PolicyMode
 from responseiq.schemas.proof import ProofBundle, ReproductionStatus
 from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
 from responseiq.services.impact import assess_impact
+from responseiq.services.performance_gate import PerformanceGateResult, gate as _perf_gate, measure_latency
 from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.rollback_generator import ExecutableRollbackGenerator
 from responseiq.services.trust_gate import (
@@ -132,8 +133,9 @@ class RemediationService:
         log_content = incident.get("log_content") or incident.get("reason") or "No log provided"
         severity = incident.get("severity", "medium").lower()
 
-        # Step 2: AI analysis for remediation plan
-        analysis_result = await analyze_with_llm(log_content)
+        # Step 2: AI analysis for remediation plan (P5: timed for performance gate)
+        async with measure_latency(_perf_gate, "analyze_incident", phase="rolling"):
+            analysis_result = await analyze_with_llm(log_content)
 
         if not analysis_result:
             return self._create_failed_recommendation(
@@ -198,6 +200,17 @@ class RemediationService:
             except Exception as e:
                 logger.warning(f"⚠️  Failed to generate reproduction test: {str(e)}")
 
+        # Step 3.6: P5 — Performance regression gate
+        # Evaluate whether analysis latency regressed vs baseline (if any baseline exists).
+        perf_result: PerformanceGateResult = _perf_gate.evaluate("analyze_incident")
+        if proof_bundle is not None:
+            proof_bundle.perf_gate_result = perf_result
+        if not perf_result.passed:
+            logger.warning(
+                "⚠️  PERFORMANCE GATE FAIL: %s",
+                perf_result.reason,
+            )
+
         # Step 4: Build remediation request for trust gate
         blast_radius = impact_assessment.factors.get("affected_surface", "single_service")
 
@@ -258,6 +271,22 @@ class RemediationService:
             validation_result.message += (
                 " | TRUST GATE: Reproduction achieved via Static Template (Basic Path Check). "
                 "High-confidence logic verification was unavailable. Downgrading to PR_ONLY."
+            )
+
+        # P5 Policy Enforcement: Downgrade execution mode on latency regression
+        if (
+            not perf_result.passed
+            and validation_result.allowed
+            and validation_result.policy_mode == PolicyMode.GUARDED_APPLY
+        ):
+            logger.warning(
+                "\U0001f6a6 PERF GATE OVERRIDE: Downgrading to PR_ONLY due to latency regression. %s",
+                perf_result.reason,
+            )
+            validation_result.policy_mode = PolicyMode.PR_ONLY
+            validation_result.message += (
+                f" | PERF GATE: Latency regression detected (+{perf_result.delta_pct:.1f}%). "
+                "Autonomous apply blocked until regression is investigated."
             )
 
         # Step 6: Build comprehensive recommendation
