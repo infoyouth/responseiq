@@ -35,11 +35,15 @@ class ScanPlugin(BasePlugin):
 
         from responseiq.services.analyzer import analyze_log_async
 
-        incidents = []
-        for msg in messages:
-            result = asyncio.run(analyze_log_async(msg))
-            if result:
-                incidents.append(result.model_dump())
+        # Run all analyses in a single event loop via gather — calling asyncio.run()
+        # once per message creates/destroys a loop each iteration, which causes the
+        # httpx connection pool to emit "RuntimeError: Event loop is closed" noise
+        # during its background cleanup tasks.
+        async def _run_all(msgs: List[str]):
+            return await asyncio.gather(*[analyze_log_async(m) for m in msgs])
+
+        results = asyncio.run(_run_all(messages))
+        incidents = [r.model_dump() for r in results if r is not None]
 
         agent_state["scan_result"] = "success"
         agent_state["incidents"] = incidents

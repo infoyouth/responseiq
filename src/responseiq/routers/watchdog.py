@@ -96,10 +96,7 @@ async def start_watchdog(
     if not settings.watchdog_enabled:
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Watchdog is disabled. "
-                "Set RESPONSEIQ_WATCHDOG_ENABLED=true to enable post-apply monitoring."
-            ),
+            detail=("Watchdog is disabled. Set RESPONSEIQ_WATCHDOG_ENABLED=true to enable post-apply monitoring."),
         )
 
     script_path = Path(rollback_script) if rollback_script else None

@@ -115,8 +115,8 @@ app.include_router(conversations_router)
 app.include_router(github_pr_router)
 app.include_router(causal_graph_router)  # P6: Causal Root-Cause Graph
 app.include_router(shadow_report_router)  # v2.17.0: PDF/CSV Pilot Report
-app.include_router(proof_record_router)   # v2.18.0 #2: ProofBundle audit endpoint
-app.include_router(watchdog_router)        # v2.18.0 #3: Post-apply watchdog
+app.include_router(proof_record_router)  # v2.18.0 #2: ProofBundle audit endpoint
+app.include_router(watchdog_router)  # v2.18.0 #3: Post-apply watchdog
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"
