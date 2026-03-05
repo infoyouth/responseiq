@@ -12,6 +12,7 @@ Coverage matrix:
   - _collect_messages directory  → aggregates *.log / *.txt / *.json across sub-dirs
   - _read_file unreadable path   → logs warning, returns empty list
   - asyncio gather concurrency   → analyze_log_async called once per message
+  - _filter_noise_lines          → strips version headers, env repr blocks, bare paths
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -280,3 +281,77 @@ class TestConcurrency:
             plugin.run(_build_state(str(log)))
 
         assert call_args == ["msg A", "msg B", "msg C"]
+
+
+# ---------------------------------------------------------------------------
+# 6. Noise filter (_filter_noise_lines)
+# ---------------------------------------------------------------------------
+
+
+class TestNoiseFilter:
+    """Tests for BasePlugin._filter_noise_lines via the FixPlugin interface."""
+
+    def _filter(self, lines: list) -> list:
+        return FixPlugin()._filter_noise_lines(lines)
+
+    def test_passes_plain_error_lines_unchanged(self):
+        lines = [
+            "Traceback (most recent call last):",
+            '  File "app.py", line 10, in main',
+            "TypeError: 'float' object is not subscriptable",
+        ]
+        assert self._filter(lines) == lines
+
+    def test_strips_httpie_version_header(self):
+        lines = ["HTTPie 3.2.4", "TypeError: bad type"]
+        assert self._filter(lines) == ["TypeError: bad type"]
+
+    def test_strips_requests_version_header(self):
+        assert self._filter(["Requests 2.32.5", "real error"]) == ["real error"]
+
+    def test_strips_pygments_version_header(self):
+        assert self._filter(["Pygments 2.19.2", "real error"]) == ["real error"]
+
+    def test_strips_python_version_header(self):
+        lines = ["Python 3.12.0 (main, Oct 3 2023)", "real error"]
+        assert self._filter(lines) == ["real error"]
+
+    def test_strips_linux_os_string(self):
+        assert self._filter(["Linux 6.6.87.2-microsoft-standard-WSL2", "real"]) == ["real"]
+
+    def test_strips_bare_filesystem_path(self):
+        assert self._filter(["/home/user/.venv/bin/python3", "real error"]) == ["real error"]
+
+    def test_strips_repr_block_single_line(self):
+        # <ClassName {key: val}> — entire block on one line still skipped
+        lines = ["<Environment {'colors': 256}>", "real error"]
+        assert self._filter(lines) == ["real error"]
+
+    def test_strips_repr_block_multiline(self):
+        lines = [
+            "<Environment {'colors': 256,",
+            " 'stderr': <...>,",
+            " 'stdout': <...>}>",
+            "real error",
+        ]
+        assert self._filter(lines) == ["real error"]
+
+    def test_keeps_error_lines_after_noise(self):
+        lines = [
+            "HTTPie 3.2.4",
+            "Requests 2.32.5",
+            "<PluginManager {'auth': []}>",
+            "http: error: TypeError: 'float' object is not subscriptable",
+            "Traceback (most recent call last):",
+        ]
+        result = self._filter(lines)
+        assert "http: error: TypeError: 'float' object is not subscriptable" in result
+        assert "Traceback (most recent call last):" in result
+        assert len(result) == 2  # only the signal lines
+
+    def test_empty_input_returns_empty(self):
+        assert self._filter([]) == []
+
+    def test_all_noise_returns_empty(self):
+        lines = ["HTTPie 3.2.4", "Requests 2.32.5", "<Environment {'k': 'v'}>", "/usr/bin/python3"]
+        assert self._filter(lines) == []

@@ -35,8 +35,22 @@ Writing a custom plugin
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import List
+
+# Patterns that indicate tool-version headers, bare paths, or OS strings —
+# none of which carry actionable signal for the LLM.
+_NOISE_HEADER_RE = re.compile(
+    r"^("
+    r"HTTPie \d|Requests \d|Pygments \d|Python \d"
+    r"|Linux \S|Windows \S|Darwin \S"
+    r"|/\S+$"  # bare filesystem paths with no spaces
+    r")"
+)
+# Object repr blocks: <ClassName { ... }> emitted by debug modes
+_REPR_BLOCK_START_RE = re.compile(r"^<[A-Z][A-Za-z]+ \{")
 
 
 @dataclass
@@ -64,6 +78,44 @@ class BasePlugin(ABC):
         ``False`` so unimplemented plugins are never auto-selected.
         """
         return False
+
+    @staticmethod
+    def _filter_noise_lines(lines: List[str]) -> List[str]:
+        """Strip tool-version headers and object-repr dump blocks from log lines.
+
+        Keeps error lines, tracebacks, and stack frames (the signal).
+        Removes: version headers (``HTTPie 3.2.4``, ``Python 3.12``), bare
+        filesystem paths, OS strings, and multi-line ``<Object {...}>`` repr
+        blocks emitted by ``--debug`` flags.
+
+        This dramatically improves LLM focus when log files include verbose
+        debug preambles (e.g. ``http --debug``, Django DEBUG=True, etc.).
+        """
+        result: List[str] = []
+        in_repr_block = False
+        brace_depth = 0
+
+        for line in lines:
+            if in_repr_block:
+                brace_depth += line.count("{") - line.count("}")
+                if brace_depth <= 0:
+                    in_repr_block = False
+                continue
+
+            if _REPR_BLOCK_START_RE.match(line):
+                brace_depth = line.count("{") - line.count("}")
+                # Only enter block-skip mode when the block spans multiple lines;
+                # if braces balance on this single line, skip only this line.
+                if brace_depth > 0:
+                    in_repr_block = True
+                continue
+
+            if _NOISE_HEADER_RE.match(line):
+                continue
+
+            result.append(line)
+
+        return result
 
     @abstractmethod
     def run(self, agent_state: dict) -> dict:

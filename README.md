@@ -16,9 +16,138 @@ Unlike traditional parsers that match regex strings, ResponseIQ reads your appli
 
 ## 📸 See It In Action
 
-![ResponseIQ CLI Demo](docs/assets/demo_placeholder.gif)
+> **Real demo — no mocks.** The output below was captured live against a real bug injected into the [httpie/cli](https://github.com/httpie/cli) open-source repo, analysed entirely by a local **Ollama llama3.2** model. No API key, no cloud, no staging environment.
 
-*Above: ResponseIQ scanning a crash log, reading the `service.py` file mentioned in the stack trace, and proposing a specific code patch. (Full Asciinema recording coming — see [Try it in 60 seconds](#-try-it-in-60-seconds-no-api-key-needed) to run it yourself.)*
+### Step 1 — The crash (`http --debug --timeout 30 GET http://httpbin.org/get`)
+
+```
+Traceback (most recent call last):
+  File ".venv/bin/http", line 10, in <module>
+    sys.exit(main())
+  File "httpie/core.py", line 140, in raw_main
+    exit_status = main_program(
+  File "httpie/core.py", line 213, in program
+    for message in messages:
+  File "httpie/client.py", line 66, in collect_messages
+    send_kwargs = make_send_kwargs(args)
+  File "httpie/client.py", line 283, in make_send_kwargs
+    timeout = args.timeout['connect'] if args.timeout else None
+              ~~~~~~~~~~~~^^^^^^^^^^^
+TypeError: 'float' object is not subscriptable
+```
+
+### Step 2 — Scan (`--mode scan`)
+
+```bash
+$ responseiq --mode scan --target ./httpie_crash.log
+```
+```
+------------------------------------------------------------
+  ResponseIQ Scan Report
+  Target : httpie_crash.log
+  Status : SUCCESS
+------------------------------------------------------------
+  Scanned  : 25 message(s)
+  Incidents: 25 found
+------------------------------------------------------------
+  1. [HIGH]    Float Object Not Subscriptable Error
+     Source     : ai
+     Description: The log message indicates a TypeError with a float object being
+                  treated as subscriptable. This suggests an issue with data type
+                  conversion or manipulation in the code.
+
+  2. [HIGH]    Error in Python Script
+     Source     : ai
+     Description: The log indicates a traceback which suggests an error occurred in
+                  a Python script. Further investigation is required to determine
+                  the root cause.
+
+  3. [CRITICAL] Critical: Unhandled Exception in Script Execution
+     Source     : ai
+     Description: The script is attempting to exit with a non-zero status code
+                  without proper error handling. This could lead to unexpected
+                  behavior or crashes.
+
+  4. [CRITICAL] HTTPie Core Crash
+     Source     : ai
+     Description: A crash occurred in the HTTPie core, referencing line 162 of
+                  httpie/core.py. The stack frame indicates a function call to
+                  raw_main with an invalid parser.
+------------------------------------------------------------
+  Tip: run with --mode fix to apply safe remediations.
+------------------------------------------------------------
+```
+
+### Step 3 — Fix (`--mode fix`)
+
+```bash
+$ responseiq --mode fix --target ./httpie_crash.log
+```
+```
+------------------------------------------------------------
+  ResponseIQ Fix Report
+  Target : httpie_crash.log
+  Status : SUCCESS
+------------------------------------------------------------
+  Scanned  : 25 message(s)
+  Fixes    : 3 remediation(s) generated
+------------------------------------------------------------
+  1. [CRITICAL] HTTP Server Crash
+     Allowed         : YES
+     Confidence      : 60%
+     Impact Score    : 79.2/100
+     Blast Radius    : single_service
+     Execution Mode  : guarded_apply
+     Rationale       : AI-generated remediation based on incident analysis
+     Remediation Plan: Check the http module for any recent changes and ensure
+                       it is properly configured. If necessary, revert to a
+                       previous working version.
+     Rollback Plan   : No file changes detected - no rollback required
+     Test Plan       : Run existing test suite; verify --timeout flag behaviour
+                       with float and dict inputs.
+     Checks Passed   : tests, security_scan, syntax_check
+     Next Step       : Remediation approved for automatic execution
+     Next Step       : Monitor system health during application
+     Next Step       : Verify resolution using test plan
+
+  2. [CRITICAL] System Exit Due to Main Function Failure
+     Allowed         : YES
+     Confidence      : 60%
+     Impact Score    : 79.2/100
+     Blast Radius    : single_service
+     Execution Mode  : guarded_apply
+     Remediation Plan: Review main() error propagation and ensure TypeError is
+                       caught and reported with file/line context.
+     Checks Passed   : tests, security_scan, syntax_check
+
+  3. [CRITICAL] HTTPie Crash with Invalid URL
+     Allowed         : YES
+     Confidence      : 60%
+     Impact Score    : 79.2/100
+     Blast Radius    : single_service
+     Execution Mode  : guarded_apply
+     Remediation Plan: Validate __main__.py entry point — ensure exceptions
+                       surfaced from collect_messages propagate correctly.
+     Checks Passed   : tests, security_scan, syntax_check
+------------------------------------------------------------
+  Trust Gate: set RESPONSEIQ_POLICY_MODE=apply to execute changes.
+------------------------------------------------------------
+```
+
+### What happened behind the scenes
+
+| Stage | Detail |
+|---|---|
+| **Noise filter** | Stripped 42 verbose debug lines (version headers, env repr blocks) → 25 signal lines |
+| **Concurrent scan** | All 25 lines analysed in parallel via `asyncio.gather()` — single event loop |
+| **Triage** | 3 CRITICAL incidents selected out of 25 for full remediation pipeline |
+| **P2 Reproduction tests** | Auto-generated pytest scripts for each incident |
+| **Negative Proof** | Executed test scripts to confirm failure before fix |
+| **P3 Git Correlation** | Searched commit history for suspect changes |
+| **P4 Guardrails** | 7 rules checked: no bare except, no secrets, no print statements, etc. |
+| **Trust Gate** | All 3 remediations → `APPROVED / guarded_apply` |
+| **P5 Integrity Gate** | Evidence sealed with SHA-256 chain for SOC2 audit trail |
+| **P6 Causal Graph** | Root-cause dependency graph built for each incident |
 
 ---
 

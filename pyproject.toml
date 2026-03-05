@@ -134,7 +134,8 @@ dev = [
 line-length = 120
 exclude = [
     "tests/repro/test_incident_*.py",
-    "tests/repro/test_test_*.py"
+    "tests/repro/test_test_*.py",
+    "tests/repro/test_[0-9a-f]*_*.py",
 ]
 
 [tool.semantic_release]

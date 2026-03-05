@@ -107,7 +107,7 @@ class FixPlugin(BasePlugin):
         try:
             content = path.read_text(encoding="utf-8")
             lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
-            return lines
+            return self._filter_noise_lines(lines)
         except Exception as exc:
             logger.warning(f"Could not read {path}: {exc}")
             return []

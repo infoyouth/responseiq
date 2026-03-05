@@ -69,8 +69,9 @@ class ScanPlugin(BasePlugin):
                 if isinstance(data, list):
                     return [item["message"] for item in data if isinstance(item, dict) and "message" in item]
             else:
-                # Plain log — analyse each non-empty line, cap at 50
-                return [line.strip() for line in content.splitlines() if line.strip()][:50]
+                # Plain log — filter noise then analyse each non-empty line, cap at 50
+                raw = [line.strip() for line in content.splitlines() if line.strip()]
+                return self._filter_noise_lines(raw)[:50]
         except Exception as exc:
             logger.warning("Failed to read %s: %s", path, exc)
         return []
