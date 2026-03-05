@@ -42,6 +42,30 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           git_committer_name: "Youth Innovations"
           git_committer_email: "info.youthinno@gmail.com"
+          changelog: false  # git-cliff owns CHANGELOG.md
+
+      # ---------------------------------------------------------------------------
+      # git-cliff: generate a rich, human-readable CHANGELOG.md after PSR tags
+      # ---------------------------------------------------------------------------
+      - name: Generate CHANGELOG with git-cliff
+        if: steps.semantic.outputs.released == 'true'
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --verbose --tag v${{ steps.semantic.outputs.version }}
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Commit updated CHANGELOG
+        if: steps.semantic.outputs.released == 'true'
+        run: |
+          git config user.name "Youth Innovations"
+          git config user.email "info.youthinno@gmail.com"
+          git add CHANGELOG.md
+          git diff --cached --quiet && echo "CHANGELOG unchanged" || \
+            git commit -m "docs: update CHANGELOG for v${{ steps.semantic.outputs.version }} [skip ci]"
+          git push
 
       - name: Publish to PyPI
         if: steps.semantic.outputs.released == 'true'
