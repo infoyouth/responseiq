@@ -68,6 +68,7 @@ dependencies = [
     "bs4>=0.0.2",
     "lxml>=6.0.2",
     "types-pyyaml>=6.0.12.20250915",
+    "pyyaml>=6.0",
 ]
 
 [project.urls]

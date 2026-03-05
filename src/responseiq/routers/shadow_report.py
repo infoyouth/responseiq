@@ -31,8 +31,15 @@ from responseiq.utils.logger import logger
 
 router = APIRouter(prefix="/api/v1/shadow", tags=["Shadow Analytics"])
 
-# Module-level service instance (cheap; holds no DB connections)
-_shadow_service = ShadowAnalyticsService()
+# Lazily initialized to avoid triggering the full service init chain at import time.
+_shadow_service: ShadowAnalyticsService | None = None
+
+
+def _get_shadow_service() -> ShadowAnalyticsService:
+    global _shadow_service
+    if _shadow_service is None:
+        _shadow_service = ShadowAnalyticsService()
+    return _shadow_service
 
 
 @router.get(
@@ -79,7 +86,7 @@ async def export_shadow_report(
         )
 
     # Build report from accumulated shadow results
-    report: ProjectedValueReport = await _shadow_service.generate_period_report(days_back=days)
+    report: ProjectedValueReport = await _get_shadow_service().generate_period_report(days_back=days)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename_stem = f"responseiq_pilot_report_{timestamp}"
