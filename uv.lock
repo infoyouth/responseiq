@@ -3058,7 +3058,7 @@ wheels = [
 
 [[package]]
 name = "responseiq"
-version = "2.17.0"
+version = "2.18.3"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -3082,6 +3082,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pygithub" },
+    { name = "pyyaml" },
     { name = "ruamel-yaml" },
     { name = "slack-sdk" },
     { name = "sqlmodel" },
@@ -3145,6 +3146,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "pygithub", specifier = ">=1.59.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruamel-yaml", specifier = ">=0.17.0" },
     { name = "slack-sdk", specifier = ">=3.20.0" },
     { name = "spacy", marker = "extra == 'ner'", specifier = ">=3.7.0" },

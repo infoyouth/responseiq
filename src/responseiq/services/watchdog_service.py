@@ -56,9 +56,7 @@ class WatchdogConfig:
     poll_interval_seconds: int = 30  # How often to sample metrics
     health_url: str = "http://localhost:8000/health"  # Fallback health probe
     # Optional async callable: (incident_id: str) -> float  (error rate 0.0-1.0)
-    metrics_callback: Optional[Callable[[str], Awaitable[float]]] = field(
-        default=None, repr=False
-    )
+    metrics_callback: Optional[Callable[[str], Awaitable[float]]] = field(default=None, repr=False)
 
 
 @dataclass
@@ -179,10 +177,7 @@ class WatchdogService:
             self._completed[incident_id] = result
             await self._persist_result(result)
             status = "TRIGGERED" if result.triggered else "CLEAR"
-            logger.info(
-                f"✅ Watchdog complete for {incident_id}: {status} "
-                f"(peak_rate={peak_rate:.1%})"
-            )
+            logger.info(f"✅ Watchdog complete for {incident_id}: {status} (peak_rate={peak_rate:.1%})")
 
         return result
 

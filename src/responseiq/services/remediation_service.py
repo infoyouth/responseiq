@@ -382,6 +382,7 @@ class RemediationService:
         # Step 10: #2 v2.18.0 — Persist sealed ProofBundle to DB (SOC2 audit trail)
         if proof_bundle is not None and proof_bundle.integrity and proof_bundle.integrity.integrity_hash:
             from responseiq.services.proof_persistence_service import persist_proof_bundle as _persist_proof
+
             await _persist_proof(incident_id=incident_id, proof_bundle=proof_bundle)
 
         # Log final decision

@@ -177,12 +177,67 @@ def _print_result(mode: str, state: dict) -> None:
         print(sep)
 
     elif mode == "fix":
+        result = state.get("fix_result", "unknown")
+        error = state.get("fix_error")
+        fixes: list = state.get("fixes", [])
+        total = state.get("total_scanned", 0)
+        target = state.get("context", {}).get("args", {}).get("target", "unknown")
+
         print(sep)
         print("  ResponseIQ Fix Report")
+        print(f"  Target : {target}")
+        print(f"  Status : {result.upper()}")
         print(sep)
-        for k, v in state.items():
-            if k not in ("context", "trace_id") and v is not None:
-                print(f"  {k}: {v}")
+
+        if error:
+            print(f"  ERROR: {error}")
+            print(sep)
+            return
+
+        if not fixes:
+            print("  No actionable incidents found (severity < HIGH).")
+            print(sep)
+            return
+
+        print(f"  Scanned  : {total} message(s)")
+        print(f"  Fixes    : {len(fixes)} remediation(s) generated")
+        print(sep)
+
+        for i, fix in enumerate(fixes, 1):
+            severity = (fix.get("severity") or "unknown").lower()
+            icon = _SEVERITY_ICON.get(severity, f"[{severity.upper()[:6]}]")
+            title = fix.get("title") or "Untitled"
+            print(f"  {i}. {icon} {title}")
+            print(f"     Allowed         : {'YES' if fix.get('allowed') else 'NO (suggest_only)'}")
+            print(f"     Confidence      : {fix.get('confidence', 0):.0%}")
+            print(f"     Impact Score    : {fix.get('impact_score', 0):.1f}/100")
+            print(f"     Blast Radius    : {fix.get('blast_radius', 'unknown')}")
+            print(f"     Execution Mode  : {fix.get('execution_mode') or 'suggest_only'}")
+            rationale = fix.get("rationale") or ""
+            if rationale:
+                print(f"     Rationale       : {rationale[:120]}")
+            plan = fix.get("remediation_plan") or ""
+            if plan:
+                print(f"     Remediation Plan: {plan[:120]}")
+            rollback = fix.get("rollback_plan") or ""
+            if rollback:
+                print(f"     Rollback Plan   : {rollback[:120]}")
+            test_plan = fix.get("test_plan") or ""
+            if test_plan:
+                print(f"     Test Plan       : {test_plan[:120]}")
+            passed = fix.get("checks_passed") or []
+            failed = fix.get("checks_failed") or []
+            if passed:
+                print(f"     Checks Passed   : {', '.join(passed[:4])}")
+            if failed:
+                print(f"     Checks Failed   : {', '.join(failed[:4])}")
+            next_steps = fix.get("next_steps") or []
+            for ns in next_steps[:3]:
+                print(f"     Next Step       : {ns[:100]}")
+            print()
+
+        print(sep)
+        print("  Trust Gate: set RESPONSEIQ_POLICY_MODE=apply to execute changes.")
         print(sep)
 
     else:

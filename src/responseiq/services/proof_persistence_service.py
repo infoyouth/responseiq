@@ -62,8 +62,7 @@ async def persist_proof_bundle(
     integrity = proof_bundle.integrity
     if integrity is None or not integrity.integrity_hash:
         logger.warning(
-            "⚠️  proof_persistence: ProofBundle has no integrity_hash — "
-            "skipping DB persist (not yet sealed?)",
+            "⚠️  proof_persistence: ProofBundle has no integrity_hash — skipping DB persist (not yet sealed?)",
             incident_id=incident_id,
         )
         return None
