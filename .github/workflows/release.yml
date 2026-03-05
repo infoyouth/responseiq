@@ -49,11 +49,10 @@ jobs:
       # ---------------------------------------------------------------------------
       - name: Generate CHANGELOG with git-cliff
         if: steps.semantic.outputs.released == 'true'
+        continue-on-error: true  # git-cliff exits 1 on unparseable commits; file is still written
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          # --latest: render only the release PSR just tagged (tag already exists in git)
-          # Do NOT use --tag here — that flag is for tagging unreleased commits, not existing tags
           args: --verbose --latest
         env:
           OUTPUT: CHANGELOG.md
