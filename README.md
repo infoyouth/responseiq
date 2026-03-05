@@ -18,7 +18,7 @@ Unlike traditional parsers that match regex strings, ResponseIQ reads your appli
 
 ![ResponseIQ CLI Demo](docs/assets/demo_placeholder.gif)
 
-*Above: ResponseIQ scanning a crash log, reading the `service.py` file mentioned in the stack trace, and proposing a specific code patch.*
+*Above: ResponseIQ scanning a crash log, reading the `service.py` file mentioned in the stack trace, and proposing a specific code patch. (Full Asciinema recording coming — see [Try it in 60 seconds](#-try-it-in-60-seconds-no-api-key-needed) to run it yourself.)*
 
 ---
 
@@ -28,6 +28,40 @@ Unlike traditional parsers that match regex strings, ResponseIQ reads your appli
 - **👁️ Context-Aware**: Reads the local source files referenced in logs to understand *why* the crash happened.
 - **⚡ Self-Healing**: Can generate Pull Requests or apply patches directly (CLI mode).
 - **🛡️ Battle-Tested**: Includes "Sandbox Mode" to safely test remediation logic.
+
+---
+
+## ⚡ Try it in 60 seconds (no API key needed)
+
+A broken service and a pre-recorded crash log are included in the repo so you can see ResponseIQ work immediately:
+
+```bash
+pip install responseiq
+git clone https://github.com/infoyouth/responseiq.git && cd responseiq
+
+# Scan the included crash log — no LLM key required
+responseiq --mode scan --target ./samples/crash.log
+```
+
+Expected output:
+```
+------------------------------------------------------------
+  ResponseIQ Scan Report
+  Target : samples/crash.log
+  Status : SUCCESS
+------------------------------------------------------------
+  Scanned  : 3 message(s)
+  Incidents: 3 found
+------------------------------------------------------------
+  1. [HIGH]     KeyError: 'email' in process_user_request
+  2. [CRITICAL] Memory leak — _request_log unbounded growth
+  3. [HIGH]     ZeroDivisionError: division by zero (reset race)
+------------------------------------------------------------
+  Tip: run with --mode fix to apply safe remediations.
+------------------------------------------------------------
+```
+
+See [`samples/README.md`](samples/README.md) for full details on the embedded bugs and how to reproduce them.
 
 ---
 
@@ -66,10 +100,13 @@ Works out of the box with no API key — uses a local heuristic parser.
 ### 3. Scan Your Logs
 
 ```bash
-# Single file (JSON or .log or .txt)
+# Use the included sample scenario (fastest path — no setup needed)
+responseiq --mode scan --target ./samples/crash.log
+
+# Your own single file (JSON or .log or .txt)
 responseiq --mode scan --target ./logs/error.log
 
-# Whole directory
+# Your own directory
 responseiq --mode scan --target ./var/log/app/
 ```
 
@@ -96,6 +133,10 @@ responseiq --mode scan --target ./var/log/app/
 
 Analyse all incidents and get a projected MTTR savings report — nothing is changed:
 ```bash
+# Try it on the included samples first
+responseiq --mode shadow --target ./samples/ --shadow-report
+
+# Or point at your own logs
 responseiq --mode shadow --target ./logs/ --shadow-report
 ```
 
@@ -128,6 +169,22 @@ uv sync
 # Run the API server with hot-reload
 uv run uvicorn src.app:app --reload
 ```
+
+---
+
+## 🔌 Compatible With
+
+ResponseIQ's webhook API is designed to receive alert payloads from the tools your team already uses. Point your existing alert routing at `POST /api/v1/incidents/ingest` — no agents or plugins required.
+
+| Platform | How to connect |
+|---|---|
+| **Datadog** | Webhook integration → `POST /api/v1/incidents/ingest` |
+| **PagerDuty** | Event Orchestration webhook → same endpoint |
+| **Sentry** | Internal Integrations → Webhook URL |
+| **GitHub Actions** | `curl` step in your CI workflow (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)) |
+| **Alertmanager** | Webhook receiver in `alertmanager.yml` |
+
+> All integrations use standard HTTP webhooks — no vendor-specific SDK required.
 
 ---
 

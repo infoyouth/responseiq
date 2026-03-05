@@ -1,0 +1,21 @@
+2026-03-04T09:12:01.004Z ERROR [app.service] Unhandled exception in process_user_request
+Traceback (most recent call last):
+  File "/app/samples/buggy_service.py", line 45, in process_user_request
+    recipient = user["email"].lower()
+KeyError: 'email'
+
+2026-03-04T09:12:01.005Z CRITICAL [app.service] Request processing halted for user=u-002 payload_len=11
+
+2026-03-04T09:14:33.210Z ERROR [app.worker] Memory pressure detected — RSS 1.2 GB, threshold 512 MB
+  File "/app/samples/buggy_service.py", line 52, in process_user_request
+    _request_log.append({"ts": time.time(), "user": user.get("id"), "payload_len": len(payload)})
+RuntimeError: Cannot allocate memory — _request_log contains 2147483 entries, no eviction policy defined
+
+2026-03-04T09:15:00.001Z ERROR [app.worker] ZeroDivisionError during metrics aggregation
+Traceback (most recent call last):
+  File "/app/samples/buggy_service.py", line 57, in process_user_request
+    avg_payload = sum(r["payload_len"] for r in _request_log) / _request_count
+ZeroDivisionError: division by zero
+  [Caused by concurrent call to reset_counters() at line 65]
+
+2026-03-04T09:15:00.002Z CRITICAL [app.worker] Service entering degraded state — 3 incidents in last 180s

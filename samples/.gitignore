@@ -1,0 +1,3 @@
+# Allow sample log files to be tracked — these are intentional demo fixtures,
+# not generated runtime logs.
+!*.log
