@@ -34,12 +34,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+          persist-credentials: true
 
       - name: Python Semantic Release
         id: semantic
         uses: python-semantic-release/python-semantic-release@v10.5.3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.RELEASE_PAT }}
           git_committer_name: "Youth Innovations"
           git_committer_email: "info.youthinno@gmail.com"
           changelog: false  # git-cliff owns CHANGELOG.md
