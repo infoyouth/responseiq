@@ -1,12 +1,11 @@
 import asyncio
 import json
-import logging
 from pathlib import Path
 from typing import List
 
-from .base import BasePlugin
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from .base import BasePlugin
 
 
 class ScanPlugin(BasePlugin):

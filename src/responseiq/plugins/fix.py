@@ -10,14 +10,13 @@ Usage:
 """
 
 import asyncio
-import logging
 import uuid
 from pathlib import Path
 from typing import List
 
-from .base import BasePlugin
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from .base import BasePlugin
 
 
 class FixPlugin(BasePlugin):

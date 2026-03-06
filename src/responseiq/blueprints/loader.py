@@ -1,7 +1,8 @@
 import glob
-import logging
 import os
 from typing import Dict
+
+from loguru import logger
 
 from pydantic import ValidationError
 from ruamel.yaml import YAML
@@ -37,7 +38,7 @@ def reload_blueprints():
                 bp = _load_file(path)
             except (YAMLError, ValidationError) as exc:
                 # skip invalid blueprint files but continue loading others
-                logging.warning("skipping invalid blueprint %s: %s", path, exc)
+                logger.warning("skipping invalid blueprint {}: {}", path, exc)
                 continue
             # last-wins if duplicate ids
             registry[bp.id] = bp

@@ -48,6 +48,7 @@ from githubkit import GitHub, TokenAuthStrategy
 from githubkit.exception import RequestFailed
 
 from responseiq.config.settings import settings
+from responseiq.integrations.github_integration import _split_repo
 from responseiq.schemas.github_pr import (
     GitHubWebhookAck,
     IssueCommentPayload,
@@ -72,14 +73,6 @@ _COMMAND_MAP: Dict[str, PRBotCommand] = {
 }
 
 _BOT_BADGE = "\n\n---\n*\U0001f916 ResponseIQ Bot \u2014 Powered by GitHub Copilot \u00b7 Trust-First Remediation*"
-
-
-def _split_repo(repo_name: str) -> tuple[str, str]:
-    """Split 'owner/repo' into (owner, repo) for githubkit REST calls."""
-    parts = repo_name.split("/", 1)
-    if len(parts) != 2:
-        raise ValueError(f"Invalid repo name: {repo_name!r}. Expected 'owner/repo'.")
-    return parts[0], parts[1]
 
 
 _HELP_TEXT = """\
