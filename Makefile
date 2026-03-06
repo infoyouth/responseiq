@@ -24,7 +24,7 @@ run:  ## Run the API server (dev mode)
 
 
 test:  ## Run all tests
-	uv run pytest
+	uv run pytest -n auto --dist=loadscope
 
 
 lint:  ## Lint code with Ruff
@@ -89,7 +89,7 @@ ci:  ## Run CI pipeline (lock, lint, type, test)
 	uv lock --check
 	uv run ruff check src tests --no-fix
 	uv run mypy src
-	uv run pytest --maxfail=1 --disable-warnings -q
+	uv run pytest -n auto --dist=loadscope --maxfail=1 --disable-warnings -q
 
 # Guard: run all local checks before push
 check: format lint mypy test  ## Run all local checks (format, lint, type, test)
