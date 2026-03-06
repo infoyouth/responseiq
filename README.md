@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/responseiq)](https://pypi.org/project/responseiq/)
 [![License](https://img.shields.io/github/license/infoyouth/responseiq)](LICENSE)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 > **"Don't just debug. Fix."**
 
@@ -325,9 +325,9 @@ ResponseIQ's webhook API is designed to receive alert payloads from the tools yo
 3. **Format**: `make format`
 
 ### Project Structure
-* `src/cli.py`: Entry point for the CLI tool.
-* `src/app.py`: Entry point for the API Server.
-* `src/services/remediation_service.py`: The core "Brain" that interfaces with the LLM.
+* `src/responseiq/cli.py`: Entry point for the CLI tool.
+* `src/responseiq/app.py`: Entry point for the API Server.
+* `src/responseiq/services/remediation_service.py`: The core "Brain" that interfaces with the LLM.
 
 ### License
 MIT
