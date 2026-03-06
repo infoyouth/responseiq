@@ -151,6 +151,13 @@ jobs:
             --disable-warnings \
             -q 2>&1 | tee reports/pytest.txt
 
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: reports/coverage.xml
+          fail_ci_if_error: false
+
       # Packaging smoke test
       - name: Build distributables
         run: |

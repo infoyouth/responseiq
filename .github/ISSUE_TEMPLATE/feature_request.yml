@@ -1,0 +1,57 @@
+name: 🚀 Feature Request
+description: Suggest an idea or enhancement for ResponseIQ
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? We'd love to hear it.
+        Before opening, please check [ROADMAP_TODO.md](../docs/ROADMAP_TODO.md) to see if it's already planned.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this solve? Who benefits?
+      placeholder: |
+        "I'm always frustrated when ... because ..."
+        "Platform engineers need ... so that ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe what you'd like to happen. Be as specific as possible.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why did you reject them?
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature area
+      options:
+        - CLI (scan / fix / shadow modes)
+        - API Server (webhooks / incidents)
+        - LLM / AI reasoning
+        - GitHub integration (PR bot)
+        - CI/CD pipeline
+        - Observability / OpenTelemetry
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any links, screenshots, or prior art that might help?

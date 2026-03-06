@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    "group:allNonMajor"
+  ],
+  "timezone": "UTC",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "packageRules": [
+    {
+      "matchManagers": ["pip_requirements", "pyproject"],
+      "groupName": "python dependencies",
+      "automerge": false
+    },
+    {
+      "matchDepTypes": ["action"],
+      "groupName": "GitHub Actions",
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "matchPackageNames": ["python-semantic-release/python-semantic-release"],
+      "automerge": false
+    }
+  ],
+  "ignorePaths": ["rollbacks/**", "demo_utils_local/**"]
+}

@@ -6,6 +6,10 @@
 [![License](https://img.shields.io/github/license/infoyouth/responseiq)](LICENSE)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Coverage](https://codecov.io/gh/infoyouth/responseiq/branch/main/graph/badge.svg)](https://codecov.io/gh/infoyouth/responseiq)
+[![Python](https://img.shields.io/pypi/pyversions/responseiq)](https://pypi.org/project/responseiq/)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/infoyouth/responseiq/badge)](https://scorecard.dev/viewer/?uri=github.com/infoyouth/responseiq)
+[![Downloads](https://static.pepy.tech/badge/responseiq)](https://pepy.tech/project/responseiq)
 
 > **"Don't just debug. Fix."**
 
@@ -15,6 +19,10 @@ Unlike traditional parsers that match regex strings, ResponseIQ reads your appli
 ---
 
 ## 📸 See It In Action
+
+> 🎬 **Animated terminal demo:** Run `vhs demo.tape` ([VHS](https://github.com/charmbracelet/vhs) required) to regenerate `demo.gif`.
+
+![ResponseIQ demo](demo.gif)
 
 > **Real demo — no mocks.** The output below was captured live against a real bug injected into the [httpie/cli](https://github.com/httpie/cli) open-source repo, analysed entirely by a local **Ollama llama3.2** model. No API key, no cloud, no staging environment.
 
@@ -157,6 +165,25 @@ $ responseiq --mode fix --target ./httpie_crash.log
 - **👁️ Context-Aware**: Reads the local source files referenced in logs to understand *why* the crash happened.
 - **⚡ Self-Healing**: Can generate Pull Requests or apply patches directly (CLI mode).
 - **🛡️ Battle-Tested**: Includes "Sandbox Mode" to safely test remediation logic.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    A([📄 Log Input]) --> B[Noise Filter]
+    B --> C[⚡ Concurrent Scan\nasyncio.gather]
+    C --> D{🤖 AI Classifier}
+    D -->|HIGH / CRITICAL| E[🌲 Context Extractor\nTree-sitter AST]
+    D -->|LOW / INFO| H
+    E --> F[🧠 LLM Reasoning\nOllama · OpenAI]
+    F --> G{🛡️ Trust Gate\n7 guardrails}
+    G -->|✅ Approved| H[📦 ProofBundle\nSHA-256 sealed]
+    G -->|🚫 Blocked| I([👤 Human Review])
+    H --> J[🐙 GitHub PR\ngithubkit]
+    J --> K[🤖 PR Bot\n/responseiq approve]
+```
 
 ---
 
