@@ -226,9 +226,6 @@ jobs.json
 release_v*.log
 run_failure.txt
 
-# Copilot instructions
-.github/copilot-instructions.md
-
 # Generated Rollbacks
 rollbacks/
 
@@ -238,3 +235,6 @@ tests/repro/test_test_*.py
 
 # Local-only sandbox (reusable test framework — never push to remote)
 sandbox/
+
+# Local-only planning docs (never push to remote)
+docs/IMPROVEMENT_BACKLOG.md

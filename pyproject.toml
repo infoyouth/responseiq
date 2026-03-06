@@ -207,7 +207,7 @@ ignore_missing_imports = true
 # Run only the proper test suite; demo_utils_local requires optional dev deps
 testpaths = ["tests"]
 asyncio_mode = "strict"
-norecursedirs = ["demo_utils_local", "rollbacks", "scripts", "docs", "fixtures", "terraform", "helm"]
+norecursedirs = ["demo_utils_local", "rollbacks", "scripts", "docs", "fixtures", "terraform", "helm", "tests/repro", "tests/integration"]
 
 [tool.responseiq]
 # Configure what ResponseIQ scans/ignores.

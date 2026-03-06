@@ -13,6 +13,8 @@ permissions:
   packages: write
   issues: write
   pull-requests: write
+  id-token: write        # required for OIDC Trusted Publishing to PyPI
+  attestations: write   # required for actions/attest-build-provenance (SLSA)
 
 jobs:
   pre-release-verify:
@@ -24,6 +26,7 @@ jobs:
     name: Semantic Release
     needs: pre-release-verify
     runs-on: ubuntu-latest
+    environment: production   # requires approval in GitHub repo Settings → Environments → production
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     concurrency: release
     outputs:
@@ -78,13 +81,22 @@ jobs:
         if: steps.semantic.outputs.released == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_TOKEN }}
+          attestations: true
+          # No PYPI_TOKEN needed — uses OIDC Trusted Publishing.
+          # One-time setup at: https://pypi.org/manage/project/responseiq/settings/publishing/
+
+      - name: Attest build provenance (SLSA)
+        if: steps.semantic.outputs.released == 'true'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/*
 
   docker-publish:
     name: Build & Push Docker
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
+    environment: production   # explicit gate — covered transitively by release, but explicit for auditability
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}

@@ -1,0 +1,27 @@
+# CODEOWNERS — https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# These owners are automatically requested for review when someone opens a
+# pull request that modifies the matching files.
+
+# Default owner for everything not matched below
+* @infoyouth
+
+# CI/CD and release pipeline
+.github/                    @infoyouth
+Makefile                    @infoyouth
+pyproject.toml              @infoyouth
+uv.lock                     @infoyouth
+
+# Core source
+src/                        @infoyouth
+tests/                      @infoyouth
+
+# Docs
+docs/                       @infoyouth
+README.md                   @infoyouth
+
+# Infrastructure
+Dockerfile                  @infoyouth
+docker-compose*.yml         @infoyouth
+helm/                       @infoyouth
+terraform/                  @infoyouth

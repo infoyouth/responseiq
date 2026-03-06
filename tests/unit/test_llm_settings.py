@@ -26,8 +26,9 @@ class TestLLMSettingsDefaults:
         s = Settings(_env_file=None)
         assert s.llm_analysis_model == "gpt-4o"
 
-    def test_fast_model_default(self):
-        s = Settings()
+    def test_fast_model_default(self, monkeypatch):
+        monkeypatch.delenv("LLM_FAST_MODEL", raising=False)
+        s = Settings(_env_file=None)
         assert s.llm_fast_model == "gpt-4o-mini"
 
     def test_repro_model_default(self, monkeypatch):
