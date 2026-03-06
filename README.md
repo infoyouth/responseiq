@@ -189,17 +189,31 @@ flowchart TD
 
 ## ⚡ Try it in 60 seconds (no API key needed)
 
-A broken service and a pre-recorded crash log are included in the repo so you can see ResponseIQ work immediately:
+A broken service and a pre-recorded crash log are included in the repo. **One command, zero config:**
 
 ```bash
 pip install responseiq
 git clone https://github.com/infoyouth/responseiq.git && cd responseiq
 
-# Scan the included crash log — no LLM key required
-responseiq --mode scan --target ./samples/crash.log
+# Full demo — scan + fix + REASONING.md audit log
+./samples/demo.sh --explain
 ```
 
-Expected output:
+The demo script:
+- Shows the 3 real injected bugs in `samples/buggy_service.py`
+- Runs `--mode scan` and prints the incident report
+- Runs `--mode fix` with Trust Gate evaluation
+- Writes a `REASONING.md` audit log explaining every decision
+- Needs no LLM key (rule-engine fallback is active by default)
+
+**Want more control?** The demo script accepts flags:
+```bash
+./samples/demo.sh           # scan only
+./samples/demo.sh --fix     # scan + fix
+./samples/demo.sh --explain # scan + fix + REASONING.md audit log
+```
+
+Expected scan output:
 ```
 ------------------------------------------------------------
   ResponseIQ Scan Report
@@ -230,41 +244,66 @@ For developers who want to fix bugs in their local environment or CI pipeline.
 pip install responseiq
 ```
 
-### 2. Configure an LLM
+### 2. Configure (30-second wizard)
 
-Choose one option:
-
-**Option A: Ollama (free, fully local — recommended)**
 ```bash
-# Install Ollama: https://ollama.com
-ollama serve &
-ollama pull llama3.2
+responseiq init
+```
 
-# Add to .env in your project root:
+The wizard asks three questions:
+1. **LLM provider** — Ollama (local, free), OpenAI, or none (rule-engine fallback)
+2. **Trust policy** — `suggest_only`, `pr_only`, or `guarded_apply`
+3. **GitHub token** — optional, for PR bot mode
+
+It writes a `.env` file and runs a smoke test. Done.
+
+**Prefer manual config?** Set env vars directly:
+
+```bash
+# Ollama (free, fully local — recommended)
 echo "LLM_BASE_URL=http://localhost:11434/v1" >> .env
 echo "LLM_ANALYSIS_MODEL=llama3.2" >> .env
-```
 
-**Option B: OpenAI**
-```bash
+# OpenAI
 echo "OPENAI_API_KEY=sk-..." >> .env
-```
 
-**Option C: No config (rule-engine fallback)**
-Works out of the box with no API key — uses a local heuristic parser.
+# No config — rule-engine fallback, always available
+```
 
 ### 3. Scan Your Logs
 
 ```bash
-# Use the included sample scenario (fastest path — no setup needed)
+# Included sample — fastest path, no setup needed
 responseiq --mode scan --target ./samples/crash.log
 
-# Your own single file (JSON or .log or .txt)
+# Single file (JSON, .log, or .txt)
 responseiq --mode scan --target ./logs/error.log
 
-# Your own directory
+# Whole directory
 responseiq --mode scan --target ./var/log/app/
 ```
+
+#### 📥 Zero-Config JSON / NDJSON Pipe (no OTel collector needed)
+
+If you don’t have a live OTel collector, pipe logs directly from any source using `--target -`:
+
+```bash
+# Plain text lines
+cat ./logs/error.log | responseiq --mode scan --target -
+
+# NDJSON (one JSON object per line — Docker, Kubernetes, structured logging)
+docker logs my-container 2>&1 | responseiq --mode scan --target -
+kubectl logs -l app=api | responseiq --mode fix --target - --explain
+
+# JSON array (e.g. from a log aggregator export)
+curl -s 'https://logstore/export?format=json' | responseiq --mode scan --target -
+
+# Datadog / OpenTelemetry structured events
+echo '{"level":"ERROR","message":"KeyError: email","service":"api"}' \
+  | responseiq --mode scan --target -
+```
+
+All three wire formats are auto-detected: NDJSON, JSON array, and plain text.
 
 **Example output:**
 ```
@@ -285,7 +324,25 @@ responseiq --mode scan --target ./var/log/app/
 ------------------------------------------------------------
 ```
 
-### 4. Shadow Mode (zero-risk demo)
+### 4. Fix with Explainability
+
+Add `--explain` to any `--mode fix` run to produce a `REASONING.md` audit log:
+
+```bash
+responseiq --mode fix --target ./samples/crash.log --explain
+```
+
+`REASONING.md` contains the full decision trace for every incident:
+- Why the LLM chose this fix
+- Which AST nodes were loaded (Tree-sitter context)
+- What the Trust Gate decided and why
+- The causal graph JSON
+- Rollback plan
+- Suspect commit (Git correlation)
+
+Commit `REASONING.md` alongside the patch for SOC2 / post-incident review.
+
+### 5. Shadow Mode (zero-risk demo)
 
 Analyse all incidents and get a projected MTTR savings report — nothing is changed:
 ```bash
@@ -325,6 +382,30 @@ uv sync
 # Run the API server with hot-reload
 uv run uvicorn src.app:app --reload
 ```
+
+---
+
+## 🧪 Benchmark: SWE-bench Verified
+
+ResponseIQ is evaluated against [SWE-bench Verified](https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified) — the 500-sample human-validated subset used to rank autonomous coding agents (SWE-agent, Devin, OpenHands, etc.).
+
+```bash
+# Quick smoke run — 5 samples, no LLM key (dry-run)
+uv run python scripts/swe_bench_eval.py --samples 5 --dry-run
+
+# Full benchmark run (500 samples, real LLM)
+uv run python scripts/swe_bench_eval.py --samples 500
+
+# Filter by repo
+uv run python scripts/swe_bench_eval.py --repo sympy/sympy --samples 50
+```
+
+Outputs:
+- `reports/swe_bench_eval.md` — per-repo pass@1 table
+- `reports/swe_bench_eval.json` — machine-readable results per instance
+- `reports/predictions.jsonl` — compatible with the official `swebench` harness for gold-standard eval
+
+> The built-in heuristic pass@1 (non-empty patch + Trust Gate approved + causal symbol overlap) is a fast CI proxy. Feed `predictions.jsonl` to the official harness for the Docker-based gold-standard evaluation.
 
 ---
 
