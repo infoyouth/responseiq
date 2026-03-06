@@ -8,13 +8,13 @@ Responsibilities
    body.  Ignores comments that don't contain a ``/responseiq`` invocation.
 
 2. **Command dispatch** — route to the appropriate handler:
-     approve   → merge PR via PyGithub after final validation
+     approve   → merge PR via githubkit after final validation
      rollback  → post rollback script location as a PR comment
      status    → post ProofBundle summary (or "no proof available") as comment
      explain   → post full rationale + blast_radius as comment
      help      → post command catalogue
 
-3. **Comment posting** — wraps PyGithub ``create_issue_comment`` so bot
+3. **Comment posting** — wraps githubkit ``issues.create_comment`` so bot
    responses always include a ResponseIQ badge and audit timestamp.
 
 Configuration (env vars)
@@ -30,7 +30,7 @@ Configuration (env vars)
 Design Notes
 ────────────
 - ``GitHubPRService`` is **stateless** — construct a new instance per request.
-- All PyGithub calls are wrapped in a try/except so a transient GitHub API
+- All GitHub API calls are wrapped in a try/except so a transient GitHub API
   error never crashes the webhook endpoint.
 - When ``RESPONSEIQ_GITHUB_TOKEN`` is absent, the service operates in
   **dry-run mode**: commands are parsed and logged but no GitHub API calls
@@ -43,6 +43,9 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from typing import Dict, Optional
+
+from githubkit import GitHub, TokenAuthStrategy
+from githubkit.exception import RequestFailed
 
 from responseiq.config.settings import settings
 from responseiq.schemas.github_pr import (
@@ -69,6 +72,15 @@ _COMMAND_MAP: Dict[str, PRBotCommand] = {
 }
 
 _BOT_BADGE = "\n\n---\n*\U0001f916 ResponseIQ Bot \u2014 Powered by GitHub Copilot \u00b7 Trust-First Remediation*"
+
+
+def _split_repo(repo_name: str) -> tuple[str, str]:
+    """Split 'owner/repo' into (owner, repo) for githubkit REST calls."""
+    parts = repo_name.split("/", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Invalid repo name: {repo_name!r}. Expected 'owner/repo'.")
+    return parts[0], parts[1]
+
 
 _HELP_TEXT = """\
 ### ResponseIQ Bot — Available Commands
@@ -250,14 +262,16 @@ class GitHubPRService:
         if not self._dry_run:
             try:
                 gh = self._get_github_client()
-                gh_repo = gh.get_repo(repo)
-                pr = gh_repo.get_pull(cmd.pr_number)
-                pr.merge(
+                owner, repo_name = _split_repo(repo)
+                gh.rest.pulls.merge(
+                    owner=owner,
+                    repo=repo_name,
+                    pull_number=cmd.pr_number,
                     commit_message=f"ResponseIQ remediation approved by @{cmd.actor}",
                     merge_method="squash",
                 )
                 logger.info("GitHubPRBot: PR #%d merged by %s", cmd.pr_number, cmd.actor)
-            except Exception as exc:
+            except (RequestFailed, Exception) as exc:
                 logger.warning("GitHubPRBot: merge failed for PR #%d: %s", cmd.pr_number, exc)
                 self._post_comment(
                     repo,
@@ -311,11 +325,9 @@ class GitHubPRService:
 
     # ── GitHub client ─────────────────────────────────────────────────────────
 
-    def _get_github_client(self):  # type: ignore[return]
-        """Return a PyGithub ``Github`` instance (lazy, per-call)."""
-        from github import Github  # type: ignore[import-untyped]
-
-        return Github(self._token)
+    def _get_github_client(self) -> GitHub:
+        """Return a githubkit ``GitHub`` instance (lazy, per-call)."""
+        return GitHub(TokenAuthStrategy(self._token or ""))
 
     def _post_comment(self, repo: str, pr_number: int, body: str) -> None:
         """Post *body* as a comment on PR *pr_number* in *repo*."""
@@ -330,11 +342,15 @@ class GitHubPRService:
             return
         try:
             gh = self._get_github_client()
-            gh_repo = gh.get_repo(repo)
-            issue = gh_repo.get_issue(pr_number)
-            issue.create_comment(full_body)
+            owner, repo_name = _split_repo(repo)
+            gh.rest.issues.create_comment(
+                owner=owner,
+                repo=repo_name,
+                issue_number=pr_number,
+                body=full_body,
+            )
             logger.info("GitHubPRBot: comment posted to %s#%d", repo, pr_number)
-        except Exception as exc:
+        except (RequestFailed, Exception) as exc:
             logger.warning(
                 "GitHubPRBot: failed to post comment to %s#%d: %s",
                 repo,
