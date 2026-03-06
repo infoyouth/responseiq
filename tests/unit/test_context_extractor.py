@@ -39,14 +39,17 @@ def complex_operation(x):
     log_text = f'File "{file_path.name}", line {line_num}, in complex_operation'
 
     # Mock tree-sitter because the environment might have broken bindings
-    with patch("responseiq.utils.context_extractor.tree_sitter_languages") as mock_ts:
+    with (
+        patch("responseiq.utils.context_extractor._ts_get_language") as mock_get_language,
+        patch("responseiq.utils.context_extractor._ts_get_parser") as mock_get_parser,
+    ):
         # Setup mocks
         mock_lang = MagicMock()
         mock_lang.name = "python"
-        mock_ts.get_language.return_value = mock_lang
+        mock_get_language.return_value = mock_lang
 
         mock_parser = MagicMock()
-        mock_ts.get_parser.return_value = mock_parser
+        mock_get_parser.return_value = mock_parser
 
         mock_tree = MagicMock()
         mock_parser.parse.return_value = mock_tree

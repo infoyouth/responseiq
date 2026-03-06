@@ -19,6 +19,14 @@ def get_engine():
         return _engine
 
     database_url = settings.database_url
+    # Normalize PostgreSQL URL scheme for psycopg3.
+    # psycopg3 (package: psycopg) uses the 'postgresql+psycopg' SQLAlchemy dialect.
+    # Plain 'postgresql://' defaults to psycopg2 which is no longer a dependency.
+    if database_url.startswith("postgresql://"):
+        database_url = "postgresql+psycopg://" + database_url[len("postgresql://") :]
+    elif database_url.startswith("postgres://"):
+        database_url = "postgresql+psycopg://" + database_url[len("postgres://") :]
+
     # Configure engine to support in-memory sqlite for tests (thread-safe)
     if database_url == "sqlite:///:memory:":
         _engine = create_engine(

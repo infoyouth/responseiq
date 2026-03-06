@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import List, Optional
 
 import aiofiles
-import tree_sitter_languages  # type: ignore
+from tree_sitter_language_pack import get_language as _ts_get_language  # type: ignore
+from tree_sitter_language_pack import get_parser as _ts_get_parser  # type: ignore
 
 from responseiq.schemas.proof import ContextResolutionFailure, ContextResolutionReason
 from responseiq.utils.logger import logger
@@ -40,7 +41,7 @@ def _get_tree_sitter_language(file_path: Path):
     if not lang_name:
         return None
     try:
-        return tree_sitter_languages.get_language(lang_name)
+        return _ts_get_language(lang_name)  # type: ignore[arg-type]
     except Exception:
         return None  # Fallback to lines if parser not found
 
@@ -206,7 +207,7 @@ async def read_code_around_line(file_path: Path, line_num: int, context_lines: i
     try:
         language = _get_tree_sitter_language(file_path)
         if language:
-            parser = tree_sitter_languages.get_parser(language.name)
+            parser = _ts_get_parser(language.name)
             tree = parser.parse(bytes(content, "utf8"))
             root_node = tree.root_node
 

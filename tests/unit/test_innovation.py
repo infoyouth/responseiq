@@ -32,22 +32,19 @@ async def test_context_extraction_regex():
 
 
 @pytest.mark.asyncio
-async def test_parallel_log_processor_small_file():
+async def test_parallel_log_processor_small_file(tmp_path):
     """
     Verifies that small files bypass the parallel engine.
+    Uses pytest's tmp_path fixture for proper worker isolation under pytest-xdist.
     """
     processor = ParallelLogProcessor()
 
-    # Create a small temp file
-    tmp_path = Path("test_small_log.txt")
-    tmp_path.write_text("Small log with Error")
+    # Create a small temp file in the isolated tmp directory
+    log_file = tmp_path / "test_small_log.txt"
+    log_file.write_text("Small log with Error")
 
-    try:
-        result = await processor.scan_large_file(tmp_path)
-        assert result == "Small log with Error"
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink()
+    result = await processor.scan_large_file(log_file)
+    assert result == "Small log with Error"
 
 
 @pytest.mark.asyncio

@@ -134,13 +134,15 @@ jobs:
       - name: Security scan (ruff --select S)
         run: uv run ruff check --select S src 2>&1 | tee reports/security.txt
 
-      - name: Dependency vulnerability scan (safety)
-        run: uv run safety check --full-report 2>&1 | tee reports/safety.txt || true
+      - name: Dependency vulnerability scan (pip-audit)
+        run: uv run pip-audit --format cyclonedx-json -o reports/pip-audit.json 2>&1 | tee reports/pip-audit.txt || true
 
       # Tests — generate JUnit XML + coverage reports
       - name: Run tests (pytest + coverage)
         run: |
           uv run pytest \
+            -n auto \
+            --dist=loadscope \
             --junitxml=reports/pytest.xml \
             --cov=src/responseiq \
             --cov-report=xml:reports/coverage.xml \
@@ -187,7 +189,7 @@ jobs:
           check_status "🎨 ruff format"   "reports/ruff-format.txt" "All checks passed|unchanged"
           check_status "🔍 ruff lint"     "reports/ruff-lint.txt"   "All checks passed"
           check_status "🔒 security scan" "reports/security.txt"    "All checks passed"
-          check_status "🔐 safety"        "reports/safety.txt"      "No known security vulnerabilities"
+          check_status "🔐 pip-audit"     "reports/pip-audit.txt"   "No known vulnerabilities"
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
