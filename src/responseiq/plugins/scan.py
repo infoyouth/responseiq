@@ -15,16 +15,21 @@ class ScanPlugin(BasePlugin):
 
         if not target:
             agent_state["scan_result"] = "error"
-            agent_state["scan_error"] = "No --target specified. Use --target <file_or_directory>"
+            agent_state["scan_error"] = (
+                "No --target specified. Use --target <file_or_directory> or --target - to read from stdin."
+            )
             return agent_state
 
-        target_path = Path(target)
-        if not target_path.exists():
-            agent_state["scan_result"] = "error"
-            agent_state["scan_error"] = f"Target not found: {target}"
-            return agent_state
-
-        messages = self._collect_messages(target_path)
+        # stdin pipe mode: responseiq --mode scan --target -
+        if target == "-":
+            messages = self._filter_noise_lines(self._read_stdin())
+        else:
+            target_path = Path(target)
+            if not target_path.exists():
+                agent_state["scan_result"] = "error"
+                agent_state["scan_error"] = f"Target not found: {target}"
+                return agent_state
+            messages = self._collect_messages(target_path)
 
         if not messages:
             agent_state["scan_result"] = "no_incidents"

@@ -35,7 +35,9 @@ Writing a custom plugin
 
 from __future__ import annotations
 
+import json
 import re
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List
@@ -116,6 +118,71 @@ class BasePlugin(ABC):
             result.append(line)
 
         return result
+
+    @staticmethod
+    def _read_stdin() -> List[str]:
+        """Read log messages from stdin.
+
+        Accepts three wire formats piped via ``--target -``:
+
+        1. **NDJSON** — one JSON object per line, each with a ``message`` key::
+
+               {"level": "ERROR", "message": "KeyError: 'email'"}
+               {"level": "CRITICAL", "message": "OOM — 2.1 GB RSS"}
+
+        2. **JSON array** — a single array of objects with a ``message`` key::
+
+               [{"message": "..."}, {"message": "..."}]
+
+        3. **Plain text** — one log line per stdin line (the familiar case)::
+
+               echo "ERROR: ZeroDivisionError" | responseiq --mode scan --target -
+
+        All three formats are detected automatically; no flag required.
+        """
+        raw = sys.stdin.read()
+        if not raw.strip():
+            return []
+
+        messages: List[str] = []
+
+        # ── Try NDJSON (one JSON object per line) ──────────────────────────
+        lines = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        ndjson_hits: List[str] = []
+        for line in lines:
+            if line.startswith("{"):
+                try:
+                    obj = json.loads(line)
+                    msg = obj.get("message") or obj.get("msg") or obj.get("text") or obj.get("body")
+                    if msg:
+                        ndjson_hits.append(str(msg))
+                        continue
+                except json.JSONDecodeError:
+                    pass
+            # not parseable as JSON object — treat as plain-text line
+            ndjson_hits.append(line)
+
+        if ndjson_hits:
+            return ndjson_hits
+
+        # ── Try JSON array ─────────────────────────────────────────────────
+        stripped = raw.strip()
+        if stripped.startswith("["):
+            try:
+                data = json.loads(stripped)
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict):
+                            msg = item.get("message") or item.get("msg") or item.get("text")
+                            if msg:
+                                messages.append(str(msg))
+                    if messages:
+                        return messages
+            except json.JSONDecodeError:
+                pass
+
+        # ── Fallback: plain text lines ─────────────────────────────────────
+        return [ln.strip() for ln in raw.splitlines() if ln.strip()]
 
     @abstractmethod
     def run(self, agent_state: dict) -> dict:

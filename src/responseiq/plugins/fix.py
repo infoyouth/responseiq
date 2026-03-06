@@ -26,16 +26,22 @@ class FixPlugin(BasePlugin):
 
         if not target:
             agent_state["fix_result"] = "error"
-            agent_state["fix_error"] = "No --target specified."
+            agent_state["fix_error"] = (
+                "No --target specified. Use --target <file_or_directory> or --target - to read from stdin."
+            )
             return agent_state
 
-        target_path = Path(target)
-        if not target_path.exists():
-            agent_state["fix_result"] = "error"
-            agent_state["fix_error"] = f"Target not found: {target}"
-            return agent_state
-
-        messages = self._collect_messages(target_path)
+        # stdin pipe mode: responseiq --mode fix --target -
+        if target == "-":
+            messages = self._filter_noise_lines(self._read_stdin())
+            target_path = None
+        else:
+            target_path = Path(target)
+            if not target_path.exists():
+                agent_state["fix_result"] = "error"
+                agent_state["fix_error"] = f"Target not found: {target}"
+                return agent_state
+            messages = self._collect_messages(target_path)
         if not messages:
             agent_state["fix_result"] = "no_incidents"
             agent_state["fixes"] = []
