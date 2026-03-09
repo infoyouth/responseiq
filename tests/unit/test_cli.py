@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import at module level — avoids module-cache pollution in xdist workers
-from responseiq.cli import _run_demo, _run_init, main
+from responseiq.cli import _run_demo, main
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +55,7 @@ class TestRunDemoWithFixture:
         """Fixture using 'msg' key (not 'message') does not crash."""
         fixture_dir = tmp_path / "fixtures"
         fixture_dir.mkdir()
-        (fixture_dir / "fixture_high.json").write_text(
-            json.dumps([{"msg": "ALTERNATIVE_KEY_MSG"}])
-        )
+        (fixture_dir / "fixture_high.json").write_text(json.dumps([{"msg": "ALTERNATIVE_KEY_MSG"}]))
 
         with (
             patch("responseiq.cli._find_project_root", return_value=tmp_path),
@@ -94,7 +92,7 @@ class TestRunDemoFallback:
         assert "kubectl logs" in out
 
     def test_subprocess_called_with_log_level_warning(self, tmp_path):
-        """Both subprocess calls must include --log-level WARNING to suppress log noise."""
+        """Both subprocess calls must include --log-level ERROR to suppress log noise in demo."""
         with (
             patch("responseiq.cli._find_project_root", return_value=tmp_path),
             patch("subprocess.run") as mock_run,
@@ -105,7 +103,7 @@ class TestRunDemoFallback:
         for call in mock_run.call_args_list:
             args = call[0][0]
             assert "--log-level" in args
-            assert "WARNING" in args
+            assert "ERROR" in args
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +128,26 @@ class TestMainSubcommandDispatch:
         mock_init.assert_called_once()
         assert exc_info.value.code == 0
 
+    def test_run_init_smoke_test_subprocess_called(self, tmp_path):
+        """_run_init runs a scan smoke-test subprocess when samples/crash.log exists and LLM != none."""
+        from responseiq.cli import _run_init
+
+        (tmp_path / "samples").mkdir()
+        (tmp_path / "samples" / "crash.log").write_text("ERROR: crash\n")
+
+        with (
+            patch("responseiq.cli._find_project_root", return_value=tmp_path),
+            # All interactive prompts return "" — falls through to 'ollama' branch (llm_provider != "none")
+            patch("responseiq.cli._ask", return_value=""),
+            patch("subprocess.run") as mock_sub,
+        ):
+            mock_sub.return_value = MagicMock(returncode=0)
+            _run_init()
+
+        assert mock_sub.called
+        call_args = mock_sub.call_args[0][0]
+        assert "--mode" in call_args and "scan" in call_args
+
     def test_demo_not_triggered_for_scan_mode(self, monkeypatch):
         """'--mode scan' does not trigger _run_demo."""
         monkeypatch.setattr(sys, "argv", ["responseiq", "--mode", "scan", "--target", "/tmp/x.log"])
@@ -145,4 +163,3 @@ class TestMainSubcommandDispatch:
             except SystemExit:
                 pass
         mock_demo.assert_not_called()
-
