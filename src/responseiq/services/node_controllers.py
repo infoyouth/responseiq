@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""State-machine node controller functions.
+
+Each function maps an ``AgentState`` to a string outcome that the
+``StateGraph`` uses for edge routing. Node prompts are loaded from
+``prompts/node_prompts.yaml`` at module import time.
+"""
+
 from responseiq.config import base as config
 from responseiq.models.agent_state import AgentState
 from responseiq.services.prompt_loader import load_prompts

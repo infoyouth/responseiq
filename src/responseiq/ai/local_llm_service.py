@@ -1,8 +1,10 @@
-"""
-Local Mock LLM Service for ResponseIQ Testing & Development
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Local mock LLM for testing and offline development.
 
-Provides a lightweight, deterministic AI analysis service that mimics OpenAI
-responses without requiring external API keys or internet connectivity.
+Provides deterministic, pattern-based incident analysis that mimics the
+real LLM service without any API key or internet connection. Used
+automatically when ``LLM_BASE_URL`` is unset in the environment.
 """
 
 import hashlib

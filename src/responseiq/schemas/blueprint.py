@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Pydantic models for remediation blueprints.
+
+A ``Blueprint`` describes a known fix pattern with ordered ``Action``
+steps and optional ``RollbackStep`` entries. Loaded from YAML/JSON by
+``blueprints/loader.py`` and served via the blueprints router.
+"""
+
 from typing import List, Optional
 
 from pydantic import BaseModel, Field

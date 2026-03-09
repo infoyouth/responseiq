@@ -1,3 +1,14 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""High-throughput log processor with parallel chunk scanning.
+
+Divides large log files into 5 MB chunks and scans them concurrently
+via a ``ProcessPoolExecutor``. Extracts error patterns and stack-trace
+references using the regex patterns from ``context_extractor``.
+Designed to handle multi-gigabyte files without loading them fully
+into memory.
+"""
+
 import asyncio
 import mmap
 import os

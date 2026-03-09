@@ -1,30 +1,12 @@
-"""
-src/responseiq/temporal/activities.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Temporal activities for the ResponseIQ remediation workflow.
 
-Temporal Activities for the ResponseIQ RemediationWorkflow (P-F4).
-
-Each activity is a plain async function that wraps an existing service.
-Activities are:
-  - Retriable (Temporal retries on failure with back-off)
-  - Idempotent where possible (safe to replay)
-  - Free of workflow-specific state (just call services directly)
-
-Registered activities
-─────────────────────
-  analyze_incident_activity(log_id)
-        Runs process_log_ingestion for the log row — creates the Incident.
-
-  generate_embedding_activity(log_id)
-        Generates and stores a semantic embedding for the incident (P-F2).
-        No-op when OpenAI is unavailable.
-
-  score_remediation_activity(log_id, approved, comment)
-        Scores the Langfuse trace (P-F1 flywheel).
-        No-op when Langfuse is unavailable.
-
-  notify_human_review_activity(log_id, summary)
-        Sends a notification (Slack/webhook) requesting human approval.
-        No-op when no notification channel is configured.
+Each activity wraps an existing service call as a retriable, idempotent async
+function. Temporal replays these on failure so they must not have side effects
+that cannot be safely re-run. Registered: ``analyze_incident_activity``,
+``generate_embedding_activity``, ``score_remediation_activity``, and
+``notify_human_review_activity``.
 """
 
 from __future__ import annotations

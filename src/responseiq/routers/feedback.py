@@ -1,21 +1,11 @@
-"""
-src/responseiq/routers/feedback.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Human feedback and semantic similarity router.
 
-Human Feedback API (P-F1) + Semantic Similarity API (P-F2).
-
-Endpoints
-─────────
-POST /api/v1/feedback
-    Record an engineer's approval or rejection of a suggested remediation.
-    Persists to FeedbackRecord table + scores the Langfuse LLM trace.
-
-GET  /api/v1/feedback/{log_id}
-    Return feedback summary (accept/reject counts, acceptance rate) for a log.
-
-GET  /api/v1/incidents/{incident_id}/similar
-    Return a ranked list of semantically similar past incidents.
-    (cosine similarity on text-embedding-3-small vectors stored in
-     IncidentEmbedding table)
+Handles ``POST /api/v1/feedback`` (engineer approves or rejects a
+suggested fix), ``GET /api/v1/feedback/{log_id}`` (accept/reject
+summary), and ``GET /api/v1/incidents/{id}/similar`` (cosine-similarity
+ranked list of past incidents via text-embedding vectors).
 """
 
 from __future__ import annotations

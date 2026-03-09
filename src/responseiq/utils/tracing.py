@@ -1,26 +1,11 @@
-"""
-src/responseiq/utils/tracing.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Langfuse LLM tracing — optional, self-hostable.
 
-Langfuse LLM tracing — optional, self-hostable.
-
-Langfuse traces every LLM call with: model name, prompt, completion,
-token usage, latency, and a score once a human (or automated evaluator)
-labels the output quality.  This powers the "eval flywheel" — the dataset
-that feeds DSPy prompt optimisation in a later phase.
-
-Configuration (all optional — tracing is silently disabled when absent):
-    LANGFUSE_PUBLIC_KEY  — Langfuse project public key
-    LANGFUSE_SECRET_KEY  — Langfuse project secret key
-    LANGFUSE_HOST        — default: https://cloud.langfuse.com
-                           set to your self-hosted URL for EU data residency
-
-Usage:
-    from responseiq.utils.tracing import get_langfuse, trace_generation
-
-    lf = get_langfuse()
-    if lf:
-        gen = lf.generation(name="analyze_incident", model="gpt-4o", ...)
-        gen.end(output=result)
+Traces every LLM call (model, prompt, completion, token usage, latency)
+so the eval flywheel can feed labelled data back into DSPy prompt
+optimisation. Silently disabled when Langfuse credentials are absent
+— no import errors, no crashes.
 """
 
 from __future__ import annotations

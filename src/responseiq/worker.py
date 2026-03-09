@@ -1,11 +1,15 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
 """
-src/responseiq/worker.py
+ARQ background worker.
 
-ARQ (Async Redis Queue) worker — durable background task execution.
+Runs durable async tasks (remediation, embedding, proof persistence)
+outside the FastAPI request cycle using Redis-backed ARQ queues. Start
+with::
+
+    uv run arq responseiq.worker.WorkerSettings
 
 Why ARQ over FastAPI BackgroundTasks
--------------------------------------
-BackgroundTasks runs in the same process and is fire-and-forget with no
 persistence, no retry, and no visibility.  If the server restarts mid-LLM
 call, the job is silently lost.  ARQ gives:
   - Durability   — jobs survive server restarts (stored in Redis)

@@ -1,34 +1,11 @@
-"""
-Watchdog Service — v2.18.0 #3 Post-Apply Monitoring + Auto-Rollback.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Post-apply watchdog monitor with auto-rollback.
 
 Monitors error rate in a configurable window after a ``guarded_apply``
-and automatically triggers the rollback script if the threshold is breached.
-
-State Machine:
-    IDLE → MONITORING (started) → ROLLBACK_TRIGGERED | CLEAR (window elapsed)
-
-Design Principles
------------------
-* The service is always feature-flagged via ``settings.watchdog_enabled``
-  (default False) so teams opt-in explicitly.
-* A ``metrics_callback`` hook lets callers plug in real metrics sources
-  (DataDog, Prometheus) without coupling the service to specific SDKs.
-* When no callback is provided, the service falls back to probing
-  ``GET /health`` on the local server using ``aiohttp``.
-* Every run (triggered or clear) writes a ``WatchdogRecord`` to the DB for
-  audit purposes.
-
-Trust Gate
-----------
-rationale    : Post-apply watchdog closes the "silent drift" risk — the SRE
-               persona review identified no automated rollback after apply.
-               This adds a safety net that activates within 5 min of a bad
-               deploy and is fully reversible (just disable the flag).
-blast_radius : Reads metrics/health endpoint; writes WatchdogRecord; on breach
-               executes the pre-generated rollback script (same as manual
-               ``python rollback_<id>.py``).
-rollback_plan: Set ``RESPONSEIQ_WATCHDOG_ENABLED=false``; the service becomes
-               a no-op immediately without code changes.
+and automatically executes the pre-generated rollback script if the
+threshold is breached. Feature-flagged via ``settings.watchdog_enabled``
+(default False) — teams opt in explicitly.
 """
 
 from __future__ import annotations

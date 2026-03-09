@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Incident ingestion and lifecycle service.
+
+Processes a stored log entry, runs it through the analyzer, and
+persists a resulting ``Incident`` row. Called by the ARQ background
+worker after a log is written to the database.
+"""
+
 from sqlmodel import Session
 
 from responseiq.db import get_engine

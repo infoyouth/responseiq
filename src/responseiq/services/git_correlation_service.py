@@ -1,18 +1,11 @@
-"""
-git_correlation_service.py — P3: Change-to-Incident Correlation
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Git change-to-incident correlation service.
 
-Answers the question:
-  "What changed in the last N commits that most likely caused this incident?"
-
-The service operates in two modes:
-  - heuristic  (no LLM key required): symbol/filename matching against git log
-  - llm        (requires OpenAI key): compact diff sent to LLM for causal reasoning
-
-CorrelationResult is attached to RemediationRecommendation so the suspect commit
-surfaces in the UI, in generated PR bodies, and in the forensic audit trail.
-
-State-machine position:
-  Detect → Context → **Reason (P3 correlation here)** → Policy → Execute → Learn
+Answers: "what changed in the last N commits that most likely caused
+this incident?" Operates in heuristic mode (symbol/filename matching)
+when no LLM key is present, or sends a compact diff to the LLM for
+causal reasoning when one is available.
 """
 
 from __future__ import annotations

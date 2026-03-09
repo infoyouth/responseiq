@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Database engine and session factory.
+
+Builds a SQLAlchemy engine from ``settings.database_url`` (PostgreSQL via
+psycopg3 in production, in-memory SQLite for tests) and exposes a
+``get_session`` FastAPI dependency for use in routers.
+"""
+
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 

@@ -1,32 +1,19 @@
-"""src/responseiq/ai/model_utils.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Cost-efficient multi-LLM model routing.
 
-P5.3: Multi-LLM Agent Routing — cost-efficient, quality-optimised model selection.
+``LLMRouter`` dispatches each task (detect, analyze, generate_patch) to
+the right model tier — cheap fast models for classification, stronger
+models for patch synthesis. The routing table rebuilds from settings on
+each instantiation, so environment overrides are always respected.
 
-Architecture
-────────────
-``LLMRouter`` maps task names to the appropriate model.  Two cost tiers:
-
-  fast_tasks   (detect, classify_severity)  → settings.llm_fast_model    (default: gpt-4o-mini)
-  patch_tasks  (analyze, generate_patch)    → settings.llm_analysis_model (default: gpt-4o)
-  repro_tasks  (generate_repro)             → settings.llm_repro_model    (default: gpt-4o)
-
-Usage
-─────
+Example:
+    ```python
     from responseiq.ai.model_utils import router as _router
 
-    model = _router.model_for("analyze")        # → "gpt-4o" by default
-    model = _router.model_for("detect")         # → "gpt-4o-mini" by default
-    model = _router.model_for("generate_repro") # → "gpt-4o" by default
-
-    # audit trail
-    print(_router.table())
-    # {'detect': 'gpt-4o-mini', 'classify_severity': 'gpt-4o-mini', ...}
-
-    # per-test override (does not affect other tasks)
-    _router.override("analyze", "gpt-4o-mini")
-
-The routing table is lazily rebuilt from settings values on each new
-``LLMRouter()`` call, so environment-level overrides are always respected.
+    model = _router.model_for("analyze")  # "gpt-4o" by default
+    model = _router.model_for("detect")   # "gpt-4o-mini" by default
+    ```
 """
 
 from __future__ import annotations

@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""GitHub API client wrapper.
+
+Thin layer over ``githubkit`` that handles authentication via
+``TokenAuthStrategy``, splits ``owner/repo`` strings, and surfaces
+``RequestFailed`` as the single exception type callers need to catch.
+Dry-run mode activates automatically when ``RESPONSEIQ_GITHUB_TOKEN`` is unset.
+"""
+
 from typing import Optional
 
 from githubkit import GitHub, TokenAuthStrategy

@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Core SQLModel database models.
+
+Defines the ``Log`` and ``Incident`` tables that back the FastAPI
+endpoints and the remediation pipeline. All timestamps are UTC-aware;
+``FeedbackRecord`` and ``IncidentEmbedding`` are co-located here to
+keep the schema in one place.
+"""
+
 from datetime import datetime, timezone
 from typing import Optional
 

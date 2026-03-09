@@ -1,24 +1,11 @@
-"""
-log_scrubber.py — P2.3: PII / Secrets Scrubbing Layer
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""PII and secrets scrubbing layer for log payloads.
 
-Scrubs sensitive data from log payloads BEFORE they are sent to any external
-LLM API. Reversible placeholders let the response be re-enriched for local
-display without leaking live customer data.
-
-Enabled by default (settings.scrub_enabled = True). Disable only for
-fully air-gapped / on-prem deployments that never call an external endpoint.
-
-Patterns covered:
-  - Email addresses
-  - IPv4 addresses
-  - IPv6 addresses (simplified)
-  - JWT tokens  (header.payload.signature)
-  - Bearer / Authorization header values
-  - OpenAI-style API keys  (sk-...)
-  - Generic high-entropy secrets  (key=<value>, token=<value>, password=<value>)
-  - AWS access key IDs  (AKIA...)
-  - Credit card numbers  (Luhn-adjacent 12-19 digit sequences)
-  - UUIDs  (used as user / session / request IDs)
+Scrubs sensitive data from log text before it reaches any external LLM
+API, replacing emails, IPs, JWTs, API keys, and high-entropy secrets
+with reversible placeholders. Enabled by default via
+``settings.scrub_enabled``; disable only for fully air-gapped deployments.
 """
 
 from __future__ import annotations

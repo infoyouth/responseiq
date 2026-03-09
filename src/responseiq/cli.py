@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Command-line interface entry point.
+
+Exposes the three primary operating modes -- ``scan``, ``fix``, and
+``shadow`` -- and the interactive ``init`` wizard that writes a local
+``.env`` file. Invoked as ``responseiq <flags>`` after installation.
+"""
+
 import argparse
 import os
 import sys

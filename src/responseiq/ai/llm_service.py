@@ -1,23 +1,19 @@
-"""
-src/responseiq/ai/llm_service.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""LLM analysis and reproduction-code generation.
 
-LLM analysis and reproduction-code generation.
+Wraps the OpenAI async client with ``instructor`` for Pydantic-enforced
+structured outputs, so the LLM is constrained to return a valid
+``IncidentAnalysis`` or ``ReproductionCode`` object every time. Langfuse
+tracing is wired in when keys are present and silently skipped otherwise.
 
-Stack
------
-* openai SDK      — async-first official client; replaces hand-rolled httpx calls.
-* instructor 1.7  — Pydantic-enforced structured outputs.  The LLM is constrained
-                    to return a valid ``IncidentAnalysis`` or ``ReproductionCode``
-                    object; no ``json.loads`` gamble, no silent JSON parse failures.
-* langfuse (opt)  — LLM call tracing + eval flywheel (no-op when keys absent).
+Example:
+    ```python
+    from responseiq.ai.llm_service import analyze_with_llm
 
-Mocking in tests
-----------------
-Patch ``responseiq.ai.llm_service._get_instructor_client`` to inject a mock:
-
-    mock_client.chat.completions.create = AsyncMock(
-        return_value=IncidentAnalysis(title="T", severity="low", ...)
-    )
+    result = await analyze_with_llm(log_text)
+    print(result.severity)  # "high"
+    ```
 """
 
 from __future__ import annotations

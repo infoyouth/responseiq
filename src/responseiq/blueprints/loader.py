@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Remediation blueprint registry and loader.
+
+Reads YAML/JSON blueprint files from ``src/blueprints/`` at startup into
+an in-memory registry. Blueprints describe known fix patterns that the
+remediation service applies before falling back to LLM generation.
+"""
+
 import glob
 import os
 from typing import Dict

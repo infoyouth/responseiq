@@ -1,52 +1,11 @@
-"""src/responseiq/services/performance_gate.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Performance regression gate.
 
-P5: Operational Proof — Performance Regression Gate.
-
-Architecture
-────────────
-The gate maintains an in-process rolling latency window per named endpoint.
-It works in every environment (dev, CI, prod) without requiring a live OTLP
-backend.  All recorded samples are also emitted as OpenTelemetry span events
-so they appear in Tempo / Jaeger automatically when a collector is configured.
-
-State machine for a guarded remediation:
-    1. ``record_pre_fix(endpoint, duration_ms)``  — N baseline samples.
-    2. Fix is applied (by RemediationService / PR).
-    3. ``record_post_fix(endpoint, duration_ms)``  — M post-fix samples.
-    4. ``evaluate(endpoint)``
-          → PerformanceGateResult:
-            • passed = True   → fix is safe; ProofBundle is enriched
-            • passed = False  → fix introduces regression; execution blocked
-
-Threshold rule  (non-negotiable per ROADMAP):
-    post_fix_p95 > 1.15 × baseline_p95  →  FAIL (regression)
-
-Ongoing production monitoring:
-    ``record(endpoint, duration_ms)``  feeds the rolling window.
-    ``snapshot_baseline(endpoint)``    freezes the current p95 as baseline.
-    ``evaluate(endpoint)``             compares rolling p95 vs frozen baseline.
-
-Usage
-─────
-    from responseiq.services.performance_gate import PerformanceGate, gate
-
-    # Option A — pre/post fix split
-    gate.record_pre_fix("remediateIncident", 120.5)
-    gate.record_post_fix("remediateIncident", 118.2)
-    result = gate.evaluate("remediateIncident")
-
-    # Option B — rolling window + baseline snapshot
-    gate.record("remediateIncident", 120.5)
-    gate.snapshot_baseline("remediateIncident")
-    gate.record("remediateIncident", 140.0)  # after fix
-    result = gate.evaluate("remediateIncident")
-
-    # Async context manager (records duration automatically)
-    async with measure_latency(gate, "remediateIncident", phase="post_fix"):
-        await some_async_work()
-
-Module-level singleton ``gate`` is exported for global use.
-Reset with ``gate.reset(endpoint)`` between tests.
+Maintains an in-process rolling latency window per endpoint and compares
+pre-fix vs post-fix samples to detect performance regressions after a
+patch is applied. Emits OpenTelemetry span events so results appear in
+Tempo/Jaeger automatically when a collector is configured.
 """
 
 from __future__ import annotations

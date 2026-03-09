@@ -1,28 +1,11 @@
-"""
-ProofBundle Persistence Service — v2.18.0 #2.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""ProofBundle persistence service.
 
 Writes a sealed ``ProofBundle``'s forensic integrity fields to the
-``ProofBundleRecord`` SQLite/Postgres table immediately after
-``seal_forensic_evidence()`` completes.
-
-SOC2 Rationale
---------------
-* Evidence must survive process restarts (in-memory ProofBundle is lost on
-  deploy).
-* The record is append-only — there is no ``update`` path — so it acts as an
-  immutable audit log.
-* ``GET /api/v1/incidents/{id}/proof`` lets auditors retrieve cryptographic
-  proof hashes without access to the live process.
-
-Trust Gate
-----------
-rationale    : Closes the SOC2 gap identified in persona review — ProofBundle
-               had no durable storage.  This adds a write path with no mutation
-               of existing records.
-blast_radius : One new DB table (ProofBundleRecord); zero changes to Incident
-               or Log tables.
-rollback_plan: ``DROP TABLE proofbundlerecord;`` — or simply stop calling
-               ``persist_proof_bundle()`` from remediation_service.
+``ProofBundleRecord`` table immediately after ``seal_forensic_evidence()``
+completes. Append-only — no update path — so it acts as an immutable
+SOC2 audit log that survives process restarts.
 """
 
 from __future__ import annotations

@@ -1,6 +1,11 @@
-"""
-Trust Gate Validator - Core policy enforcement engine for ResponseIQ.
-Validates remediation actions against configured policies before execution.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Trust Gate — core policy enforcement engine.
+
+Validates every proposed remediation against 7 safety guardrails before
+any code is written or a PR is opened. A single guardrail failure blocks
+the entire action. Integrates with ``GuardrailChecker`` for project-level
+rules and seals the result into a ``ProofBundle``.
 """
 
 from __future__ import annotations

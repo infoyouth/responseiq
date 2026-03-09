@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Incident impact scoring.
+
+Computes a numeric impact score (0–100) from severity level and blast
+radius surface area. Used by the Trust Gate to decide whether an
+auto-apply or PR-only policy applies to a given incident.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

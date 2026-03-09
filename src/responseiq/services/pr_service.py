@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Pull request creation service.
+
+Orchestrates the end-to-end PR workflow: creates a git branch,
+commits the applied patch, pushes to the remote, and opens a GitHub
+PR via the ``GitHubIntegration`` client.
+"""
+
 import os
 import time
 

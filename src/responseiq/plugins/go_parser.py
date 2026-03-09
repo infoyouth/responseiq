@@ -1,14 +1,11 @@
-"""src/responseiq/plugins/go_parser.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Go runtime panic and error log parser.
 
-P5.2 built-in parser: Go runtime panic and error logs.
-
-Detects and extracts structured context from Go logs:
-  - Runtime panics (goroutine dumps)
-  - ``panic: <message>`` lines
-  - ``goroutine N [running]:`` headers
-  - Standard Go stack frames (pkg/file.go:line)
-  - ``log.Fatal`` / ``log.Panic`` / ``zap`` / ``logrus`` log output
-  - Signal-based crashes (SIGSEGV, SIGABRT)
+Detects and extracts structured context from Go logs — runtime panics
+with goroutine dumps, ``panic:`` lines, standard Go stack frames
+(``pkg/file.go:line``), ``log.Fatal`` / ``zap`` / ``logrus`` output,
+and signal-based crashes (SIGSEGV, SIGABRT).
 """
 
 from __future__ import annotations

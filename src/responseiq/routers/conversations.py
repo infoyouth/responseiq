@@ -1,30 +1,11 @@
-"""
-src/responseiq/routers/conversations.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Stateful multi-turn conversation router.
 
-Stateful multi-turn conversation API (P-F3).
-
-Endpoints
-─────────
-POST /api/v1/conversations/{log_id}
-    Start a new conversation about a log/incident, or resume the most recent
-    open session.  Returns session_id + metadata.
-
-POST /api/v1/conversations/{session_id}/messages
-    Append a user message and get the AI response.  Full message history is
-    passed to the LLM on every turn.  Returns structured assistant reply.
-
-GET  /api/v1/conversations/{session_id}
-    Return the full session state including all messages.
-
-POST /api/v1/conversations/{session_id}/resolve
-    Mark the session as resolved (further messages return 409).
-
-Design notes
-────────────
-- Sessions stored in Redis via ``ConversationService`` (mem-dict fallback for tests).
-- LLM turn uses ``_get_instructor_client()`` with ``ConversationReply`` schema.
-- Falls back to a canned "AI unavailable" message when OpenAI key is absent.
-- Langfuse traces each turn with the ``session_id`` as metadata.
+Exposes three endpoints for the AI conversation layer: start or resume
+a session (``POST /{log_id}``), append a message and get a reply
+(``POST /{session_id}/messages``), and retrieve the full session state
+(``GET /{session_id}``). Sessions are Redis-backed in production.
 """
 
 from __future__ import annotations

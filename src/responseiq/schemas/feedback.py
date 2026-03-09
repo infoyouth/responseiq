@@ -1,13 +1,11 @@
-"""
-src/responseiq/schemas/feedback.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Request/response schemas for the human feedback API.
 
-Request/response schemas for the human feedback API (P-F1).
-
-Engineers call POST /api/v1/feedback after reviewing a suggested
-remediation.  Each approval or rejection is:
-  1. Persisted to the FeedbackRecord DB table for audit.
-  2. Passed to the Langfuse Scores API to label the associated
-     LLM generation span — building the eval flywheel.
+Engineers submit an approval or rejection after reviewing a suggested
+remediation. Each response is persisted to ``FeedbackRecord`` for audit
+and passed to the Langfuse Scores API to label the LLM trace, building
+the evaluation flywheel over time.
 """
 
 from __future__ import annotations

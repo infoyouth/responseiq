@@ -1,12 +1,12 @@
-"""
-fix.py — ResponseIQ Fix Plugin
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Fix plugin — full remediation pipeline runner.
 
-Runs the full remediation pipeline (scan → triage → Trust Gate → patch synthesis)
-on a target log file or directory. Operates in suggest_only mode by default;
-no code is written without an explicit policy upgrade.
+Runs scan → triage → Trust Gate → patch synthesis on a target log
+file or directory. Operates in ``suggest_only`` mode by default so
+nothing is written to disk without an explicit policy upgrade.
 
-Usage:
-    responseiq --mode fix --target <file_or_dir>
+Invoked by the CLI as ``responseiq --mode fix --target <path>``.
 """
 
 import asyncio

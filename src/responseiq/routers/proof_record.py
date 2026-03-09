@@ -1,18 +1,11 @@
-"""
-ProofBundle Record Router — v2.18.0 #2 SOC2 Audit Endpoint.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""SOC2 proof record router.
 
-GET /api/v1/incidents/{incident_id}/proof
-
-Returns the most-recent sealed ProofBundle record for an incident, enabling
-auditors and SOC2 reviewers to verify cryptographic evidence chains without
+Serves ``GET /api/v1/incidents/{incident_id}/proof`` and returns the
+most recently sealed ``ProofBundle`` for an incident. Read-only —
+allows auditors to verify the SHA-256 evidence chain without needing
 access to the live process.
-
-Trust Gate
-----------
-rationale    : Read-only endpoint exposing immutable DB records — zero
-               mutation risk.
-blast_radius : None — only SELECTs from ProofBundleRecord table.
-rollback_plan: Remove router include from app.py.
 """
 
 from __future__ import annotations

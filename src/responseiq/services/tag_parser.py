@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""XML/HTML tag block extractor.
+
+Parses ``<tag>...</tag>`` blocks from LLM response text using
+``BeautifulSoup``. Used to pull structured sections (e.g.
+``<patch>``, ``<rationale>``) out of free-form LLM output reliably.
+"""
+
 from typing import Optional
 
 from bs4 import BeautifulSoup

@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Structured logging setup using Loguru.
+
+Configures Loguru to intercept standard ``logging`` calls and emit
+JSON in production or coloured human-readable output in development.
+Call ``setup_logging()`` once at startup; all modules import the
+shared ``logger`` instance from this module.
+"""
+
 import os
 import sys
 from typing import Optional

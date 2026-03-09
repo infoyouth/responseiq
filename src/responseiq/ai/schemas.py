@@ -1,19 +1,11 @@
-"""
-src/responseiq/ai/schemas.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Pydantic response-model contracts for structured LLM outputs.
 
-Pydantic response-model contracts for structured LLM outputs.
-
-These models are used by ``instructor`` to enforce schema compliance at the
-token-sampling level — the LLM is mathematically incapable of returning a
-field with the wrong type or an invalid severity value.
-
-Design notes
-------------
-* ``IncidentAnalysis`` — used for both incident triage and patch synthesis.
-  Maps 1-to-1 with the dict contract the rest of the codebase already expects,
-  so downstream code requires zero changes.
-* ``ReproductionCode`` — wraps the raw Python string returned by the repro
-  endpoint so instructor can validate it is non-empty.
+``instructor`` uses these models to enforce schema compliance at the token
+sampling level — the LLM cannot return a wrong field type or invalid
+severity value. ``IncidentAnalysis`` covers both triage and patch
+synthesis; ``ReproductionCode`` wraps the raw pytest repro script.
 """
 
 from __future__ import annotations

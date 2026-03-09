@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Kubernetes YAML patch utilities.
+
+``KubernetesPatcher`` loads Deployment/Service YAML files with
+comment- and quote-preserving ``ruamel.yaml``, applies targeted value
+changes (image tags, replica counts, env vars), and writes the
+patched manifest back to disk.
+"""
+
 from pathlib import Path
 from typing import Any, Dict, Optional
 

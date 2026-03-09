@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Application settings loaded from environment variables and ``.env``.
+
+Built on ``pydantic-settings`` so every field can be overridden via an
+environment variable. The ``settings`` singleton at the bottom of this
+file is the single import point used across the entire codebase.
+"""
+
 from __future__ import annotations
 
 import json

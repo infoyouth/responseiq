@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Lightweight state-machine graph for the remediation pipeline.
+
+Builds a directed node graph where each node is a callable that
+receives the current ``AgentState`` and returns a transition string.
+Edges map transition strings to the next node name.
+"""
+
 from typing import Callable, Dict, Optional
 
 from responseiq.models.agent_state import AgentState

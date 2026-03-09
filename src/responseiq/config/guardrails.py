@@ -1,19 +1,11 @@
-"""
-guardrails.py — P4: Sovereign Architectural Guardrails
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Project-level architectural guardrails (P4).
 
-Checks proposed code changes against a project-level rule set defined in
-`.responseiq/rules.yaml` before the Trust Gate allows any execution.
-
-State-machine position:
-    Detect → Context → Reason → **Policy (P4 Guardrails here)** → Execute → Learn
-
-Integration point: `TrustGateValidator._validate_guardrails()`.
-
-Actions
--------
-block               → TrustGate denies the remediation (DenyReason.GUARDRAIL_VIOLATION).
-downgrade_to_pr_only→ Execution mode silently forced to PR_ONLY.
-warn                → Logged in audit trail; does not block or downgrade.
+Loads rules from ``.responseiq/rules.yaml`` and checks proposed patches
+before the Trust Gate allows execution. A rule can block the remediation
+entirely, silently force PR-only mode, or just leave a warning in the
+audit trail — no code is touched until all rules pass.
 """
 
 from __future__ import annotations

@@ -1,43 +1,11 @@
-"""
-P5.1 — Real-Time Webhook Ingestion Path
-========================================
-Exposes three ingest endpoints (Datadog, PagerDuty, Sentry) and a
-Server-Sent Events (SSE) streaming endpoint for real-time remediation
-progress.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Real-time webhook ingestion router.
 
-State-machine position:
-    **Detect (Webhook)** → Context → Reason → Policy → Execute → Learn
-
-Endpoints
----------
-POST /webhooks/datadog      Datadog Monitor webhook
-POST /webhooks/pagerduty    PagerDuty v3 event webhook
-POST /webhooks/sentry       Sentry issue webhook
-
-GET  /incidents/{log_id}/stream   SSE — streams processing status until
-                                  the incident is stored or timeout fires.
-
-Signature Verification
-----------------------
-Each source uses HMAC-SHA256.  Configure via env vars:
-
-    RESPONSEIQ_DATADOG_WEBHOOK_SECRET=<signing_secret>
-    RESPONSEIQ_PAGERDUTY_WEBHOOK_SECRET=<signing_secret>
-    RESPONSEIQ_SENTRY_WEBHOOK_SECRET=<signing_secret>
-
-When the corresponding secret is **not** configured the signature check is
-skipped — useful for local development.  In production always set the
-secret.
-
-Idempotency
------------
-Each normalised incident is fingerprinted with
-``sha256(source + title + log_content[:256])``.  If the same fingerprint
-arrives within the TTL window (1 hour) the request is acknowledged as a
-duplicate without re-enqueuing — preventing alert-storm fan-out.
-
-Production note: replace the in-memory ``_SEEN_KEYS`` dict with Redis
-``SET NX EX 3600`` for multi-process / multi-node deployments.
+Exposes ingest endpoints for Datadog, PagerDuty, and Sentry, plus a
+Server-Sent Events stream (``GET /incidents/{log_id}/stream``) that
+pushes remediation progress to clients in real time. This is the
+first step in the pipeline: Detect → Context → Reason → Execute.
 """
 
 from __future__ import annotations

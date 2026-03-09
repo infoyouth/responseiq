@@ -1,13 +1,11 @@
-"""src/responseiq/plugins/fastapi_parser.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""FastAPI / Uvicorn log parser.
 
-P5.2 built-in parser: FastAPI / Uvicorn error logs.
-
-Detects and extracts structured context from FastAPI/Uvicorn logs:
-  - Uvicorn access log lines (INFO / ERROR)
-  - FastAPI HTTPException details
-  - ASGI application errors
-  - Starlette exception handlers
-  - Pydantic ValidationError payloads
+Detects and extracts structured context from FastAPI and Uvicorn error
+output — access log lines, ``HTTPException`` details, ASGI application
+errors, Starlette exception handlers, and Pydantic ``ValidationError``
+payloads.
 """
 
 from __future__ import annotations

@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""YAML prompt loader and Jinja2 template renderer.
+
+Loads node prompt templates from ``prompts/node_prompts.yaml`` and
+exposes ``render_prompt`` for injecting runtime values (incident
+details, patch context) into prompt strings before LLM calls.
+"""
+
 import os
 from typing import Any, Dict
 

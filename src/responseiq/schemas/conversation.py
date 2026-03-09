@@ -1,16 +1,10 @@
-"""
-src/responseiq/schemas/conversation.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Request/response schemas for the stateful conversation layer.
 
-Request/response schemas for the stateful conversation layer (P-F3).
-
-Each conversation is tied to a log_id and stores a rolling message
-history in Redis (keyed by session_id = UUID4).  The first message
-is always a "system" message grounding the AI in the incident context.
-
-Redis key layout
-────────────────
-  responseiq:conv:{session_id}          → JSON-encoded ConversationSession
-  responseiq:conv:log:{log_id}:sessions → Redis list of session_ids for this log
+Each conversation is tied to a ``log_id`` and stores a rolling message
+history in Redis keyed by ``session_id`` (UUID4). The first message is
+always a system prompt grounding the AI in the incident context.
 """
 
 from __future__ import annotations

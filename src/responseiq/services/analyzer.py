@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Log message analyzer entry point.
+
+Routes each incoming log message through the registered parser chain
+and then to the LLM service for triage. Returns a structured
+``IncidentOut`` with severity, title, and remediation suggestion.
+"""
+
 from typing import Optional
 
 # Ensure parsers are registered

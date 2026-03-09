@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Telemetry abstraction layer.
+
+Defines the ``BaseTelemetry`` interface and the ``ConsoleTelemetry``
+default implementation that writes structured events to stdout. Swap in
+a different backend (Datadog, OTLP) by subclassing ``BaseTelemetry``.
+"""
+
 import sys
 from abc import ABC, abstractmethod
 from typing import Any, Optional

@@ -1,47 +1,11 @@
-"""
-src/responseiq/temporal/workflows.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Durable Temporal workflow for end-to-end incident remediation.
 
-RemediationWorkflow — Temporal durable workflow for ResponseIQ (P-F4).
-
-State machine
-─────────────
-  Detect → Context → [Notify] → [Wait: Human Approval] → Learn
-
-The workflow is feature-flagged via ``settings.temporal_enabled = false``.
-It is entirely inert until TEMPORAL_ENABLED=true AND a Temporal server is
-reachable at TEMPORAL_HOST.
-
-Activation
-──────────
-  1. Set TEMPORAL_ENABLED=true in .env
-  2. Run Temporal server:  docker compose -f docker-compose.yml up temporal
-  3. Start Temporal worker:  await start_temporal_worker()
-  4. Submit workflow:
-       client = await get_temporal_client()
-       handle = await client.start_workflow(
-           RemediationWorkflow.run,
-           RemediationInput(log_id=42, require_approval=True),
-           id=f"remediation-{log_id}",
-           task_queue=settings.temporal_task_queue,
-       )
-  5. Approve via feedback endpoint (P-F1):
-       POST /api/v1/feedback  {log_id: 42, approved: true}
-       → sends RemediationWorkflow.receive_approval signal
-
-Human approval signal integration (P-F1 ↔ P-F4)
-─────────────────────────────────────────────────
-  When settings.temporal_enabled=True, POST /api/v1/feedback calls:
-      await handle.signal(RemediationWorkflow.receive_approval, True, comment)
-  This wakes the waiting workflow and proceeds to the Learn step.
-
-Determinism constraints (Temporal requirement)
-──────────────────────────────────────────────
-  Workflow code is replayed on worker restart.  All side effects MUST go
-  in activities.  The workflow body only:
-    - calls ``workflow.execute_activity(...)``
-    - calls ``workflow.wait_condition(...)``
-    - reads/writes instance variables
-  Never import, log, or call external I/O directly inside workflow methods.
+Implements the state machine: Detect → Context → Notify → Human Approval
+→ Learn. Entirely inert until ``TEMPORAL_ENABLED=true`` and a Temporal
+server is reachable. Human approval is delivered via the
+``receive_approval`` signal, triggered by ``POST /api/v1/feedback``.
 """
 
 from __future__ import annotations

@@ -1,33 +1,11 @@
-"""
-P2.4 — Multi-Repo Context Resolution
-======================================
-Resolves stack-trace file paths across multiple repositories so the LLM
-always receives the exact source that crashed — even when that source lives
-in a different repo or a different git commit.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Multi-repository stack-trace context resolver.
 
-Resolution order
-----------------
-1. **Local path** — ``repo_map[name].local_path`` is present and the file
-   exists there.
-2. **Sparse checkout** — ``repo_map[name].remote_url`` is present; the repo
-   is cloned/fetched into
-   ``~/.cache/responseiq/repos/<name>/`` at ``git_ref`` and the file is
-   looked up inside that tree.
-3. **Graceful failure** — a ``ContextResolutionFailure`` is returned instead
-   of raising; the caller decides whether to surface it in the prompt.
-
-Monorepo support
-----------------
-Set ``path_prefix`` on a ``RepoEntry`` to strip a leading path component.
-E.g. if paths in the stack trace start with ``services/payments/src/..``
-and the repo root *is* ``services/payments/``, set
-``path_prefix = "services/payments"``.
-
-Service-prefix matching
------------------------
-``service_prefixes`` is a list of strings (module names, package prefixes,
-path fragments) that identify which ``RepoEntry`` owns an unknown path.
-E.g. ``["com.example.payments", "payments/"]``.
+Resolves file paths in stack traces across multiple repos: tries a local
+path first, then falls back to a sparse Git checkout at the correct ref.
+Returns a ``ContextResolutionFailure`` on error rather than raising, so
+missing context degrades gracefully without halting remediation.
 """
 
 from __future__ import annotations
