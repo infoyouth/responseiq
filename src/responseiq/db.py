@@ -27,8 +27,10 @@ def get_engine():
     elif database_url.startswith("postgres://"):
         database_url = "postgresql+psycopg://" + database_url[len("postgres://") :]
 
-    # Configure engine to support in-memory sqlite for tests (thread-safe)
-    if database_url == "sqlite:///:memory:":
+    # Configure engine to support sqlite for tests (thread-safe).
+    # Apply StaticPool + check_same_thread=False to ANY SQLite URL, including
+    # per-worker file-based DBs used under pytest-xdist.
+    if database_url.startswith("sqlite"):
         _engine = create_engine(
             database_url,
             connect_args={"check_same_thread": False},

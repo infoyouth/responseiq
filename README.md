@@ -43,6 +43,26 @@ ResponseIQ is evaluated against the **SWE-bench Verified** dataset — the indus
 
 ## 📸 See It In Action
 
+### 1-line Kubernetes / Docker workflow
+
+```bash
+# Pipe logs straight in — no file, no config, no kubectl plugin to install
+kubectl logs payment-svc-6d9b7c8f4-xkp2q --since=1h \
+  | responseiq --mode fix --target - --explain
+
+# Docker? Same thing:
+docker logs --tail 200 my-api-container \
+  | responseiq --mode fix --target - --explain
+```
+
+ResponseIQ reads from **stdin** when `--target -` is given. It scans the stream,
+generates Trust-Gate-approved remediations, and writes a full `REASONING.md`
+audit trail — before you've finished your coffee.
+
+---
+
+### Interactive demo
+
 > 🎬 **Animated terminal demo:** Run `vhs demo.tape` ([VHS](https://github.com/charmbracelet/vhs) required) to regenerate `demo.gif`.
 
 ![ResponseIQ demo](demo.gif)

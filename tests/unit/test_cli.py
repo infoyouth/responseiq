@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import at module level — avoids module-cache pollution in xdist workers
-from responseiq.cli import _run_demo, _run_init, main
+from responseiq.cli import _run_demo, main
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +55,7 @@ class TestRunDemoWithFixture:
         """Fixture using 'msg' key (not 'message') does not crash."""
         fixture_dir = tmp_path / "fixtures"
         fixture_dir.mkdir()
-        (fixture_dir / "fixture_high.json").write_text(
-            json.dumps([{"msg": "ALTERNATIVE_KEY_MSG"}])
-        )
+        (fixture_dir / "fixture_high.json").write_text(json.dumps([{"msg": "ALTERNATIVE_KEY_MSG"}]))
 
         with (
             patch("responseiq.cli._find_project_root", return_value=tmp_path),
@@ -94,7 +92,7 @@ class TestRunDemoFallback:
         assert "kubectl logs" in out
 
     def test_subprocess_called_with_log_level_warning(self, tmp_path):
-        """Both subprocess calls must include --log-level WARNING to suppress log noise."""
+        """Both subprocess calls must include --log-level ERROR to suppress log noise in demo."""
         with (
             patch("responseiq.cli._find_project_root", return_value=tmp_path),
             patch("subprocess.run") as mock_run,
@@ -105,7 +103,7 @@ class TestRunDemoFallback:
         for call in mock_run.call_args_list:
             args = call[0][0]
             assert "--log-level" in args
-            assert "WARNING" in args
+            assert "ERROR" in args
 
 
 # ---------------------------------------------------------------------------
@@ -145,4 +143,3 @@ class TestMainSubcommandDispatch:
             except SystemExit:
                 pass
         mock_demo.assert_not_called()
-

@@ -140,7 +140,7 @@ def _run_init() -> None:
         print(_dim("  Running a quick smoke test against samples/crash.log …"))
         import subprocess
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [sys.executable, "-m", "responseiq.cli", "--mode", "scan", "--target", str(samples_log)],
             capture_output=True,
             text=True,
@@ -229,9 +229,10 @@ def _run_demo() -> None:
     print(_bold("  Step 1 — Scan the log"))
     print(_cyan(f"  $ responseiq --mode scan --target {tmp_path}"))
     print()
-    subprocess.run(
-        [sys.executable, "-m", "responseiq.cli", "--mode", "scan", "--target", tmp_path, "--log-level", "WARNING"],
+    subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "responseiq.cli", "--mode", "scan", "--target", tmp_path, "--log-level", "ERROR"],
         check=False,
+        env={**os.environ, "RESPONSEIQ_LOG_LEVEL": "ERROR"},
     )
 
     print()
@@ -240,7 +241,7 @@ def _run_demo() -> None:
     print(_bold("  Step 2 — Fix with explainability  (dry-run — no files touched)"))
     print(_cyan(f"  $ responseiq --mode fix --target {tmp_path} --explain"))
     print()
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [
             sys.executable,
             "-m",
@@ -251,9 +252,10 @@ def _run_demo() -> None:
             tmp_path,
             "--explain",
             "--log-level",
-            "WARNING",
+            "ERROR",
         ],
         check=False,
+        env={**os.environ, "RESPONSEIQ_LOG_LEVEL": "ERROR"},
     )
 
     print()
@@ -338,6 +340,11 @@ def main():
         level=getattr(logging, log_level),
         format="%(asctime)s | %(levelname)s | %(message)s",
     )
+    # Reconfigure loguru to match — it was set to DEBUG at import time.
+    os.environ["RESPONSEIQ_LOG_LEVEL"] = log_level
+    from responseiq.utils.logger import setup_logging as _setup_logging
+
+    _setup_logging(level=log_level)
 
     # Map Action inputs to CLI args
     mode = args.action if args.action else args.mode
