@@ -1,0 +1,391 @@
+{
+  "summary": {
+    "total": 20,
+    "passed": 4,
+    "trust_blocked": 1,
+    "errors": 0,
+    "avg_latency_s": 29.07,
+    "avg_confidence": 0.57,
+    "pass_at_1": 0.2,
+    "by_repo": {
+      "example/recommendation-engine": {
+        "total": 1,
+        "passed": 1
+      },
+      "example/event-bus": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/ingestion-worker": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/billing-service": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/analytics-export": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/notification-svc": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/config-loader": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/file-processor": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/order-service": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/cache-layer": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/ml-serving": {
+        "total": 1,
+        "passed": 1
+      },
+      "example/job-scheduler": {
+        "total": 1,
+        "passed": 1
+      },
+      "example/metrics-svc": {
+        "total": 1,
+        "passed": 1
+      },
+      "example/stream-processor": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/api-gateway": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/auth-service": {
+        "total": 2,
+        "passed": 0
+      },
+      "example/session-service": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/tree-parser": {
+        "total": 1,
+        "passed": 0
+      },
+      "example/data-pipeline": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "results": [
+    {
+      "instance_id": "fixture-006",
+      "repo": "example/recommendation-engine",
+      "problem_statement": "IndexError [recommender.ranker] list index out of range\n  File 'recommender/ranker.py', line 17, in top_k\n    return ranked_items[0]\nIndexError: list index out of range\nHappens for new users with no i",
+      "ground_truth_patch": "--- a/recommender/ranker.py\n+++ b/recommender/ranker.py\n@@ -14,7 +14,7 @@ def top_k(user_id, k=5):\n     ranked_items = score_and_rank(user_id)\n-    return ranked_items[0]\n+    return ranked_items[0] if ranked_items else []\n",
+      "generated_patch": "Modify the top_k function in recommender/ranker.py to handle the case where ranked_items is an empty list, e.g., by returning a default value or raising a custom exception.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 34.471,
+      "pass_heuristic": true,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-020",
+      "repo": "example/event-bus",
+      "problem_statement": "RuntimeError [event.bus] Dictionary changed size during iteration\n  File 'event/bus.py', line 74, in broadcast\n    for handler_id, fn in self._handlers.items():\nRuntimeError: dictionary changed size d",
+      "ground_truth_patch": "--- a/event/bus.py\n+++ b/event/bus.py\n@@ -71,7 +71,7 @@ def broadcast(self, event):\n-    for handler_id, fn in self._handlers.items():\n+    for handler_id, fn in list(self._handlers.items()):  # snapshot\n",
+      "generated_patch": "Use a thread-safe data structure, such as a `collections.OrderedDict`, to store handlers. Alternatively, use a lock to synchronize access to the `_handlers` dictionary when modifying it.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 35.774,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-015",
+      "repo": "example/ingestion-worker",
+      "problem_statement": "AssertionError [ingestion.validator] assert len(batch) > 0\n  File 'ingestion/validator.py', line 19, in validate_batch\n    assert len(batch) > 0, 'Empty batch not allowed'\nAssertionError: Empty batch ",
+      "ground_truth_patch": "--- a/ingestion/validator.py\n+++ b/ingestion/validator.py\n@@ -16,7 +16,8 @@ def validate_batch(batch):\n-    assert len(batch) > 0, 'Empty batch not allowed'\n+    if not batch:\n+        raise ValueError('Empty batch not allowed')\n",
+      "generated_patch": "Verify that the batch being ingested is not empty and contains valid data. If the issue persists, investigate the source of the empty batch and take corrective action.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 35.525,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-005",
+      "repo": "example/billing-service",
+      "problem_statement": "AttributeError [billing.invoice] 'NoneType' object has no attribute 'stripe_id'\n  File 'billing/invoice.py', line 88, in charge_customer\n    token = customer.stripe_id\nAttributeError: 'NoneType' objec",
+      "ground_truth_patch": "--- a/billing/invoice.py\n+++ b/billing/invoice.py\n@@ -85,7 +85,8 @@ def charge_customer(customer_id, amount):\n     customer = db.get_customer(customer_id)\n+    if customer is None:\n+        raise CustomerNotFoundError(customer_id)\n     token = customer.stripe_id\n",
+      "generated_patch": "Review the customer lookup process to ensure that all accounts are properly checked for deletion status before attempting to access their stripe_id. Consider adding additional error handling or logging to identify and resolve this issue.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 30.081,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-010",
+      "repo": "example/analytics-export",
+      "problem_statement": "OverflowError [export.serializer] Python int too large to convert to C long\n  File 'export/serializer.py', line 44, in to_csv_row\n    row['clicks'] = ctypes.c_long(event['clicks']).value\nOverflowError",
+      "ground_truth_patch": "--- a/export/serializer.py\n+++ b/export/serializer.py\n@@ -41,7 +41,7 @@ def to_csv_row(event):\n-    row['clicks'] = ctypes.c_long(event['clicks']).value\n+    row['clicks'] = int(event['clicks'])  # int is unbounded in Python\n",
+      "generated_patch": "Use a library that supports arbitrary-precision integers, such as `gmpy2`, or consider using a different data type for the 'clicks' field that can handle larger values.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": false,
+      "confidence": 0.0,
+      "impact_score": 61.6,
+      "latency_s": 31.084,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-014",
+      "repo": "example/notification-svc",
+      "problem_statement": "UnicodeDecodeError [notifications.email] 'utf-8' codec can't decode byte 0xff\n  File 'notifications/email.py', line 35, in render_template\n    content = template_file.read()\nUnicodeDecodeError: 'utf-8",
+      "ground_truth_patch": "--- a/notifications/email.py\n+++ b/notifications/email.py\n@@ -32,7 +32,7 @@ def render_template(path):\n-    content = template_file.read()\n+    content = template_file.read()  # add encoding param below\n     # fix: open with errors='replace' and detect encoding\n-    with open(path) as f:\n+    with open(path, encoding='utf-8', errors='replace') as f:\n",
+      "generated_patch": "Update the email templates to use UTF-8 encoding or specify the correct encoding when reading the template files.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 31.516,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-007",
+      "repo": "example/config-loader",
+      "problem_statement": "ValueError [config.loader] invalid literal for int() with base 10: ''\n  File 'config/loader.py', line 22, in load_port\n    port = int(os.environ.get('PORT', ''))\nValueError: invalid literal for int() ",
+      "ground_truth_patch": "--- a/config/loader.py\n+++ b/config/loader.py\n@@ -19,7 +19,7 @@ def load_port():\n-    port = int(os.environ.get('PORT', ''))\n+    port = int(os.environ.get('PORT', '8080'))\n",
+      "generated_patch": "Set the PORT environment variable to a valid integer value or use a default port number in the Kubernetes manifests.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 39.6,
+      "latency_s": 22.651,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-016",
+      "repo": "example/file-processor",
+      "problem_statement": "FileNotFoundError [file.processor] No such file or directory: '/tmp/upload/job-99.csv'\n  File 'processor/worker.py', line 44, in process_upload\n    with open(job_path) as f:\nFileNotFoundError: [Errno ",
+      "ground_truth_patch": "--- a/processor/worker.py\n+++ b/processor/worker.py\n@@ -41,6 +41,8 @@ def process_upload(job_path):\n+    if not os.path.exists(job_path):\n+        raise FileNotReadyError(f'{job_path} not yet available')\n     with open(job_path) as f:\n",
+      "generated_patch": "Implement asynchronous processing with retries or use a queue-based system to ensure that the worker waits for the S3 download to complete before accessing the file.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 28.205,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-019",
+      "repo": "example/order-service",
+      "problem_statement": "PermissionError [order.exporter] [Errno 13] Permission denied: '/var/data/orders.csv'\n  File 'order/exporter.py', line 61, in export_daily\n    with open(OUTPUT_PATH, 'w') as f:\nPermissionError: [Errno",
+      "ground_truth_patch": "--- a/order/exporter.py\n+++ b/order/exporter.py\n@@ -58,7 +58,7 @@ OUTPUT_PATH = '/var/data/orders.csv'\n-OUTPUT_PATH = '/var/data/orders.csv'\n+OUTPUT_PATH = os.environ.get('EXPORT_PATH', '/tmp/orders.csv')\n",
+      "generated_patch": "Update the Helm chart to revert the `securityContext.readOnlyRootFilesystem` setting to false or provide an alternative solution for writing to the file, such as using a different filesystem or mounting a volume with read-write permissions.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 28.28,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-013",
+      "repo": "example/cache-layer",
+      "problem_statement": "ERROR [cache.lru] KeyError in LRU cache eviction\n  File 'cache/lru.py', line 78, in evict\n    del self._store[self._order[0]]\nKeyError: 'stale-key-12345'\nConcurrent eviction and expiry both delete the",
+      "ground_truth_patch": "--- a/cache/lru.py\n+++ b/cache/lru.py\n@@ -75,7 +75,7 @@ def evict(self):\n-    del self._store[self._order[0]]\n+    self._store.pop(self._order[0], None)  # idempotent\n",
+      "generated_patch": "Implement a locking mechanism or use a thread-safe data structure to prevent concurrent access to the cache, ensuring that only one operation can delete a key at a time.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 36.831,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-018",
+      "repo": "example/ml-serving",
+      "problem_statement": "ValueError [ml.serving] Input contains NaN; sklearn estimator does not accept NaN\n  File 'ml/serving/predictor.py', line 33, in predict\n    return model.predict(X)\nValueError: Input X contains NaN\nFea",
+      "ground_truth_patch": "--- a/ml/serving/predictor.py\n+++ b/ml/serving/predictor.py\n@@ -30,6 +30,7 @@ def predict(X):\n+    X = X.fillna(X.median())  # impute before predict\n     return model.predict(X)\n",
+      "generated_patch": "Impute missing values in the 'age' column using a suitable method (e.g., mean or median) and update the feature pipeline to include this step.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 70.4,
+      "latency_s": 36.043,
+      "pass_heuristic": true,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-011",
+      "repo": "example/job-scheduler",
+      "problem_statement": "UnboundLocalError [scheduler.runner] local variable 'result' referenced before assignment\n  File 'scheduler/runner.py', line 29, in run_job\n    return result\nUnboundLocalError: local variable 'result'",
+      "ground_truth_patch": "--- a/scheduler/runner.py\n+++ b/scheduler/runner.py\n@@ -22,6 +22,7 @@ def run_job(job_fn, *args):\n+    result = None\n     try:\n         result = job_fn(*args)\n",
+      "generated_patch": "In the scheduler/runner.py file, ensure that 'result' is assigned a value before it's referenced in the return statement. This can be achieved by adding a default or initial value for 'result'. For example:\n\n    def run_job(self):\n        try:\n            # code here\n            result = None  # Initialize result with a default value\n            if some_condition:\n                result = calculated_value\n            return result\n        except Exception as e:\n            # handle exception\n   ",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 36.204,
+      "pass_heuristic": true,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-002",
+      "repo": "example/metrics-svc",
+      "problem_statement": "CRITICAL [metrics.worker] ZeroDivisionError during aggregation\n  File 'metrics/aggregator.py', line 57, in aggregate\n    avg = total / count\nZeroDivisionError: division by zero\nOccurs when reset_count",
+      "ground_truth_patch": "--- a/metrics/aggregator.py\n+++ b/metrics/aggregator.py\n@@ -54,7 +54,7 @@ def aggregate(log):\n-    avg = total / count\n+    avg = total / count if count else 0.0\n",
+      "generated_patch": "Implement synchronization mechanisms (e.g., locks or semaphores) to ensure that `reset_counters()` completes before `aggregate()` starts on pod restart.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 79.2,
+      "latency_s": 28.745,
+      "pass_heuristic": true,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-012",
+      "repo": "example/stream-processor",
+      "problem_statement": "StopIteration [stream.processor] StopIteration raised inside generator\n  File 'stream/processor.py', line 55, in process_events\n    value = next(self._cursor)\nRuntimeError: generator raised StopIterat",
+      "ground_truth_patch": "--- a/stream/processor.py\n+++ b/stream/processor.py\n@@ -52,7 +52,10 @@ def process_events(self):\n-    value = next(self._cursor)\n+    try:\n+        value = next(self._cursor)\n+    except StopIteration:\n+        return\n",
+      "generated_patch": "Review the code in `stream/processor.py`, specifically line 55, to ensure that the `_cursor` is properly initialized and iterated over. Ensure that the generator is designed to handle all possible states and edge cases. Consider adding error handling or logging statements to diagnose the issue.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 28.041,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-003",
+      "repo": "example/api-gateway",
+      "problem_statement": "ERROR [api.gateway] RuntimeError: Cannot allocate memory\n  File 'gateway/service.py', line 52, in handle_request\n    _request_log.append({'ts': time.time(), 'uid': uid})\nRuntimeError: Cannot allocate ",
+      "ground_truth_patch": "--- a/gateway/service.py\n+++ b/gateway/service.py\n@@ -49,6 +49,8 @@ def handle_request(uid, payload):\n     _request_log.append({'ts': time.time(), 'uid': uid})\n+    if len(_request_log) > 10_000:\n+        del _request_log[:-5_000]  # keep newest 5 000\n",
+      "generated_patch": "Add a max-size eviction policy to the _request_log to prevent it from growing indefinitely.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 70.4,
+      "latency_s": 27.904,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-017",
+      "repo": "example/auth-service",
+      "problem_statement": "TimeoutError [auth.token] Token verification timed out after 30s\n  File 'auth/token.py', line 88, in verify\n    resp = requests.get(JWKS_URI)\nrequests.exceptions.Timeout: HTTPSConnectionPool: Read tim",
+      "ground_truth_patch": "--- a/auth/token.py\n+++ b/auth/token.py\n@@ -85,7 +85,7 @@ def verify(token):\n-    resp = requests.get(JWKS_URI)\n+    resp = requests.get(JWKS_URI, timeout=5)\n",
+      "generated_patch": "Implement a retry mechanism with exponential backoff for the JWKS endpoint requests or consider using a more robust DNS caching solution.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 25.676,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-008",
+      "repo": "example/session-service",
+      "problem_statement": "ConnectionError [session.store] Max retries exceeded with url /healthz\n  File 'session/store.py', line 66, in connect\n    self._client.get(self.base_url + '/healthz')\nConnectionError: ('Connection abo",
+      "ground_truth_patch": "--- a/session/store.py\n+++ b/session/store.py\n@@ -63,7 +63,9 @@ def connect(self):\n-    self._client.get(self.base_url + '/healthz')\n+    for attempt in range(3):\n+        try:\n+            self._client.get(self.base_url + '/healthz', timeout=2)\n+            break\n+        except ConnectionError:\n+            if attempt == 2:\n+                raise\n",
+      "generated_patch": "Restart the Redis server and ensure it is running before attempting to reconnect.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 79.2,
+      "latency_s": 25.479,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-009",
+      "repo": "example/tree-parser",
+      "problem_statement": "RecursionError [parser.ast] maximum recursion depth exceeded\n  File 'parser/ast.py', line 38, in parse_node\n    return parse_node(node.children[0])\nRecursionError: maximum recursion depth exceeded\nDee",
+      "ground_truth_patch": "--- a/parser/ast.py\n+++ b/parser/ast.py\n@@ -35,7 +35,9 @@ def parse_node(node, depth=0):\n+    if depth > 500:\n+        raise ParseDepthError(f'AST depth {depth} exceeds limit')\n     return parse_node(node.children[0])\n+    # updated call\n+    return parse_node(node.children[0], depth + 1)\n",
+      "generated_patch": "Minify or decompile the JavaScript code before parsing it. Alternatively, consider using a more robust parser that can handle deeply nested ASTs.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 25.258,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-001",
+      "repo": "example/auth-service",
+      "problem_statement": "ERROR [auth.service] Traceback (most recent call last):\n  File 'auth/core.py', line 42, in process_login\n    result = user['email'].lower()\nKeyError: 'email'\nOAuth users authenticated via Google SSO h",
+      "ground_truth_patch": "--- a/auth/core.py\n+++ b/auth/core.py\n@@ -39,7 +39,7 @@ def process_login(user, payload):\n-    result = user['email'].lower()\n+    result = user.get('email', '').lower()\n",
+      "generated_patch": "Check if the user object has an 'email' field before trying to access it. For OAuth users, consider using the provided username or ID instead.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 39.6,
+      "latency_s": 13.993,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    },
+    {
+      "instance_id": "fixture-004",
+      "repo": "example/data-pipeline",
+      "problem_statement": "TypeError [pipeline.transform] unsupported operand type(s) for +: 'int' and 'NoneType'\n  File 'pipeline/transform.py', line 31, in enrich_record\n    record['score'] = record['base_score'] + record['bo",
+      "ground_truth_patch": "--- a/pipeline/transform.py\n+++ b/pipeline/transform.py\n@@ -28,7 +28,7 @@ def enrich_record(record):\n-    record['score'] = record['base_score'] + record['bonus']\n+    record['score'] = record['base_score'] + (record['bonus'] or 0)\n",
+      "generated_patch": "Update the pipeline to handle legacy records by setting the 'bonus' value to a default or null value, or by skipping these records during the transformation process.",
+      "generated_rationale": "AI-generated remediation based on incident analysis",
+      "trust_gate_allowed": true,
+      "confidence": 0.6,
+      "impact_score": 61.6,
+      "latency_s": 19.691,
+      "pass_heuristic": false,
+      "error": null,
+      "llm_model": "llama3.2"
+    }
+  ]
+}
