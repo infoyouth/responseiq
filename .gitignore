@@ -238,3 +238,7 @@ sandbox/
 
 # Local-only planning docs (never push to remote)
 docs/IMPROVEMENT_BACKLOG.md
+docs/ROADMAP_TODO.md
+docs/DECISIONS.md
+docs/GROWTH_PLAYBOOK.md
+docs/SECURITY_TRUST.md
