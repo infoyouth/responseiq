@@ -86,6 +86,7 @@ temporal = ["temporalio>=1.0.0"]
 pgvector = ["pgvector>=0.3.0"]
 ner = ["spacy>=3.7.0"]
 reports = ["fpdf2>=2.7.0"]
+eval = ["datasets>=2.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/responseiq"]

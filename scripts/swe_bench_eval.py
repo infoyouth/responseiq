@@ -93,24 +93,43 @@ class EvalSummary:
 def load_swe_bench(n: int, repo_filter: Optional[str], seed: int) -> list[dict[str, Any]]:
     """Load SWE-bench Verified from HuggingFace datasets.
 
-    Falls back to a tiny synthetic fixture if the ``datasets`` package is not
-    installed or network is unavailable — so the harness always runs in CI.
+    Uses streaming mode to pull only the records needed — avoids downloading
+    the full 2 MB parquet file on slow / unauthenticated connections.
+    Falls back to 20 built-in synthetic fixtures when the network is unavailable.
     """
+    samples: list[dict[str, Any]] = []
     try:
         from datasets import load_dataset  # type: ignore[import-untyped]
 
-        ds = load_dataset("princeton-nlp/SWE-bench_Verified", split="test")
-        samples: list[dict[str, Any]] = list(ds)  # type: ignore[arg-type]
+        # Streaming=True: records are fetched lazily — no full-file download.
+        # We overfetch by 5× to allow shuffle + repo filtering, capped at 2000.
+        fetch_n = min(n * 5, 2000)
+        ds = load_dataset(
+            "princeton-nlp/SWE-bench_Verified",
+            split="test",
+            streaming=True,
+        )
+        raw: list[dict[str, Any]] = []
+        for record in ds:  # type: ignore[union-attr]
+            raw.append(dict(record))  # type: ignore[arg-type]
+            if len(raw) >= fetch_n:
+                break
+        if raw:
+            samples = raw
+            print(f"  Loaded {len(raw)} samples via streaming.")
+        else:
+            raise RuntimeError("Streaming returned 0 records.")
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠  Could not load SWE-bench from HuggingFace: {exc}")
         print("     Falling back to built-in synthetic fixtures.\n")
         samples = _builtin_fixtures()
 
     if repo_filter:
-        samples = [s for s in samples if repo_filter.lower() in s.get("repo", "").lower()]
-        if not samples:
+        filtered = [s for s in samples if repo_filter.lower() in s.get("repo", "").lower()]
+        if filtered:
+            samples = filtered
+        else:
             print(f"  ⚠  No samples match repo filter '{repo_filter}'. Using all samples.")
-            samples = _builtin_fixtures()
 
     rng = random.Random(seed)
     rng.shuffle(samples)
@@ -118,22 +137,26 @@ def load_swe_bench(n: int, repo_filter: Optional[str], seed: int) -> list[dict[s
 
 
 def _builtin_fixtures() -> list[dict[str, Any]]:
-    """Minimal synthetic SWE-bench-compatible fixtures for offline / CI use."""
+    """20 diverse synthetic SWE-bench-compatible fixtures for offline / CI use.
+
+    Covers: KeyError, ZeroDivisionError, TypeError, AttributeError, IndexError,
+    ValueError, ConnectionError, RecursionError, OverflowError, UnboundLocalError,
+    StopIteration, MemoryError, and common off-by-one / guard patterns.
+    """
     return [
         {
             "instance_id": "fixture-001",
-            "repo": "example/myapp",
+            "repo": "example/auth-service",
             "problem_statement": (
-                "ERROR [app.service] Traceback (most recent call last):\n"
-                "  File 'myapp/core.py', line 42, in process\n"
+                "ERROR [auth.service] Traceback (most recent call last):\n"
+                "  File 'auth/core.py', line 42, in process_login\n"
                 "    result = user['email'].lower()\n"
                 "KeyError: 'email'\n"
-                "Fix: guard the dict access for OAuth users that have no email field."
+                "OAuth users authenticated via Google SSO have no 'email' field."
             ),
             "patch": (
-                "--- a/myapp/core.py\n"
-                "+++ b/myapp/core.py\n"
-                "@@ -39,7 +39,7 @@ def process(user, payload):\n"
+                "--- a/auth/core.py\n+++ b/auth/core.py\n"
+                "@@ -39,7 +39,7 @@ def process_login(user, payload):\n"
                 "-    result = user['email'].lower()\n"
                 "+    result = user.get('email', '').lower()\n"
             ),
@@ -142,44 +165,385 @@ def _builtin_fixtures() -> list[dict[str, Any]]:
         },
         {
             "instance_id": "fixture-002",
-            "repo": "example/myapp",
+            "repo": "example/metrics-svc",
             "problem_statement": (
-                "CRITICAL [app.worker] ZeroDivisionError during metrics aggregation\n"
-                "Traceback (most recent call last):\n"
-                "  File 'myapp/metrics.py', line 57, in aggregate\n"
+                "CRITICAL [metrics.worker] ZeroDivisionError during aggregation\n"
+                "  File 'metrics/aggregator.py', line 57, in aggregate\n"
                 "    avg = total / count\n"
                 "ZeroDivisionError: division by zero\n"
-                "Happens when reset_counters() races with aggregate()."
+                "Occurs when reset_counters() races with aggregate() on pod restart."
             ),
             "patch": (
-                "--- a/myapp/metrics.py\n"
-                "+++ b/myapp/metrics.py\n"
+                "--- a/metrics/aggregator.py\n+++ b/metrics/aggregator.py\n"
                 "@@ -54,7 +54,7 @@ def aggregate(log):\n"
                 "-    avg = total / count\n"
                 "+    avg = total / count if count else 0.0\n"
             ),
-            "FAIL_TO_PASS": json.dumps(["tests/test_metrics.py::test_zero_count"]),
+            "FAIL_TO_PASS": json.dumps(["tests/test_aggregator.py::test_zero_count"]),
             "PASS_TO_PASS": json.dumps([]),
         },
         {
             "instance_id": "fixture-003",
-            "repo": "example/myapp",
+            "repo": "example/api-gateway",
             "problem_statement": (
-                "ERROR [app.worker] RuntimeError: Cannot allocate memory\n"
-                "  File 'myapp/service.py', line 52, in process_request\n"
-                "_request_log.append({'ts': time.time(), 'user': uid, 'payload_len': n})\n"
-                "RuntimeError: Cannot allocate memory — list contains 2147483 entries.\n"
-                "Root cause: _request_log grows unbounded. Add an eviction policy."
+                "ERROR [api.gateway] RuntimeError: Cannot allocate memory\n"
+                "  File 'gateway/service.py', line 52, in handle_request\n"
+                "    _request_log.append({'ts': time.time(), 'uid': uid})\n"
+                "RuntimeError: Cannot allocate memory — list has 2147483 entries.\n"
+                "_request_log grows unbounded; add a max-size eviction policy."
             ),
             "patch": (
-                "--- a/myapp/service.py\n"
-                "+++ b/myapp/service.py\n"
-                "@@ -49,6 +49,7 @@ def process_request(user, payload):\n"
-                "     _request_log.append({'ts': time.time(), 'user': uid, 'payload_len': len(payload)})\n"
+                "--- a/gateway/service.py\n+++ b/gateway/service.py\n"
+                "@@ -49,6 +49,8 @@ def handle_request(uid, payload):\n"
+                "     _request_log.append({'ts': time.time(), 'uid': uid})\n"
                 "+    if len(_request_log) > 10_000:\n"
-                "+        del _request_log[:-5_000]  # evict oldest 50 %\n"
+                "+        del _request_log[:-5_000]  # keep newest 5 000\n"
             ),
-            "FAIL_TO_PASS": json.dumps(["tests/test_service.py::test_memory_eviction"]),
+            "FAIL_TO_PASS": json.dumps(["tests/test_service.py::test_log_eviction"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-004",
+            "repo": "example/data-pipeline",
+            "problem_statement": (
+                "TypeError [pipeline.transform] unsupported operand type(s) for +: 'int' and 'NoneType'\n"
+                "  File 'pipeline/transform.py', line 31, in enrich_record\n"
+                "    record['score'] = record['base_score'] + record['bonus']\n"
+                "TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'\n"
+                "'bonus' is NULL for legacy records ingested before schema migration."
+            ),
+            "patch": (
+                "--- a/pipeline/transform.py\n+++ b/pipeline/transform.py\n"
+                "@@ -28,7 +28,7 @@ def enrich_record(record):\n"
+                "-    record['score'] = record['base_score'] + record['bonus']\n"
+                "+    record['score'] = record['base_score'] + (record['bonus'] or 0)\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_transform.py::test_null_bonus"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-005",
+            "repo": "example/billing-service",
+            "problem_statement": (
+                "AttributeError [billing.invoice] 'NoneType' object has no attribute 'stripe_id'\n"
+                "  File 'billing/invoice.py', line 88, in charge_customer\n"
+                "    token = customer.stripe_id\n"
+                "AttributeError: 'NoneType' object has no attribute 'stripe_id'\n"
+                "Customer lookup returns None when trial account was deleted mid-session."
+            ),
+            "patch": (
+                "--- a/billing/invoice.py\n+++ b/billing/invoice.py\n"
+                "@@ -85,7 +85,8 @@ def charge_customer(customer_id, amount):\n"
+                "     customer = db.get_customer(customer_id)\n"
+                "+    if customer is None:\n"
+                "+        raise CustomerNotFoundError(customer_id)\n"
+                "     token = customer.stripe_id\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_invoice.py::test_deleted_customer"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-006",
+            "repo": "example/recommendation-engine",
+            "problem_statement": (
+                "IndexError [recommender.ranker] list index out of range\n"
+                "  File 'recommender/ranker.py', line 17, in top_k\n"
+                "    return ranked_items[0]\n"
+                "IndexError: list index out of range\n"
+                "Happens for new users with no interaction history (cold-start)."
+            ),
+            "patch": (
+                "--- a/recommender/ranker.py\n+++ b/recommender/ranker.py\n"
+                "@@ -14,7 +14,7 @@ def top_k(user_id, k=5):\n"
+                "     ranked_items = score_and_rank(user_id)\n"
+                "-    return ranked_items[0]\n"
+                "+    return ranked_items[0] if ranked_items else []\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_ranker.py::test_cold_start_user"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-007",
+            "repo": "example/config-loader",
+            "problem_statement": (
+                "ValueError [config.loader] invalid literal for int() with base 10: ''\n"
+                "  File 'config/loader.py', line 22, in load_port\n"
+                "    port = int(os.environ.get('PORT', ''))\n"
+                "ValueError: invalid literal for int() with base 10: ''\n"
+                "PORT env var is unset in Kubernetes manifests, defaults to empty string."
+            ),
+            "patch": (
+                "--- a/config/loader.py\n+++ b/config/loader.py\n"
+                "@@ -19,7 +19,7 @@ def load_port():\n"
+                "-    port = int(os.environ.get('PORT', ''))\n"
+                "+    port = int(os.environ.get('PORT', '8080'))\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_loader.py::test_missing_port_env"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-008",
+            "repo": "example/session-service",
+            "problem_statement": (
+                "ConnectionError [session.store] Max retries exceeded with url /healthz\n"
+                "  File 'session/store.py', line 66, in connect\n"
+                "    self._client.get(self.base_url + '/healthz')\n"
+                "ConnectionError: ('Connection aborted.', RemoteDisconnected)\n"
+                "connect() has no retry logic; Redis restarts cause cascading failures."
+            ),
+            "patch": (
+                "--- a/session/store.py\n+++ b/session/store.py\n"
+                "@@ -63,7 +63,9 @@ def connect(self):\n"
+                "-    self._client.get(self.base_url + '/healthz')\n"
+                "+    for attempt in range(3):\n"
+                "+        try:\n"
+                "+            self._client.get(self.base_url + '/healthz', timeout=2)\n"
+                "+            break\n"
+                "+        except ConnectionError:\n"
+                "+            if attempt == 2:\n"
+                "+                raise\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_store.py::test_connect_retry"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-009",
+            "repo": "example/tree-parser",
+            "problem_statement": (
+                "RecursionError [parser.ast] maximum recursion depth exceeded\n"
+                "  File 'parser/ast.py', line 38, in parse_node\n"
+                "    return parse_node(node.children[0])\n"
+                "RecursionError: maximum recursion depth exceeded\n"
+                "Deeply nested ASTs from minified JS exceed Python default limit."
+            ),
+            "patch": (
+                "--- a/parser/ast.py\n+++ b/parser/ast.py\n"
+                "@@ -35,7 +35,9 @@ def parse_node(node, depth=0):\n"
+                "+    if depth > 500:\n"
+                "+        raise ParseDepthError(f'AST depth {depth} exceeds limit')\n"
+                "     return parse_node(node.children[0])\n"
+                "+    # updated call\n"
+                "+    return parse_node(node.children[0], depth + 1)\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_ast.py::test_deep_ast"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-010",
+            "repo": "example/analytics-export",
+            "problem_statement": (
+                "OverflowError [export.serializer] Python int too large to convert to C long\n"
+                "  File 'export/serializer.py', line 44, in to_csv_row\n"
+                "    row['clicks'] = ctypes.c_long(event['clicks']).value\n"
+                "OverflowError: Python int too large to convert to C long\n"
+                "click counts for viral posts exceed 2^63 on some campaigns."
+            ),
+            "patch": (
+                "--- a/export/serializer.py\n+++ b/export/serializer.py\n"
+                "@@ -41,7 +41,7 @@ def to_csv_row(event):\n"
+                "-    row['clicks'] = ctypes.c_long(event['clicks']).value\n"
+                "+    row['clicks'] = int(event['clicks'])  # int is unbounded in Python\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_serializer.py::test_large_click_count"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-011",
+            "repo": "example/job-scheduler",
+            "problem_statement": (
+                "UnboundLocalError [scheduler.runner] local variable 'result' referenced before assignment\n"
+                "  File 'scheduler/runner.py', line 29, in run_job\n"
+                "    return result\n"
+                "UnboundLocalError: local variable 'result' referenced before assignment\n"
+                "If the job raises before result is set, the except block returns uninitialized variable."
+            ),
+            "patch": (
+                "--- a/scheduler/runner.py\n+++ b/scheduler/runner.py\n"
+                "@@ -22,6 +22,7 @@ def run_job(job_fn, *args):\n"
+                "+    result = None\n"
+                "     try:\n"
+                "         result = job_fn(*args)\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_runner.py::test_job_raises_before_result"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-012",
+            "repo": "example/stream-processor",
+            "problem_statement": (
+                "StopIteration [stream.processor] StopIteration raised inside generator\n"
+                "  File 'stream/processor.py', line 55, in process_events\n"
+                "    value = next(self._cursor)\n"
+                "RuntimeError: generator raised StopIteration\n"
+                "Python 3.7+ (PEP 479) converts StopIteration inside a generator to RuntimeError."
+            ),
+            "patch": (
+                "--- a/stream/processor.py\n+++ b/stream/processor.py\n"
+                "@@ -52,7 +52,10 @@ def process_events(self):\n"
+                "-    value = next(self._cursor)\n"
+                "+    try:\n"
+                "+        value = next(self._cursor)\n"
+                "+    except StopIteration:\n"
+                "+        return\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_processor.py::test_stop_iteration_in_generator"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-013",
+            "repo": "example/cache-layer",
+            "problem_statement": (
+                "ERROR [cache.lru] KeyError in LRU cache eviction\n"
+                "  File 'cache/lru.py', line 78, in evict\n"
+                "    del self._store[self._order[0]]\n"
+                "KeyError: 'stale-key-12345'\n"
+                "Concurrent eviction and expiry both delete the same key; second delete hits KeyError."
+            ),
+            "patch": (
+                "--- a/cache/lru.py\n+++ b/cache/lru.py\n"
+                "@@ -75,7 +75,7 @@ def evict(self):\n"
+                "-    del self._store[self._order[0]]\n"
+                "+    self._store.pop(self._order[0], None)  # idempotent\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_lru.py::test_concurrent_eviction"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-014",
+            "repo": "example/notification-svc",
+            "problem_statement": (
+                "UnicodeDecodeError [notifications.email] 'utf-8' codec can't decode byte 0xff\n"
+                "  File 'notifications/email.py', line 35, in render_template\n"
+                "    content = template_file.read()\n"
+                "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0\n"
+                "Email templates uploaded via the CMS admin panel use latin-1 encoding."
+            ),
+            "patch": (
+                "--- a/notifications/email.py\n+++ b/notifications/email.py\n"
+                "@@ -32,7 +32,7 @@ def render_template(path):\n"
+                "-    content = template_file.read()\n"
+                "+    content = template_file.read()  # add encoding param below\n"
+                "     # fix: open with errors='replace' and detect encoding\n"
+                "-    with open(path) as f:\n"
+                "+    with open(path, encoding='utf-8', errors='replace') as f:\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_email.py::test_latin1_template"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-015",
+            "repo": "example/ingestion-worker",
+            "problem_statement": (
+                "AssertionError [ingestion.validator] assert len(batch) > 0\n"
+                "  File 'ingestion/validator.py', line 19, in validate_batch\n"
+                "    assert len(batch) > 0, 'Empty batch not allowed'\n"
+                "AssertionError: Empty batch not allowed\n"
+                "assert is stripped in -O mode; validation silently passes, corrupting downstream tables."
+            ),
+            "patch": (
+                "--- a/ingestion/validator.py\n+++ b/ingestion/validator.py\n"
+                "@@ -16,7 +16,8 @@ def validate_batch(batch):\n"
+                "-    assert len(batch) > 0, 'Empty batch not allowed'\n"
+                "+    if not batch:\n"
+                "+        raise ValueError('Empty batch not allowed')\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_validator.py::test_empty_batch_raises"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-016",
+            "repo": "example/file-processor",
+            "problem_statement": (
+                "FileNotFoundError [file.processor] No such file or directory: '/tmp/upload/job-99.csv'\n"
+                "  File 'processor/worker.py', line 44, in process_upload\n"
+                "    with open(job_path) as f:\n"
+                "FileNotFoundError: [Errno 2] No such file or directory\n"
+                "S3 download is async; worker starts processing before download completes."
+            ),
+            "patch": (
+                "--- a/processor/worker.py\n+++ b/processor/worker.py\n"
+                "@@ -41,6 +41,8 @@ def process_upload(job_path):\n"
+                "+    if not os.path.exists(job_path):\n"
+                "+        raise FileNotReadyError(f'{job_path} not yet available')\n"
+                "     with open(job_path) as f:\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_worker.py::test_file_not_ready"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-017",
+            "repo": "example/auth-service",
+            "problem_statement": (
+                "TimeoutError [auth.token] Token verification timed out after 30s\n"
+                "  File 'auth/token.py', line 88, in verify\n"
+                "    resp = requests.get(JWKS_URI)\n"
+                "requests.exceptions.Timeout: HTTPSConnectionPool: Read timed out\n"
+                "JWKS endpoint has no timeout; one slow DNS lookup blocks all verify() calls."
+            ),
+            "patch": (
+                "--- a/auth/token.py\n+++ b/auth/token.py\n"
+                "@@ -85,7 +85,7 @@ def verify(token):\n"
+                "-    resp = requests.get(JWKS_URI)\n"
+                "+    resp = requests.get(JWKS_URI, timeout=5)\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_token.py::test_jwks_timeout"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-018",
+            "repo": "example/ml-serving",
+            "problem_statement": (
+                "ValueError [ml.serving] Input contains NaN; sklearn estimator does not accept NaN\n"
+                "  File 'ml/serving/predictor.py', line 33, in predict\n"
+                "    return model.predict(X)\n"
+                "ValueError: Input X contains NaN\n"
+                "Feature pipeline omits imputation for the 'age' column when upstream data is missing."
+            ),
+            "patch": (
+                "--- a/ml/serving/predictor.py\n+++ b/ml/serving/predictor.py\n"
+                "@@ -30,6 +30,7 @@ def predict(X):\n"
+                "+    X = X.fillna(X.median())  # impute before predict\n"
+                "     return model.predict(X)\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_predictor.py::test_nan_input"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-019",
+            "repo": "example/order-service",
+            "problem_statement": (
+                "PermissionError [order.exporter] [Errno 13] Permission denied: '/var/data/orders.csv'\n"
+                "  File 'order/exporter.py', line 61, in export_daily\n"
+                "    with open(OUTPUT_PATH, 'w') as f:\n"
+                "PermissionError: [Errno 13] Permission denied\n"
+                "Helm chart changed securityContext.readOnlyRootFilesystem to true in v3 deploy."
+            ),
+            "patch": (
+                "--- a/order/exporter.py\n+++ b/order/exporter.py\n"
+                "@@ -58,7 +58,7 @@ OUTPUT_PATH = '/var/data/orders.csv'\n"
+                "-OUTPUT_PATH = '/var/data/orders.csv'\n"
+                "+OUTPUT_PATH = os.environ.get('EXPORT_PATH', '/tmp/orders.csv')\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_exporter.py::test_writable_export_path"]),
+            "PASS_TO_PASS": json.dumps([]),
+        },
+        {
+            "instance_id": "fixture-020",
+            "repo": "example/event-bus",
+            "problem_statement": (
+                "RuntimeError [event.bus] Dictionary changed size during iteration\n"
+                "  File 'event/bus.py', line 74, in broadcast\n"
+                "    for handler_id, fn in self._handlers.items():\n"
+                "RuntimeError: dictionary changed size during iteration\n"
+                "subscribe() and unsubscribe() are called from other threads during broadcast()."
+            ),
+            "patch": (
+                "--- a/event/bus.py\n+++ b/event/bus.py\n"
+                "@@ -71,7 +71,7 @@ def broadcast(self, event):\n"
+                "-    for handler_id, fn in self._handlers.items():\n"
+                "+    for handler_id, fn in list(self._handlers.items()):  # snapshot\n"
+            ),
+            "FAIL_TO_PASS": json.dumps(["tests/test_bus.py::test_concurrent_unsubscribe"]),
             "PASS_TO_PASS": json.dumps([]),
         },
     ]
