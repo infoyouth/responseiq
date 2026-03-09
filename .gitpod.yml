@@ -1,0 +1,51 @@
+# ResponseIQ — Gitpod Playground
+# Gives any visitor a live terminal with responseiq pre-installed.
+# Click "Open in Gitpod" in the README to launch.
+
+image: gitpod/workspace-python-3.12
+
+tasks:
+  - name: Install ResponseIQ
+    init: |
+      pip install responseiq --quiet
+      echo "✔  responseiq $(responseiq --version) installed"
+    command: |
+      clear
+      echo ""
+      echo "  ╔══════════════════════════════════════════════════════╗"
+      echo "  ║     ResponseIQ — Self-Healing Infrastructure         ║"
+      echo "  ║     AI-native autonomous triage & remediation        ║"
+      echo "  ╚══════════════════════════════════════════════════════╝"
+      echo ""
+      echo "  Try these commands:"
+      echo ""
+      echo "    responseiq demo"
+      echo "      → live scan + fix + REASONING.md in ~10 seconds"
+      echo ""
+      echo "    responseiq --mode shadow --target ./samples/ --shadow-report"
+      echo "      → zero-risk triage report, nothing touched"
+      echo ""
+      echo "    responseiq --mode fix --target ./samples/crash.log --explain"
+      echo "      → full fix with audit trail"
+      echo ""
+      echo "    cat samples/crash.log | responseiq --mode scan --target -"
+      echo "      → stdin pipe mode (works with docker logs / kubectl logs)"
+      echo ""
+      echo "  Run  responseiq init  to configure your LLM and GitHub token."
+      echo ""
+
+  - name: Clone repo (for samples/ and fixtures/)
+    init: |
+      git clone --depth=1 https://github.com/infoyouth/responseiq.git /workspace/responseiq-src
+    command: |
+      echo "Source available at /workspace/responseiq-src"
+
+ports:
+  - port: 8000
+    onOpen: notify
+    description: ResponseIQ API server (optional)
+
+vscode:
+  extensions:
+    - ms-python.python
+    - charliermarsh.ruff

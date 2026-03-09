@@ -185,17 +185,107 @@ def _find_project_root():
     return here
 
 
+def _run_demo() -> None:
+    """Zero-config live demo — works immediately after `pip install responseiq`."""
+    import json
+    import subprocess
+    import tempfile
+
+    sep = "─" * 60
+    print()
+    print(_bold(_cyan("  ResponseIQ — Live Demo")))
+    print(_dim(f"  {sep}"))
+    print()
+    print(_dim("  No config needed. Showing scan + reasoning on a synthetic incident."))
+    print()
+
+    # ── locate fixture ──────────────────────────────────────────────────────
+    root = _find_project_root()
+    fixture = root / "fixtures" / "fixture_high.json"
+
+    # ── synthesise a plain-text log from fixture JSON (or use hardcoded fallback)
+    if fixture.exists():
+        data = json.loads(fixture.read_text())
+        msgs: list[str] = []
+        for entry in data if isinstance(data, list) else [data]:
+            for key in ("message", "msg", "text", "body", "log"):
+                if key in entry:
+                    msgs.append(str(entry[key]))
+                    break
+        log_text = "\n".join(msgs) if msgs else "ERROR: simulated crash\nTraceback: demo error"
+    else:
+        # Hardcoded minimal fallback — always works offline
+        log_text = (
+            "ERROR 2026-03-09 app.py:42 — AttributeError: 'NoneType' object has no attribute 'timeout'\n"
+            "  File 'client.py', line 87, in send_request\n"
+            "    resp = session.send(req, timeout=cfg.timeout)\n"
+            "AttributeError: 'NoneType' object has no attribute 'timeout'\n"
+        )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write(log_text)
+        tmp_path = f.name
+
+    print(_bold("  Step 1 — Scan the log"))
+    print(_cyan(f"  $ responseiq --mode scan --target {tmp_path}"))
+    print()
+    subprocess.run(
+        [sys.executable, "-m", "responseiq.cli", "--mode", "scan", "--target", tmp_path, "--log-level", "WARNING"],
+        check=False,
+    )
+
+    print()
+    print(_dim(f"  {sep}"))
+    print()
+    print(_bold("  Step 2 — Fix with explainability  (dry-run — no files touched)"))
+    print(_cyan(f"  $ responseiq --mode fix --target {tmp_path} --explain"))
+    print()
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "responseiq.cli",
+            "--mode",
+            "fix",
+            "--target",
+            tmp_path,
+            "--explain",
+            "--log-level",
+            "WARNING",
+        ],
+        check=False,
+    )
+
+    print()
+    print(_dim(f"  {sep}"))
+    print()
+    print(_green("  Demo complete."))
+    print()
+    print("  Pipe your own logs in:")
+    print(_cyan("    docker logs <container> | responseiq --mode fix --target - --explain"))
+    print(_cyan("    kubectl logs <pod>       | responseiq --mode scan --target -"))
+    print()
+    print("  Full setup:  " + _cyan("responseiq init"))
+    print("  Docs:        " + _cyan("https://github.com/infoyouth/responseiq"))
+    print()
+
+
 def main():
-    # ── init is a top-level command, not a plugin ──────────────────────────
+    # ── top-level commands dispatched before argparse ───────────────────────
     if len(sys.argv) >= 2 and sys.argv[1] == "init":
         _run_init()
+        sys.exit(0)
+
+    if len(sys.argv) >= 2 and sys.argv[1] == "demo":
+        _run_demo()
         sys.exit(0)
 
     parser = argparse.ArgumentParser(
         description=(
             "ResponseIQ CLI — AI-native self-healing infrastructure copilot.\n\n"
             "Special commands (run before flags are parsed):\n"
-            "  responseiq init   Interactive setup wizard (writes .env)"
+            "  responseiq init   Interactive setup wizard (writes .env)\n"
+            "  responseiq demo   Zero-config live demo"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

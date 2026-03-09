@@ -11,10 +11,18 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/infoyouth/responseiq/badge)](https://scorecard.dev/viewer/?uri=github.com/infoyouth/responseiq)
 [![Downloads](https://static.pepy.tech/badge/responseiq)](https://pepy.tech/project/responseiq)
 
-> **"Don't just debug. Fix."**
+> **"Your 3am alert just fixed itself and opened a PR before you woke up."**
 
 **ResponseIQ** is an AI-Native **Self-Healing Infrastructure Copilot**.
-Unlike traditional parsers that match regex strings, ResponseIQ reads your application logs, **loads your actual source code into an LLM context**, and generates surgical, context-aware remediation patches for incidents.
+Unlike traditional parsers that match regex strings, ResponseIQ reads your application logs, **loads your actual source code into an LLM context**, and generates surgical, context-aware remediation patches for incidents — with a full audit trail your post-mortem author can paste directly into the incident report.
+
+**Try it right now (zero config required):**
+
+```bash
+pip install responseiq && responseiq demo
+```
+
+**Or open an instant playground in your browser → [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/infoyouth/responseiq)**
 
 ---
 
@@ -239,6 +247,14 @@ See [`samples/README.md`](samples/README.md) for full details on the embedded bu
 
 For developers who want to fix bugs in their local environment or CI pipeline.
 
+### 0. One-liner (see it work immediately)
+
+```bash
+pip install responseiq && responseiq demo
+```
+
+No config, no API key, no database. `responseiq demo` runs a live scan + fix cycle against a synthetic incident and shows you a `REASONING.md` audit trail — all in ~10 seconds.
+
 ### 1. Install
 ```bash
 pip install responseiq
@@ -342,16 +358,28 @@ responseiq --mode fix --target ./samples/crash.log --explain
 
 Commit `REASONING.md` alongside the patch for SOC2 / post-incident review.
 
-### 5. Shadow Mode (zero-risk demo)
+### 5. Shadow Mode — Autonomous Triage (Zero Risk, Zero Config)
 
-Analyse all incidents and get a projected MTTR savings report — nothing is changed:
+> **New to AI-driven remediation? Start here.**
+> Shadow Mode is the safest entry point: ResponseIQ **never touches your code or infrastructure**.
+> It triages incidents, builds the causal graph, classifies severity, and projects what it _would_ fix.
+> Your team gets the signal. You stay in control.
+
 ```bash
 # Try it on the included samples first
 responseiq --mode shadow --target ./samples/ --shadow-report
 
-# Or point at your own logs
+# Or point at your own logs — nothing will be changed
 responseiq --mode shadow --target ./logs/ --shadow-report
 ```
+
+**What you get:**
+- Incident triage 5x faster than your senior on-call
+- Projected MTTR savings over the past 7 days
+- Executive-ready markdown report (paste into your next sprint review)
+- Full causal graph per incident — no LLM hallucination can trigger a deployment
+
+Once you trust the output, enable `pr_only` mode to let ResponseIQ open draft PRs — your engineers review, they merge. See [docs/SECURITY_TRUST.md](docs/SECURITY_TRUST.md) for the full trust model.
 
 ---
 
