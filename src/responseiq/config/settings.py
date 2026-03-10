@@ -110,6 +110,14 @@ class Settings(BaseSettings):
     # LLM_REPRO_MAX_TOKENS — cap for reproduction test code generation
     llm_repro_max_tokens: int = Field(default=1500, description="Max tokens for reproduction test generation")
 
+    # Multi-Provider LLM routing (P-Modern-1)
+    # USE_LITELLM — route all LLM calls through LiteLLM (enables Anthropic, Gemini, Cohere, etc.)
+    use_litellm: bool = Field(default=False, description="Route LLM calls through LiteLLM for multi-provider support")
+
+    # DSPy prompt optimisation (P-Modern-5)
+    # DSPY_ENABLED — activate DSPy BootstrapFewShot optimiser (requires pip install 'responseiq[dspy]')
+    dspy_enabled: bool = Field(default=False, description="Enable DSPy prompt optimisation (requires responseiq[dspy])")
+
     # PII / Secret Scrubbing
     # SCRUB_ENABLED — set to false only in fully air-gapped/on-prem deployments
     scrub_enabled: bool = Field(default=True, description="Scrub PII and secrets from log payloads before LLM calls")

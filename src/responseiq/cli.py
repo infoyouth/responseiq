@@ -302,7 +302,12 @@ def main():
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--target", default=None, help="Directory to scan (defaults to './logs' if exists)")
-    parser.add_argument("--mode", default="scan", choices=["scan", "fix", "shadow"], help="Operation mode")
+    parser.add_argument(
+        "--mode",
+        default="scan",
+        choices=["scan", "fix", "shadow", "watch"],
+        help="Operation mode: scan (one-shot analysis), fix (apply remediation), shadow (dry-run analytics), watch (continuous tail daemon)",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging (shortcut for --log-level DEBUG)")
     parser.add_argument(
         "--log-level",
@@ -323,7 +328,7 @@ def main():
     )
 
     # Support for GitHub Action inputs
-    parser.add_argument("--action", choices=["scan", "fix", "shadow"], help="Alias for --mode")
+    parser.add_argument("--action", choices=["scan", "fix", "shadow", "watch"], help="Alias for --mode")
     parser.add_argument("--url", help="Repository URL (e.g., https://github.com/owner/repo)")
     parser.add_argument("--token", help="GitHub Token")
 
