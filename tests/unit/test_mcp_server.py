@@ -271,3 +271,69 @@ class TestDispatchAllBranches:
         with patch("responseiq.config.settings.settings", mock_settings, create=True):
             result = await _dispatch("open_pr", {"remediation_plan": {"title": "Fix"}})
         assert result["dry_run"] is True
+
+
+# ---------------------------------------------------------------------------
+# _call_tool — exception path (lines 165-167)
+# ---------------------------------------------------------------------------
+
+
+class TestCallToolExceptionPath:
+    @pytest.mark.asyncio
+    async def test_exception_in_dispatch_returns_error_text_content(self):
+        """When _dispatch raises, _call_tool catches it and returns TextContent error."""
+        import json
+
+        with patch(
+            "responseiq.mcp_server._dispatch",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("boom"),
+        ):
+            result = await _call_tool("analyze_incident", {"log_text": "x"})
+
+        assert len(result) == 1
+        assert result[0].type == "text"
+        payload = json.loads(result[0].text)
+        assert payload["error"] == "boom"
+        assert payload["tool"] == "analyze_incident"
+
+
+# ---------------------------------------------------------------------------
+# _dispatch — analyze_incident branch (line 174)
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchAnalyzeIncident:
+    @pytest.mark.asyncio
+    async def test_analyze_incident_branch_returns_severity(self):
+        mock_analysis = {
+            "severity": "high",
+            "title": "DB crash",
+            "summary": "",
+            "contributing_factors": [],
+        }
+        mock_module = MagicMock(analyze_log_async=AsyncMock(return_value=mock_analysis))
+        with patch.dict("sys.modules", {"responseiq.services.analysis_service": mock_module}):
+            result = await _dispatch("analyze_incident", {"log_text": "ERROR: db crash"})
+        assert result["severity"] == "high"
+        assert result["title"] == "DB crash"
+
+
+# ---------------------------------------------------------------------------
+# _tool_open_pr — non-dry-run path with real github_token (lines 257-258)
+# ---------------------------------------------------------------------------
+
+
+class TestToolOpenPrWithToken:
+    @pytest.mark.asyncio
+    async def test_returns_pr_url_when_token_is_set(self):
+        """When github_token is set and dry_run=False, extract pr_url from plan."""
+        mock_settings = MagicMock()
+        mock_settings.github_token = "ghp_fake_token_xyz"
+
+        plan = {"pr_url": "https://github.com/org/repo/pull/42", "title": "Fix DB"}
+        with patch("responseiq.config.settings.settings", mock_settings, create=True):
+            result = await _tool_open_pr(plan, dry_run=False)
+
+        assert result["dry_run"] is False
+        assert result["pr_url"] == "https://github.com/org/repo/pull/42"

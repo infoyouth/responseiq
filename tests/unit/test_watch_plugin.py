@@ -16,7 +16,7 @@ Trust Gate:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -182,3 +182,134 @@ class TestWatchLoop:
         all_lines = [line for burst in burst_calls for line in burst]
         assert any("NullPointerException" in ln for ln in all_lines)
         assert any("OOM" in ln for ln in all_lines)
+
+
+# ---------------------------------------------------------------------------
+# WatchPlugin.run — stdin path (line 54: print "Reading from stdin")
+# ---------------------------------------------------------------------------
+
+
+class TestWatchRunStdin:
+    def test_run_with_stdin_target_prints_stdin_message(self, capsys):
+        """target='-' should print the stdin hint, not 'Watching: ...'."""
+        plugin = WatchPlugin()
+        state = {"context": {"args": {"target": "-"}}}
+
+        with patch("responseiq.plugins.watch.asyncio.run", side_effect=KeyboardInterrupt):
+            result = plugin.run(state)
+
+        captured = capsys.readouterr()
+        assert "stdin" in captured.out.lower()
+        assert result["watch_result"] == "stopped"
+
+
+# ---------------------------------------------------------------------------
+# WatchPlugin._line_source — direct tests (lines 100-127)
+# ---------------------------------------------------------------------------
+
+
+class TestLineSource:
+    @pytest.mark.asyncio
+    async def test_nonexistent_file_yields_nothing(self):
+        """_line_source with a missing file should return immediately (lines 116-118)."""
+        import asyncio
+
+        plugin = WatchPlugin()
+        stop_event = asyncio.Event()
+        stop_event.set()  # ensure we don't hang
+
+        lines = []
+        async for line in plugin._line_source("/tmp/__nonexistent_riq__.log", stop_event):
+            lines.append(line)
+
+        assert lines == []
+
+    @pytest.mark.asyncio
+    async def test_file_tail_yields_new_lines(self, tmp_path):
+        """_line_source should tail a file and yield lines appended after it starts."""
+        import asyncio
+
+        plugin = WatchPlugin()
+        stop_event = asyncio.Event()
+        log_file = tmp_path / "app.log"
+        log_file.write_text("")  # start empty so seek-to-EOF is at byte 0
+
+        collected: list[str] = []
+
+        async def _write_then_stop() -> None:
+            await asyncio.sleep(0.05)
+            with open(log_file, "a") as fh:
+                fh.write("ERROR: disk quota exceeded\n")
+            await asyncio.sleep(0.2)
+            stop_event.set()
+
+        write_task = asyncio.create_task(_write_then_stop())
+        async for line in plugin._line_source(str(log_file), stop_event):
+            collected.append(line)
+        await write_task
+
+        assert any("ERROR" in ln for ln in collected)
+
+    @pytest.mark.asyncio
+    async def test_stdin_path_yields_lines(self):
+        """_line_source with target='-' should read from the mocked stdin reader."""
+        import asyncio
+
+        plugin = WatchPlugin()
+        stop_event = asyncio.Event()
+
+        mock_reader = MagicMock()
+        # First call: a line; second call: EOF (empty bytes)
+        mock_reader.readline = AsyncMock(
+            side_effect=[
+                b"ERROR: stdin error line\n",
+                b"",  # EOF
+            ]
+        )
+        mock_protocol = MagicMock()
+        mock_loop = MagicMock()
+        mock_loop.connect_read_pipe = AsyncMock()
+
+        with (
+            patch("responseiq.plugins.watch.asyncio.StreamReader", return_value=mock_reader),
+            patch("responseiq.plugins.watch.asyncio.StreamReaderProtocol", return_value=mock_protocol),
+            patch("responseiq.plugins.watch.asyncio.get_event_loop", return_value=mock_loop),
+            patch("responseiq.plugins.watch.asyncio.wait_for", side_effect=mock_reader.readline),
+        ):
+            collected: list[str] = []
+            async for line in plugin._line_source("-", stop_event):
+                collected.append(line)
+
+        assert any("ERROR" in ln for ln in collected)
+
+
+# ---------------------------------------------------------------------------
+# WatchPlugin._watch_loop — pending-flush after generator exhausts (lines 91-92)
+# ---------------------------------------------------------------------------
+
+
+class TestWatchLoopPendingFlush:
+    @pytest.mark.asyncio
+    async def test_pending_lines_flushed_after_generator_ends(self):
+        """Lines accumulated without hitting BURST_LIMIT must be flushed after the loop."""
+        from responseiq.plugins.watch import WatchPlugin
+
+        plugin = WatchPlugin()
+        flushed: list[list[str]] = []
+
+        async def _single_error_source(target, stop_event):
+            # Yield exactly ONE error line then stop — won't hit BURST_LIMIT
+            yield "ERROR: single error that stays in pending\n"
+
+        async def _capture_burst(lines):
+            flushed.append(lines[:])
+
+        with (
+            patch.object(plugin, "_line_source", side_effect=_single_error_source),
+            patch.object(plugin, "_handle_burst", side_effect=_capture_burst),
+        ):
+            await plugin._watch_loop("/var/log/app.log")
+
+        # The single error line must be flushed via lines 91-92
+        assert len(flushed) == 1
+        assert "ERROR: single error" in flushed[0][0]
