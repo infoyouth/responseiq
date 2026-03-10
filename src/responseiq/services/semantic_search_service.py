@@ -1,42 +1,11 @@
-"""
-src/responseiq/services/semantic_search_service.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Semantic incident deduplication via text embeddings.
 
-Semantic incident deduplication via text embeddings (P-F2).
-
-Architecture
-────────────
-1. On new incident creation the ARQ worker calls
-   ``SemanticSearchService.generate_and_store(incident_id)``.
-   This generates a 1536-dim embedding for the incident's log message
-   using ``text-embedding-3-small`` (cheap, fast) and stores it in the
-   ``IncidentEmbedding`` table as a JSON-encoded float array.
-
-2. ``find_similar(incident_id, threshold)`` queries similar incidents.
-
-   Two execution paths (auto-detected at runtime):
-     a. **pgvector path** (Postgres + pgvector extension installed):
-        Uses ``embedding_json::vector <=> query::vector`` SQL expression
-        (cosine distance, O(log n) with an index).  No schema change
-        required — Postgres casts the text JSON blob to VECTOR inline.
-     b. **Python fallback** (SQLite / Postgres without pgvector):
-        Loads all embeddings and computes cosine similarity in pure Python.
-        Correct but O(n) — fine for ≤ 10k incidents.
-
-3. ``GET /api/v1/incidents/{id}/similar`` calls ``find_similar``.
-
-pgvector upgrade path
-─────────────────────
-The JSON blob column is SQLite + Postgres compatible today.
-To add a native VECTOR(1536) column (optional performance boost):
-  - Create Alembic migration: ``ALTER TABLE incidentembedding ADD COLUMN pgvec VECTOR(1536)``
-  - Backfill: ``UPDATE incidentembedding SET pgvec = embedding_json::vector``
-  - Add ``ivfflat`` index for ANN: ``CREATE INDEX ON incidentembedding USING ivfflat (pgvec vector_cosine_ops)``
-  - All callers remain unchanged (the cast path already works today).
-
-Configuration
-─────────────
-    OPENAI_API_KEY  — required for embedding generation.
-                      When absent, ``generate_and_store`` silently no-ops.
+Generates 1536-dim ``text-embedding-3-small`` vectors for new incidents
+and stores them in ``IncidentEmbedding``. ``find_similar`` returns
+cosine-ranked past incidents; scores ≥0.92 are considered duplicates.
+Falls back to in-process cosine search when pgvector is unavailable.
 """
 
 from __future__ import annotations

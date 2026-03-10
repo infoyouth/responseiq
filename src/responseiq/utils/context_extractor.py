@@ -1,3 +1,14 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Stack-trace context extractor powered by Tree-sitter.
+
+Parses log text to extract file-path and line-number references, then
+loads the surrounding AST context for each location using
+``tree-sitter-language-pack``. The resulting source snippets are
+passed directly into the LLM prompt so the model reasons over real
+code rather than just the error message.
+"""
+
 import re
 from pathlib import Path
 from typing import List, Optional

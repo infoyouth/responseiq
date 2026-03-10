@@ -1,8 +1,10 @@
-"""
-Executable Rollback Script Generator for P2.1 - Production Safety.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Executable rollback script generator.
 
-Generates executable Python scripts for deterministic rollbacks beyond git,
-including database changes, configuration changes, and environment variables.
+Generates a self-contained Python rollback script alongside every
+applied patch. The script reverses DB changes, config edits, and
+environment variables deterministically — no git revert required.
 """
 
 from __future__ import annotations

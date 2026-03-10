@@ -1,41 +1,11 @@
-"""src/responseiq/services/github_pr_service.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""GitHub App PR bot command processor.
 
-P8: Headless PR Interventions — GitHub App command processor.
-
-Responsibilities
-────────────────
-1. **Command parsing** — extract a ``ParsedBotCommand`` from a raw PR comment
-   body.  Ignores comments that don't contain a ``/responseiq`` invocation.
-
-2. **Command dispatch** — route to the appropriate handler:
-     approve   → merge PR via githubkit after final validation
-     rollback  → post rollback script location as a PR comment
-     status    → post ProofBundle summary (or "no proof available") as comment
-     explain   → post full rationale + blast_radius as comment
-     help      → post command catalogue
-
-3. **Comment posting** — wraps githubkit ``issues.create_comment`` so bot
-   responses always include a ResponseIQ badge and audit timestamp.
-
-Configuration (env vars)
-────────────────────────
-    RESPONSEIQ_GITHUB_TOKEN          — Personal Access Token OR GitHub App
-                                       installation token.  Required for
-                                       comment posting and merge operations.
-    RESPONSEIQ_GITHUB_BOT_LOGIN      — GitHub login of the bot account
-                                       (default: "responseiq-bot[bot]").
-                                       Comments from this user are ignored to
-                                       prevent reply loops.
-
-Design Notes
-────────────
-- ``GitHubPRService`` is **stateless** — construct a new instance per request.
-- All GitHub API calls are wrapped in a try/except so a transient GitHub API
-  error never crashes the webhook endpoint.
-- When ``RESPONSEIQ_GITHUB_TOKEN`` is absent, the service operates in
-  **dry-run mode**: commands are parsed and logged but no GitHub API calls
-  are made.  This is the safe default for installs that haven't configured
-  the GitHub App yet.
+Parses ``/responseiq`` commands from PR comments, validates them
+against the Trust Gate, and dispatches to the right handler —
+``approve``, ``rollback``, ``status``, ``explain``, or ``help``.
+All GitHub calls go through ``githubkit`` with ``TokenAuthStrategy``.
 """
 
 from __future__ import annotations

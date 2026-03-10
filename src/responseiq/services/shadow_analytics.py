@@ -1,8 +1,11 @@
-"""
-Shadow Analytics Service for P2.1 - Management Gold.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Shadow analytics service.
 
-Runs proof-oriented remediation analysis on ALL incidents (even low-impact ones)
-without applying fixes, generating "Projected Value Reports" for enterprise adoption.
+Runs proof-oriented remediation analysis on every incident — including
+low-severity ones — without applying any fixes. Produces a
+``ProjectedValueReport`` (CSV or PDF) showing what ResponseIQ would
+have saved, for stakeholder and enterprise evaluation.
 """
 
 from __future__ import annotations

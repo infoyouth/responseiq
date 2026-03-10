@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Scan plugin — concurrent log file and directory scanner.
+
+Reads a target log file or directory, filters noise, and dispatches
+each line through the plugin registry to produce a ranked list of
+incidents. Invoked by the CLI as ``responseiq --mode scan --target <path>``.
+"""
+
 import asyncio
 import json
 from pathlib import Path

@@ -1,13 +1,11 @@
-"""src/responseiq/plugins/spring_parser.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Spring Boot / Java log parser.
 
-P5.2 built-in parser: Spring Boot / Java error logs.
-
-Detects and extracts structured context from Spring Boot logs:
-  - Spring exception chains (BeanCreationException, NullPointerException, etc.)
-  - Spring Boot startup failures
-  - Spring Security access denied
-  - JPA/Hibernate SQL exceptions
-  - Log4j / Logback formatted output (timestamp + level + class + message)
+Detects and extracts structured context from Spring Boot logs —
+exception chains (``BeanCreationException``, ``NullPointerException``),
+startup failures, Spring Security access-denied errors, JPA/Hibernate
+SQL exceptions, and Log4j / Logback formatted output.
 """
 
 from __future__ import annotations

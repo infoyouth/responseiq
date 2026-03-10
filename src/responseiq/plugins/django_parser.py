@@ -1,12 +1,11 @@
-"""src/responseiq/plugins/django_parser.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Django log parser.
 
-P5.2 built-in parser: Django error logs.
-
-Detects and extracts structured context from Django/Python error logs:
-  - Django ORM: ObjectDoesNotExist, MultipleObjectsReturned
-  - Django HTTP: 4xx/5xx request errors logged by django.request
-  - Django template errors
-  - Standard Python tracebacks emitted by Django's logging handlers
+Detects and extracts structured context from Django error output —
+ORM exceptions (``ObjectDoesNotExist``, ``MultipleObjectsReturned``),
+4xx/5xx HTTP errors logged by ``django.request``, template errors, and
+standard Python tracebacks emitted by Django's logging handlers.
 """
 
 from __future__ import annotations

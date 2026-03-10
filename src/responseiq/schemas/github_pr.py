@@ -1,19 +1,11 @@
-"""src/responseiq/schemas/github_pr.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""GitHub App webhook event schemas for headless PR interventions.
 
-P8: Headless PR Interventions — GitHub App webhook event schemas.
-
-Supported GitHub webhook event types
-─────────────────────────────────────
-  issue_comment   — engineer types a /responseiq command on a PR comment
-  pull_request    — bot detects a ResponseIQ-authored PR (opened / reopened)
-
-Command grammar
-───────────────
-    /responseiq approve           Confirm and merge the suggested fix PR.
-    /responseiq rollback          Revert last applied remediation on this PR.
-    /responseiq status            Post a ProofBundle summary as a PR comment.
-    /responseiq explain           Post full rationale + blast_radius as comment.
-    /responseiq help              List available commands.
+Covers ``issue_comment`` events (``/responseiq`` commands typed on PR
+comments) and ``pull_request`` events (auto-posting proof summaries on
+ResponseIQ-authored PRs). Command grammar: ``approve``, ``rollback``,
+``status``, ``explain``, ``help``.
 """
 
 from __future__ import annotations

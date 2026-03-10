@@ -1,8 +1,10 @@
-"""
-P5.1 — Webhook Ingestion: Payload Schemas
-==========================================
-Pydantic models for the three supported webhook sources (Datadog, PagerDuty,
-Sentry) and the canonical ``WebhookIncident`` produced by each normaliser.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Webhook ingestion payload schemas.
+
+Pydantic models for the three supported webhook sources — Datadog,
+PagerDuty, and Sentry — plus the canonical ``WebhookIncident`` that
+each normaliser produces for the downstream remediation pipeline.
 """
 
 from __future__ import annotations

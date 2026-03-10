@@ -1,6 +1,10 @@
-"""
-Remediation Service with Trust Gate Integration
-Enterprise-ready remediation with policy enforcement, safety checks, and structured outputs.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Core LLM reasoning and remediation orchestrator.
+
+Drives the full remediation pipeline: triage → context extraction →
+LLM patch generation → Trust Gate validation → ProofBundle sealing →
+GitHub PR. This is the central brain of ResponseIQ.
 """
 
 from __future__ import annotations

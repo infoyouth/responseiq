@@ -1,22 +1,11 @@
-"""
-Shadow Report Export Router — v2.17.0 PDF/CSV Pilot Report.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Shadow analytics export router.
 
-Endpoint:
-    GET /api/v1/shadow/report/export
-
-Query params:
-    format   csv | pdf  (default: csv)
-    days     integer    lookback window (default: 30)
-
-Produces:
-    text/csv; charset=utf-8          when format=csv
-    application/pdf                  when format=pdf
-
-Trust Gate:
-    - rationale  : Exposes ProjectedValueReport KPIs as downloadable artifacts
-                   so VP-level stakeholders can paste numbers into board decks.
-    - blast_radius: read-only; never mutates any DB or incident state.
-    - rollback_plan: remove router include from app.py – zero side-effects.
+Serves ``GET /api/v1/shadow/report/export`` and returns a CSV or PDF
+``ProjectedValueReport`` covering a configurable lookback window.
+Read-only — never mutates any incident or DB state. Intended for
+VP-level stakeholders who want KPIs without accessing the live system.
 """
 
 from __future__ import annotations

@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Parser registry — central store of all registered ``BaseParser`` instances.
+
+Parsers self-register on import via the module-level ``registry`` singleton.
+The analyzer iterates through registered parsers in order, using the first
+one whose ``can_handle`` returns ``True``.
+"""
+
 from typing import List, Optional, Type
 
 from .base import BaseParser

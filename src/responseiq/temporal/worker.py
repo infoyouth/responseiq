@@ -1,23 +1,11 @@
-"""
-src/responseiq/temporal/worker.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Temporal worker bootstrap for ResponseIQ.
 
-Temporal Worker bootstrap for ResponseIQ (P-F4).
-
-The worker is started as a background task in the FastAPI lifespan when
-``settings.temporal_enabled = True`` AND the ``temporalio`` package is
-installed. It is completely inert otherwise — the function returns ``None``
-immediately so the rest of the application boots without a Temporal server.
-
-Usage
-─────
-Called from app.py lifespan:
-
-    if settings.temporal_enabled:
-        from responseiq.temporal.worker import start_temporal_worker
-        app.state.temporal_worker = await start_temporal_worker()
-
-The returned handle is stored in ``app.state.temporal_worker`` so the lifespan
-shutdown block can call ``await app.state.temporal_worker.shutdown()`` cleanly.
+Started as a background task in the FastAPI lifespan when
+``settings.temporal_enabled = True`` and ``temporalio`` is installed.
+Returns ``None`` immediately when Temporal is unavailable so the rest of
+the application boots without a running Temporal server.
 """
 
 from __future__ import annotations

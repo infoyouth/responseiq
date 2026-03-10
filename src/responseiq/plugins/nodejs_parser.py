@@ -1,13 +1,11 @@
-"""src/responseiq/plugins/nodejs_parser.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Node.js / Express log parser.
 
-P5.2 built-in parser: Node.js / Express error logs.
-
-Detects and extracts structured context from Node.js/Express logs:
-  - V8/Node.js Error: ... + at ... stack traces
-  - Express/Connect error middleware output
-  - Unhandled promise rejections
-  - JSON-structured logs (Bunyan / Pino / Winston)
-  - npm module errors (MODULE_NOT_FOUND, etc.)
+Detects and extracts structured context from Node.js and Express error
+output — V8 stack traces with column numbers, unhandled promise
+rejections, JSON-structured logs (Bunyan / Pino / Winston), Express
+error middleware output, and npm ``MODULE_NOT_FOUND`` errors.
 """
 
 from __future__ import annotations

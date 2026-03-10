@@ -1,8 +1,11 @@
-"""
-Reproduction Service for P2: Proof-Oriented Remediation.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Reproduction script generator.
 
-Generates standalone pytest reproduction scripts that fail with the exact
-error signature found in incident signals.
+Generates standalone ``pytest`` scripts that reproduce an incident
+by failing with the exact error signature found in the log signals.
+Used to prove the bug exists before applying a fix and to verify
+the fix actually resolves it.
 """
 
 from __future__ import annotations

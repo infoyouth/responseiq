@@ -1,11 +1,10 @@
-"""
-src/responseiq/schemas/causal_graph.py — P6: Causal Root-Cause Graph
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Schemas for the causal root-cause graph (P6).
 
-Machine-readable causal chain:
-    Deploy Event → Latency Spike → Error Log → Affected Code Line
-
-Designed to be ingested directly by SRE dashboards and post-incident review
-tools as plain JSON — no proprietary format required.
+Represents a machine-readable causal chain from deploy event through
+latency spike to the specific crashing code line. Plain JSON output
+so SRE dashboards and post-incident tools can ingest it directly.
 """
 
 from __future__ import annotations

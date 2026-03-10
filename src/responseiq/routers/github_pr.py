@@ -1,29 +1,11 @@
-"""src/responseiq/routers/github_pr.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""GitHub App webhook router for headless PR interventions.
 
-P8: Headless PR Interventions — GitHub App webhook endpoint.
-
-Endpoint
-─────────
-POST /webhooks/github
-
-GitHub sends ALL app event types to this single URL.  The router
-dispatches on the ``X-GitHub-Event`` header:
-
-    ping            → acknowledge (confirms webhook is live)
-    issue_comment   → parse /responseiq commands typed on PR comments
-    pull_request    → auto-post proof summary on ResponseIQ-labelled PRs
-
-Signature Verification
-──────────────────────
-GitHub signs every delivery with HMAC-SHA256 using the webhook secret
-configured in the GitHub App settings.  The signature is sent in the
-``X-Hub-Signature-256`` header as ``sha256=<hex>``.
-
-Configure via:
-    RESPONSEIQ_GITHUB_WEBHOOK_SECRET=<your_app_webhook_secret>
-
-When the secret is **not** set, signature verification is skipped
-(safe for local development; never skip in production).
+Receives all GitHub app events at ``POST /webhooks/github`` and
+dispatches on the ``X-GitHub-Event`` header. Handles ``ping``,
+``issue_comment`` (``/responseiq`` commands), and ``pull_request``
+events. Verifies HMAC-SHA256 delivery signatures before processing.
 """
 
 from __future__ import annotations

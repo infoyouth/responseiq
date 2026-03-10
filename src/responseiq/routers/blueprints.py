@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Blueprint CRUD router.
+
+Exposes ``GET /blueprints/`` and ``GET /blueprints/{id}`` endpoints
+that serve remediation blueprints loaded from the in-memory registry.
+"""
+
 from typing import List
 
 from fastapi import APIRouter, Header, HTTPException

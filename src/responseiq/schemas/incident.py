@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Incident request/response schemas.
+
+Defines ``IncidentSeverity``, the ``LogEntry`` input model, and
+``IncidentOut`` — the canonical API response shape returned by the
+analyzer and all incident endpoints.
+"""
+
 from datetime import datetime
 from enum import Enum
 from typing import Any, List, Optional

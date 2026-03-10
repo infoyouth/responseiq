@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Plugin auto-discovery and registry.
+
+Scans the ``plugins/`` directory at startup, imports every module that
+subclasses ``BasePlugin``, and registers it so the scan/fix pipeline can
+dispatch log lines to the right language-specific parser automatically.
+"""
+
 import importlib
 import os
 import pkgutil

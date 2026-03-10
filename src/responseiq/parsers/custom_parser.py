@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Keyword-based log parser driven by project configuration.
+
+Reads a keyword list from ``settings`` and flags any log line that
+contains a match. Acts as the catch-all parser when no language-specific
+plugin claims the line first.
+"""
+
 import json
 from typing import Any, Dict, Optional
 

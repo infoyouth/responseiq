@@ -1,37 +1,11 @@
-"""
-src/responseiq/utils/ner_scrubber.py — P7: Zero-Knowledge Context Scrubbing v2
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""NER-based PII scrubber using spaCy (P7: zero-knowledge context).
 
-NER-level PII detection using spaCy's ``en_core_web_sm`` model as a drop-in
-complement to the existing regex scrubber (log_scrubber.py).
-
-Activation
-----------
-Set ``RESPONSEIQ_NER_SCRUB=true`` (or ``settings.ner_scrub_enabled = True``).
-When disabled (default), this module is a no-op and the regex scrubber runs
-unchanged — no spaCy import error is raised.
-
-spaCy entity labels mapped to placeholder types
--------------------------------------------------
-PERSON   → <REDACTED_PERSON_N>
-ORG      → <REDACTED_ORG_N>
-GPE      → <REDACTED_LOCATION_N>   (Geo-Political Entity: cities, countries)
-LOC      → <REDACTED_LOCATION_N>
-FAC      → <REDACTED_LOCATION_N>   (Facilities)
-PRODUCT  → <REDACTED_PRODUCT_N>
-MONEY    → <REDACTED_FINANCIAL_N>
-DATE     → <REDACTED_DATE_N>
-TIME     → <REDACTED_TIME_N>
-CARDINAL → <REDACTED_NUMBER_N>     (bare numbers that may be account/ID)
-NORP     → <REDACTED_GROUP_N>      (Nationalities, Religious/Political groups)
-
-Entities NOT scrubbed (safe for technical context):
-  EVENT, LANGUAGE, LAW, PERCENT, QUANTITY, WORK_OF_ART, ORDINAL
-
-Graceful degradation
---------------------
-If ``spacy`` is not installed or the model is missing, ``scrub_with_ner``
-returns the original text unchanged and logs a one-time warning — the regex
-scrubber in log_scrubber.py still runs afterward.
+Complements the regex scrubber with spaCy ``en_core_web_sm`` entity
+recognition to catch PERSON, ORG, and location names that patterns miss.
+A no-op (safe import) when ``settings.ner_scrub_enabled = False`` or
+spaCy is not installed — the regex scrubber still runs unchanged.
 """
 
 from __future__ import annotations

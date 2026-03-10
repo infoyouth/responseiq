@@ -1,30 +1,14 @@
-"""
-src/responseiq/services/conversation_service.py
-
-Redis-backed stateful conversation sessions (P-F3).
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Redis-backed stateful AI conversation sessions.
 
 Each conversation is scoped to a ``log_id`` and stores all message turns
-in Redis as a JSON-encoded ``ConversationSession``.  The service degrades
-gracefully to a module-level in-memory dict when Redis is unavailable —
-making unit tests work with zero external dependencies.
-
-Storage layout (Redis)
-──────────────────────
-  responseiq:conv:{session_id}           → JSON session blob  (TTL = 24h)
-  responseiq:conv:log:{log_id}:sessions  → Redis list of session_ids
-
-In-memory fallback (Redis absent)
-──────────────────────────────────
-  ``_MEM_STORE: dict[str, str]``  — module-level dict, single-process only.
-  ``_MEM_LOG_INDEX: dict[str, list[str]]`` — log → session_ids mapping.
-  Safe for tests; not safe for multi-worker production → set ARQ_REDIS_URL.
-
-LLM integration
-───────────────
-  ``build_next_turn(session, user_content)`` constructs the OpenAI messages
-  list from the full session history, ready to pass to the instructor client.
+in Redis as a JSON-encoded ``ConversationSession`` with a 24h TTL.
+Degrades gracefully to an in-memory dict when Redis is unavailable,
+so unit tests work with zero external dependencies.
 """
 
+from __future__ import annotations
 from __future__ import annotations
 
 from datetime import datetime, timezone

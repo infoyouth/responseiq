@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""OpenTelemetry instrumentation bootstrap.
+
+Sets up a ``TracerProvider`` backed by an OTLP/gRPC exporter and
+instruments FastAPI and the standard ``logging`` module. Call
+``setup_telemetry(app)`` once in the FastAPI lifespan; all subsequent
+traces are exported via ``OTEL_EXPORTER_OTLP_ENDPOINT``.
+"""
+
 from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter

@@ -1,6 +1,10 @@
-"""
-Policy Configuration for ResponseIQ Trust Gate v1
-Defines execution modes, safety rules, and validation requirements.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Trust Gate policy configuration dataclasses and enums.
+
+Defines the three execution modes (``suggest_only``, ``pr_only``,
+``guarded_apply``) and the safety rule structures that the Trust Gate
+evaluates before any remediation is applied or submitted as a PR.
 """
 
 from __future__ import annotations

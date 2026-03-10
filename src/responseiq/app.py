@@ -1,4 +1,13 @@
-# replace startup with lifespan
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""FastAPI application entry point.
+
+Mounts all routers and exposes webhook ingestion endpoints for Datadog,
+PagerDuty, and Sentry. Run with::
+
+    uv run uvicorn responseiq.app:app --reload
+"""
+
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List

@@ -1,36 +1,22 @@
-"""src/responseiq/plugins/base.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Plugin SDK base interface.
 
-P5.2: Plugin SDK base interface.
+Every log-parser plugin subclasses ``BasePlugin``, declares a
+``PluginMetadata`` class attribute, and implements ``can_handle`` and
+``run``. The ``PluginRegistry`` auto-discovers all subclasses in this
+directory at startup — no manual registration needed.
 
-Every log-parser plugin must subclass ``BasePlugin``, declare a ``metadata``
-class attribute of type ``PluginMetadata``, and implement both ``can_handle``
-and ``run``.
-
-Discovery
-─────────
-``PluginRegistry`` (``plugin_registry.py``) auto-discovers all subclasses that
-live in the ``src/responseiq/plugins/`` directory via ``pkgutil.iter_modules``.
-
-Writing a custom plugin
-───────────────────────
+Example:
+    ```python
     from responseiq.plugins.base import BasePlugin, PluginMetadata
 
     class MyParser(BasePlugin):
-        metadata = PluginMetadata(
-            name="my_parser",
-            version="1.0.0",
-            author="you@example.com",
-            log_format="my-framework",
-            description="Parses MyFramework error logs.",
-        )
+        metadata = PluginMetadata(name="my_parser", version="1.0.0")
 
-        @classmethod
-        def can_handle(cls, log_text: str) -> bool:
-            return "MyFramework" in log_text
-
-        def run(self, agent_state: dict) -> dict:
-            # Extract relevant info and return delta
-            return {"parsed_framework": "my-framework"}
+        def can_handle(self, log_text: str) -> bool:
+            return "my_signal" in log_text
+    ```
 """
 
 from __future__ import annotations

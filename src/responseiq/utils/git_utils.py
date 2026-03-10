@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Thin wrapper around Git CLI operations.
+
+``GitClient`` runs ``git`` subprocesses to check out branches, apply
+patches, stage files, and create commits. Used by ``GitHubPRService``
+to prepare the working tree before opening a pull request.
+"""
+
 import os
 import subprocess  # nosec B404
 from pathlib import Path

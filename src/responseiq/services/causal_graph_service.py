@@ -1,11 +1,10 @@
-"""
-src/responseiq/services/causal_graph_service.py — P6: Causal Root-Cause Graph
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Causal root-cause graph builder.
 
-Assembles a machine-readable causal chain from the signals already collected
-during a remediation run (P3 Git correlation, P5 performance data, impact
-score, AI analysis, P2 proof bundle).
-
-No new I/O is performed — this is a pure transformation step.
+Assembles a machine-readable causal chain from signals already collected
+during a remediation run — git correlation, performance data, impact
+score, AI analysis, and proof bundle. Pure transformation, no new I/O.
 """
 
 from __future__ import annotations

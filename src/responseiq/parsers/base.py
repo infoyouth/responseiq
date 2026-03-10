@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Abstract base class for all log parsers.
+
+Every parser must implement ``can_handle`` to signal whether it
+understands a given log line, and ``parse`` to return structured data
+from it. The registry discovers and invokes them automatically.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 

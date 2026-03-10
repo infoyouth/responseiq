@@ -1,5 +1,11 @@
-"""
-Proof-oriented evidence schemas for P2 implementation.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Proof-oriented evidence schemas for the Trust Gate audit trail.
+
+A ``ProofBundle`` is sealed with SHA-256 after every Trust Gate
+decision and stored immutably. ``ReproductionTest`` and
+``ValidationEvidence`` carry the supporting artefacts — the failing
+pytest script, runtime output, and patch diff.
 """
 
 from __future__ import annotations

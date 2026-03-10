@@ -1,10 +1,10 @@
-"""
-src/responseiq/routers/causal_graph.py — P6: Causal Root-Cause Graph endpoint
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Causal root-cause graph endpoint.
 
-GET /api/v1/incidents/{incident_id}/causal-graph
-
-Fetches incident data from the DB and builds a causal graph on-demand.
-No separate storage table needed — graph is derived from existing signals.
+Serves ``GET /api/v1/incidents/{incident_id}/causal-graph`` and builds
+a machine-readable causal chain on demand from signals already stored
+for the incident — no separate table or pre-computation needed.
 """
 
 from __future__ import annotations

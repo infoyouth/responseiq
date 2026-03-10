@@ -1,3 +1,13 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Scan-scope configuration loader.
+
+Reads ``responseiq.toml`` (or the ``[tool.responseiq]`` section of
+``pyproject.toml``) to determine which file extensions, directories,
+and glob patterns are included or excluded from the remediation scan.
+Provides sane defaults when no config file is present.
+"""
+
 import tomllib
 from pathlib import Path
 from typing import Set

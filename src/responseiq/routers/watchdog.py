@@ -1,25 +1,11 @@
-"""
-Watchdog Router — v2.18.0 #3 Post-Apply Monitoring Endpoints.
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Post-apply watchdog monitoring router.
 
-POST /api/v1/incidents/{incident_id}/watchdog/start
-GET  /api/v1/incidents/{incident_id}/watchdog/status
-
-Starts a non-blocking background watchdog session for the given incident.
-The watchdog monitors error rate and auto-triggers the pre-generated rollback
-script if the threshold is breached within the monitoring window.
-
-Feature flag: ``RESPONSEIQ_WATCHDOG_ENABLED=true`` (default false).
-
-Trust Gate
-----------
-rationale    : Exposes the WatchdogService over HTTP so orchestration tools
-               (GitHub Actions, Temporal, CLI) can start monitoring after
-               ``guarded_apply`` without direct Python access.
-blast_radius : POST starts an asyncio background task; GET is read-only.
-               The worst-case side-effect is running the rollback script
-               (same as a human running ``python rollback_<id>.py``).
-rollback_plan: Set ``RESPONSEIQ_WATCHDOG_ENABLED=false`` — endpoint returns
-               503 immediately; no background tasks are spawned.
+Exposes ``POST /api/v1/incidents/{id}/watchdog/start`` to kick off a
+non-blocking background monitor after a ``guarded_apply``, and
+``GET /api/v1/incidents/{id}/watchdog/status`` to check its state.
+Auto-triggers the rollback script if the error rate breaches threshold.
 """
 
 from __future__ import annotations

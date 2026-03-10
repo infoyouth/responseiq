@@ -1,7 +1,10 @@
-"""
-src/responseiq/schemas/semantic.py
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2024-2026 ResponseIQ contributors
+"""Response schema for semantic incident similarity.
 
-Response schema for semantic incident similarity (P-F2).
+Returned by ``GET /api/v1/incidents/{id}/similar``. Each entry carries
+a cosine similarity score against stored text-embedding vectors;
+scores at or above 0.92 are considered duplicate-class incidents.
 """
 
 from __future__ import annotations
