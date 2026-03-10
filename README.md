@@ -99,6 +99,18 @@ flowchart TD
 | **Rollback script** | Generates an executable `rollback_<id>.py` alongside every patch |
 | **Works without any API key** | Full rule-engine fallback is always available |
 
+### New in v2.24 — Modern AI stack
+
+| Feature | What it does |
+|---|---|
+| **`--mode watch` daemon** | Continuous async tail of any log file; bursts are debounced and sent for AI analysis automatically |
+| **SSE streaming endpoint** | `POST /api/v1/incidents/analyze/stream` emits live events (`started → scrubbing → analyzing → critic → trust_gate → complete`) so UIs update in real time |
+| **Critic / reviewer agent** | A second fast-model pass reviews every proposed fix for logic errors and hidden regressions before the Trust Gate runs |
+| **LiteLLM multi-provider** | Set `RESPONSEIQ_USE_LITELLM=true` to route calls through LiteLLM — supports 100+ providers with a single env-var switch |
+| **OTel GenAI conventions** | All LLM calls emit `gen_ai.*` OpenTelemetry spans — plug any OTLP-compatible backend for cost and latency tracking |
+| **DSPy prompt optimiser** | Scaffold for automatic prompt optimisation via DSPy; activate with `responseiq[dspy]` + `RESPONSEIQ_DSPY_ENABLED=true` |
+| **MCP server** | `responseiq-mcp` exposes four tools (`analyze_incident`, `get_remediation`, `run_trust_gate`, `open_pr`) via the Model Context Protocol for agent integrations |
+
 ### Language-specific parsers
 
 Dedicated parsers extract rich structured context — goroutine IDs, stack frames, exception chains, and framework signals — before the AI even sees the log.
@@ -142,6 +154,9 @@ responseiq --mode fix --target ./logs/error.log --explain
 
 # 5. Shadow mode — read-only triage, nothing is changed
 responseiq --mode shadow --target ./logs/ --shadow-report
+
+# 6. Watch mode — continuous tail daemon (new in v2.24)
+responseiq --mode watch --target ./logs/app.log
 ```
 
 **No LLM key?** The rule-engine fallback activates automatically. `responseiq init` is optional.
@@ -189,6 +204,28 @@ Point your existing alert tools at `POST /api/v1/incidents/ingest`:
 | **Sentry** | Internal Integrations → Webhook URL |
 | **Alertmanager** | Webhook receiver in `alertmanager.yml` |
 | **GitHub Actions** | `curl` step in your workflow |
+
+**SSE streaming** — get live progress events while an incident is being analysed:
+
+```bash
+curl -N -X POST http://localhost:8000/api/v1/incidents/analyze/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"log_text": "ERROR: NullPointerException at UserService.java:42"}'
+# event: started
+# event: scrubbing
+# event: analyzing
+# event: critic
+# event: trust_gate
+# event: complete
+```
+
+**MCP server** — expose ResponseIQ as an AI agent tool:
+
+```bash
+pip install 'responseiq[mcp]'
+responseiq-mcp          # starts stdio MCP server
+# Tools: analyze_incident · get_remediation · run_trust_gate · open_pr
+```
 
 ### Try the built-in demo
 
@@ -254,15 +291,22 @@ make all     # lint + type-check + test + build + security audit
 
 ```
 src/responseiq/
-  cli.py                        # CLI entry point (--mode scan|fix|shadow)
-  app.py                        # FastAPI server (webhooks)
+  cli.py                        # CLI entry point (--mode scan|fix|shadow|watch)
+  app.py                        # FastAPI server (webhooks + SSE streaming)
+  mcp_server.py                 # MCP server — 4 agent tools (responseiq-mcp)
+  ai/
+    llm_service.py              # LLM calls with OTel GenAI spans + LiteLLM support
+    dspy_optimizer.py           # DSPy prompt optimisation scaffold (opt-in)
   services/
     remediation_service.py      # Core LLM reasoning brain
+    critic_service.py           # Second-pass critic/reviewer agent
     github_pr_service.py        # GitHub PR bot (githubkit)
     watchdog_service.py         # Post-apply error-rate monitor + auto-rollback
     conversation_service.py     # Stateful AI conversations (Redis + in-memory fallback)
+  routers/
+    streaming.py                # SSE streaming endpoint
   plugins/
-    scan.py / fix.py / shadow.py
+    scan.py / fix.py / shadow.py / watch.py
     go_parser.py / nodejs_parser.py / spring_parser.py / django_parser.py / fastapi_parser.py
   utils/
     context_extractor.py        # Tree-sitter AST source loader

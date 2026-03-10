@@ -26,6 +26,7 @@ from .routers.feedback import router as feedback_router
 from .routers.github_pr import router as github_pr_router
 from .routers.proof_record import router as proof_record_router
 from .routers.shadow_report import router as shadow_report_router
+from .routers.streaming import router as streaming_router
 from .routers.watchdog import router as watchdog_router
 from .routers.webhooks import router as webhooks_router
 from .schemas.incident import IncidentOut
@@ -126,6 +127,7 @@ app.include_router(causal_graph_router)  # P6: Causal Root-Cause Graph
 app.include_router(shadow_report_router)  # v2.17.0: PDF/CSV Pilot Report
 app.include_router(proof_record_router)  # v2.18.0 #2: ProofBundle audit endpoint
 app.include_router(watchdog_router)  # v2.18.0 #3: Post-apply watchdog
+app.include_router(streaming_router)  # P-Modern-3: SSE streaming analysis endpoint
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"

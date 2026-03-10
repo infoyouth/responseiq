@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 import instructor  # type: ignore[import-untyped]
 from openai import AsyncOpenAI
+from opentelemetry import trace as _otel_trace
 
 from responseiq.ai.model_utils import router as _router
 from responseiq.ai.schemas import IncidentAnalysis, ReproductionCode
@@ -29,6 +30,23 @@ from responseiq.config.settings import settings
 from responseiq.utils.log_scrubber import restore, scrub
 from responseiq.utils.logger import logger
 from responseiq.utils.tracing import get_langfuse
+
+_tracer = _otel_trace.get_tracer("responseiq.ai.llm_service")
+
+
+def _provider_name() -> str:
+    """Return the OTel gen_ai.system value for the active LLM backend."""
+    if getattr(settings, "use_litellm", False):
+        return "litellm"
+    if settings.llm_base_url:
+        url = str(settings.llm_base_url).lower()
+        if "ollama" in url or "11434" in url:
+            return "ollama"
+        if "groq" in url:
+            return "groq"
+        return "openai_compatible"
+    return "openai"
+
 
 # ---------------------------------------------------------------------------
 # System prompts (constants so they can be swapped / optimised with DSPy later)
@@ -64,26 +82,35 @@ _REPRO_USER_TEMPLATE = (
 
 def _get_instructor_client() -> instructor.AsyncInstructor:
     """
-    Create and return an instructor-wrapped AsyncOpenAI client.
+    Create and return an instructor-wrapped async LLM client.
 
-    Supports three backends controlled by env vars:
+    Supports four backends controlled by env vars:
 
-    1. OpenAI (default):
-       Set RESPONSEIQ_OPENAI_API_KEY.
-
-    2. Ollama (free, local):
-       RESPONSEIQ_LLM_BASE_URL=http://localhost:11434/v1
-       RESPONSEIQ_LLM_ANALYSIS_MODEL=llama3.2  (or any model pulled via `ollama pull`)
-       No API key required.
-
-    3. Groq (free cloud tier, fast):
-       RESPONSEIQ_LLM_BASE_URL=https://api.groq.com/openai/v1
-       RESPONSEIQ_OPENAI_API_KEY=gsk_...  (your Groq key)
-       RESPONSEIQ_LLM_ANALYSIS_MODEL=llama-3.1-70b-versatile
+    1. OpenAI (default):  Set RESPONSEIQ_OPENAI_API_KEY.
+    2. LiteLLM (multi-provider):  Set RESPONSEIQ_USE_LITELLM=true.
+       Gains Anthropic, Gemini, Bedrock, Groq, Mistral, Azure OpenAI —
+       all via one interface.  Model names use the LiteLLM prefix notation,
+       e.g. ``anthropic/claude-3-5-sonnet-20241022`` or ``gemini/gemini-2.0-flash``.
+    3. Ollama (free, local):  RESPONSEIQ_LLM_BASE_URL=http://localhost:11434/v1
+    4. Groq (free cloud tier):  RESPONSEIQ_LLM_BASE_URL=https://api.groq.com/openai/v1
 
     Extracted as a standalone function so unit tests can patch it:
         patch("responseiq.ai.llm_service._get_instructor_client", return_value=mock)
     """
+    # ── LiteLLM multi-provider path ─────────────────────────────────────────
+    if getattr(settings, "use_litellm", False):
+        try:
+            import litellm  # type: ignore[import-untyped]
+            from litellm import AsyncCompletions  # type: ignore[import-untyped]
+
+            litellm.set_verbose = False
+            return instructor.from_litellm(AsyncCompletions())
+        except ImportError:
+            logger.warning(
+                "RESPONSEIQ_USE_LITELLM=true but 'litellm' is not installed. "
+                "Install with: pip install 'responseiq[litellm]'. Falling back to OpenAI."
+            )
+
     api_key = (
         settings.openai_api_key.get_secret_value()
         if settings.openai_api_key
@@ -176,17 +203,22 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
         )
 
     try:
-        client = _get_instructor_client()
-        result: IncidentAnalysis = await client.chat.completions.create(
-            model=_analysis_model,
-            response_model=IncidentAnalysis,
-            messages=[
-                {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
-                {"role": "user", "content": final_user_content},
-            ],
-            temperature=0.0,
-            max_tokens=settings.llm_max_tokens,
-        )
+        with _tracer.start_as_current_span("gen_ai.analyze_incident") as span:
+            span.set_attribute("gen_ai.system", _provider_name())
+            span.set_attribute("gen_ai.request.model", _analysis_model)
+            span.set_attribute("gen_ai.operation.name", "chat")
+            client = _get_instructor_client()
+            result: IncidentAnalysis = await client.chat.completions.create(
+                model=_analysis_model,
+                response_model=IncidentAnalysis,
+                messages=[
+                    {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
+                    {"role": "user", "content": final_user_content},
+                ],
+                temperature=0.0,
+                max_tokens=settings.llm_max_tokens,
+            )
+            span.set_attribute("gen_ai.response.model", _analysis_model)
 
         if lf_generation:
             lf_generation.update(output=result.model_dump())
@@ -245,17 +277,22 @@ async def generate_reproduction_code(incident_summary: str, relevant_code: str) 
         )
 
     try:
-        client = _get_instructor_client()
-        result: ReproductionCode = await client.chat.completions.create(
-            model=_repro_model,
-            response_model=ReproductionCode,
-            messages=[
-                {"role": "system", "content": _REPRO_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=settings.llm_repro_max_tokens,
-        )
+        with _tracer.start_as_current_span("gen_ai.generate_reproduction_code") as span:
+            span.set_attribute("gen_ai.system", _provider_name())
+            span.set_attribute("gen_ai.request.model", _repro_model)
+            span.set_attribute("gen_ai.operation.name", "chat")
+            client = _get_instructor_client()
+            result: ReproductionCode = await client.chat.completions.create(
+                model=_repro_model,
+                response_model=ReproductionCode,
+                messages=[
+                    {"role": "system", "content": _REPRO_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=settings.llm_repro_max_tokens,
+            )
+            span.set_attribute("gen_ai.response.model", _repro_model)
 
         if lf_generation:
             lf_generation.update(output=result.code[:200])

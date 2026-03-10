@@ -80,6 +80,7 @@ Changelog = "https://github.com/infoyouth/responseiq/blob/main/CHANGELOG.md"
 
 [project.scripts]
 responseiq = "responseiq.cli:main"
+responseiq-mcp = "responseiq.mcp_server:main"
 
 [project.optional-dependencies]
 temporal = ["temporalio>=1.0.0"]
@@ -87,6 +88,11 @@ pgvector = ["pgvector>=0.3.0"]
 ner = ["spacy>=3.7.0"]
 reports = ["fpdf2>=2.7.0"]
 eval = ["datasets>=2.0"]
+litellm = ["litellm>=1.40.0"]
+dspy = ["dspy-ai>=2.4.0"]
+mcp = [
+    "mcp>=1.0.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/responseiq"]
