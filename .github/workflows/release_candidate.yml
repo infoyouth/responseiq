@@ -16,31 +16,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Build distributables
+      - name: 🏗️ Build distributables
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           rm -rf dist
           uv build
 
-      - name: Install built wheel in fresh environment
+      - name: 📦 Install wheel in fresh venv
         run: |
           python -m venv /tmp/responseiq-rc
           /tmp/responseiq-rc/bin/pip install --upgrade pip
           WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
           /tmp/responseiq-rc/bin/pip install "$WHEEL_PATH"
 
-      - name: CLI smoke tests
+      - name: 💨 CLI smoke tests
         run: |
           /tmp/responseiq-rc/bin/responseiq --help
           /tmp/responseiq-rc/bin/python -m responseiq.cli --help
 
-      - name: API health smoke test
+      - name: 🏥 API health smoke test
         run: |
           /tmp/responseiq-rc/bin/python -m uvicorn responseiq.app:app --host 127.0.0.1 --port 8001 &
           APP_PID=$!
