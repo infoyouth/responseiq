@@ -3,11 +3,13 @@
 [![CI](https://github.com/infoyouth/responseiq/actions/workflows/ci.yml/badge.svg)](https://github.com/infoyouth/responseiq/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/infoyouth/responseiq)](https://github.com/infoyouth/responseiq/releases)
 [![PyPI](https://img.shields.io/pypi/v/responseiq)](https://pypi.org/project/responseiq/)
+[![Downloads](https://static.pepy.tech/badge/responseiq)](https://pepy.tech/project/responseiq)
 [![License](https://img.shields.io/github/license/infoyouth/responseiq)](LICENSE)
 [![Coverage](https://codecov.io/gh/infoyouth/responseiq/branch/main/graph/badge.svg)](https://codecov.io/gh/infoyouth/responseiq)
 [![Python](https://img.shields.io/pypi/pyversions/responseiq)](https://pypi.org/project/responseiq/)
 [![SWE-bench Pass@1](https://img.shields.io/badge/SWE--bench%20Pass%401-20%25-blue)](reports/swe_bench_eval.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/infoyouth/responseiq/badge)](https://scorecard.dev/viewer/?uri=github.com/infoyouth/responseiq)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10437/badge)](https://www.bestpractices.dev/projects/10437)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
