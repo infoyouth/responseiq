@@ -5,18 +5,6 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - ".github/workflows/**"
-      - "action.yml"
-      - "uv.lock"
-      - "Makefile"
-      - "Dockerfile"
-      - "docker-compose.yml"
   pull_request:
     branches: [main]
     paths:
@@ -71,76 +59,46 @@ jobs:
               - 'docker-compose.yml'
               - 'Dockerfile'
 
-  setup-and-cache:
-    name: Prepare environment
-    needs: check-changes
-    if: needs.check-changes.outputs.python == 'true' || needs.check-changes.outputs.integration == 'true'
-    runs-on: ubuntu-latest
-    outputs:
-      cache-hit: ${{ steps.cache.outputs.cache-hit }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install UV
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - name: Sync dependencies
-        run: uv sync --group dev --active
-      - name: Install pre-commit hooks
-        run: |
-          pip install pre-commit
-          # Run pre-commit hooks, but don't fail properly yet if env is weird - just ensure it installs
-          # Actually, running pre-commit check here is redundant if we run specific checks below.
-          # Let's keep it minimal.
-          echo "Pre-commit installed."
-
   quality-checks:
     name: Code Quality & Tests
-    needs: [setup-and-cache, check-changes]
+    needs: check-changes
     runs-on: ubuntu-latest
     if: needs.check-changes.outputs.python == 'true'
-    strategy:
-      matrix:
-        python-version: [3.12]
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install UV
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: ⚡ Install UV
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - name: Sync dependencies
+      - name: 📦 Sync dependencies
         run: uv sync --group dev --active
 
-      - name: Create reports directory
+      - name: 📁 Create reports directory
         run: mkdir -p reports
 
       # Fast Checks — all via ruff (matches Makefile exactly, zero drift)
-      - name: Format check (ruff)
+      - name: 🎨 Format check (ruff)
         run: uv run ruff format --check src tests 2>&1 | tee reports/ruff-format.txt
 
-      - name: Lint (ruff)
+      - name: 🔍 Lint (ruff)
         run: uv run ruff check src tests 2>&1 | tee reports/ruff-lint.txt
 
-      - name: Type check (mypy)
+      - name: 🔬 Type check (mypy)
         run: uv run mypy src --txt-report reports/mypy-report 2>&1 | tee reports/mypy.txt
 
       # Security Checks
-      - name: Security scan (ruff --select S)
+      - name: 🔒 Security scan (ruff --select S)
         run: uv run ruff check --select S src 2>&1 | tee reports/security.txt
 
-      - name: Dependency vulnerability scan (pip-audit)
+      - name: 🛡️ Dependency audit (pip-audit)
         run: uv run pip-audit --format cyclonedx-json -o reports/pip-audit.json 2>&1 | tee reports/pip-audit.txt || true
 
       # Tests — generate JUnit XML + coverage reports
-      - name: Run tests (pytest + coverage)
+      - name: 🧪 Run tests (pytest + coverage)
         run: |
           uv run pytest \
             -n auto \
@@ -153,7 +111,7 @@ jobs:
             --disable-warnings \
             -q 2>&1 | tee reports/pytest.txt
 
-      - name: Upload coverage to Codecov
+      - name: 📊 Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v5
         with:
@@ -162,12 +120,12 @@ jobs:
           fail_ci_if_error: false
 
       # Packaging smoke test
-      - name: Build distributables
+      - name: 🏗️ Build distributables
         run: |
           rm -rf dist
           uv build
 
-      - name: Smoke test wheel install and CLI
+      - name: 💨 Smoke test wheel install and CLI
         run: |
           python -m venv /tmp/responseiq-smoke
           /tmp/responseiq-smoke/bin/pip install --upgrade pip -q
@@ -177,7 +135,7 @@ jobs:
           /tmp/responseiq-smoke/bin/python -m responseiq.cli --help
 
       # Rich GitHub Step Summary
-      - name: Write job summary
+      - name: 📝 Write job summary
         if: always()
         run: |
           echo "## 🛡️ ResponseIQ CI — Quality Report" >> $GITHUB_STEP_SUMMARY
@@ -232,19 +190,19 @@ jobs:
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "_Artifacts: \`reports/\` (JUnit XML · Coverage HTML · tool logs)_" >> $GITHUB_STEP_SUMMARY
 
-      - name: Upload reports
+      - name: 📤 Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-reports-py${{ matrix.python-version }}
+          name: ci-reports
           path: reports/
           retention-days: 14
 
-      - name: Upload coverage HTML (browsable)
+      - name: 🌐 Upload coverage HTML (browsable)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-html-py${{ matrix.python-version }}
+          name: coverage-html
           path: reports/coverage-html/
           retention-days: 14
 
@@ -262,7 +220,7 @@ jobs:
     needs: check-changes
     steps:
       - uses: actions/checkout@v4
-      - name: License scan (placeholder)
+      - name: 📜 License scan (placeholder)
         run: |
           echo "License/policy scan step is a placeholder."
           echo "Replace with a proper license scanner action and configure required inputs."
@@ -274,13 +232,27 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - check-changes
+      - quality-checks
+      - check-docker-build
       - license-check
     if: always()
     steps:
-      - name: All required checks passed or were skipped
+      - name: 🚦 Evaluate gate
         run: |
-          echo "CI gate: all required checks passed or skipped."
-          exit 0
+          results='${{ toJSON(needs) }}'
+          if echo "$results" | python3 -c "
+import sys, json
+needs = json.load(sys.stdin)
+failed = [k for k, v in needs.items() if v['result'] == 'failure']
+if failed:
+    print('FAILED jobs:', ', '.join(failed))
+    sys.exit(1)
+print('All jobs passed or were skipped.')
+"; then
+            exit 0
+          else
+            exit 1
+          fi
 
   check-docker-build:
     name: Verify Docker build
@@ -289,9 +261,9 @@ jobs:
     if: needs.check-changes.outputs.integration == 'true'
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
+      - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build (no push)
+      - name: 🔨 Build image (no push)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -300,22 +272,22 @@ jobs:
 
   integration-tests:
     name: Integration tests
-    needs: [setup-and-cache, check-changes]
+    needs: check-changes
     runs-on: ubuntu-latest
     if: |
       needs.check-changes.outputs.integration == 'true' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Docker (already available on runners)
+      - name: 🐳 Verify Docker runtime
         run: docker --version
-      - name: Install UV
+      - name: ⚡ Install UV
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - name: Sync dependencies
+      - name: 📦 Sync dependencies
         run: uv sync --group dev --active
-      - name: Run integration tests
+      - name: 🔗 Run integration tests
         env:
           RUN_INTEGRATION: '1'
         run: |
