@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   verify:
-    name: Verify from PyPI (Py${{ matrix.python-version }})
+    name: ✅ Verify from PyPI (Py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -31,15 +31,15 @@ jobs:
             api-port: 8012
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Resolve verification mode and version
+      - name: 🔍 Resolve verification mode and version
         id: version
         shell: bash
         run: |
@@ -56,7 +56,7 @@ jobs:
           echo "Verification source: $SOURCE"
           echo "Verifying responseiq==$VERSION"
 
-      - name: Build local package (local mode)
+      - name: 🏗️ Build local package
         if: steps.version.outputs.source == 'local'
         shell: bash
         run: |
@@ -65,7 +65,7 @@ jobs:
           rm -rf dist
           uv build
 
-      - name: Install local built wheel (local mode)
+      - name: 📦 Install local wheel
         if: steps.version.outputs.source == 'local'
         shell: bash
         run: |
@@ -74,7 +74,7 @@ jobs:
           WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
           /tmp/responseiq-post/bin/pip install "$WHEEL_PATH"
 
-      - name: Install released package from PyPI (retry for propagation)
+      - name: ⬇️ Install from PyPI (with retry)
         if: steps.version.outputs.source == 'pypi'
         shell: bash
         run: |
@@ -95,12 +95,12 @@ jobs:
             sleep 20
           done
 
-      - name: CLI smoke tests
+      - name: 💨 CLI smoke tests
         run: |
           /tmp/responseiq-post/bin/responseiq --help
           /tmp/responseiq-post/bin/python -m responseiq.cli --help
 
-      - name: API health smoke test
+      - name: 🏥 API health smoke test
         shell: bash
         run: |
           /tmp/responseiq-post/bin/python -m uvicorn responseiq.app:app --host 127.0.0.1 --port ${{ matrix.api-port }} &
@@ -113,13 +113,13 @@ jobs:
           curl -fsS http://127.0.0.1:${{ matrix.api-port }}/health
 
   notify-failure:
-    name: Open issue on failure
+    name: 🚨 Open issue on failure
     needs: verify
     if: failure()
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create failure issue
+      - name: 🚨 Open failure issue
         uses: actions/github-script@v7
         with:
           script: |
