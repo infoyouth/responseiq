@@ -6,7 +6,7 @@ on:
 
 jobs:
   rc-verify:
-    name: RC Verify (Py${{ matrix.python-version }})
+    name: 🔬 RC Verify (Py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -32,7 +32,7 @@ env:
 
 jobs:
   check-changes:
-    name: Check for changes
+    name: 🔍 Check for changes
     runs-on: ubuntu-latest
     outputs:
       python: ${{ steps.filter.outputs.python }}
@@ -60,7 +60,7 @@ jobs:
               - 'Dockerfile'
 
   quality-checks:
-    name: Code Quality & Tests
+    name: 🧪 Code Quality & Tests
     needs: check-changes
     runs-on: ubuntu-latest
     if: needs.check-changes.outputs.python == 'true'
@@ -215,7 +215,7 @@ jobs:
 
 
   license-check:
-    name: License and policy checks
+    name: 📜 License and policy checks
     runs-on: ubuntu-latest
     needs: check-changes
     steps:
@@ -228,7 +228,7 @@ jobs:
   # REMOVED DUPLICATE check-changes job here #
 
   ci-success:
-    name: CI
+    name: 🚦 CI
     runs-on: ubuntu-latest
     needs:
       - check-changes
@@ -249,7 +249,7 @@ jobs:
         run: echo "All required checks passed or were skipped."
 
   check-docker-build:
-    name: Verify Docker build
+    name: 🐳 Verify Docker build
     runs-on: ubuntu-latest
     needs: check-changes
     if: needs.check-changes.outputs.integration == 'true'
@@ -265,7 +265,7 @@ jobs:
           tags: responseiq:test
 
   integration-tests:
-    name: Integration tests
+    name: 🔗 Integration tests
     needs: check-changes
     runs-on: ubuntu-latest
     if: |

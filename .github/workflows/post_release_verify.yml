@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   verify:
-    name: Verify from PyPI (Py${{ matrix.python-version }})
+    name: ✅ Verify from PyPI (Py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -113,7 +113,7 @@ jobs:
           curl -fsS http://127.0.0.1:${{ matrix.api-port }}/health
 
   notify-failure:
-    name: Open issue on failure
+    name: 🚨 Open issue on failure
     needs: verify
     if: failure()
     runs-on: ubuntu-latest

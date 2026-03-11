@@ -15,11 +15,11 @@ permissions:
 
 jobs:
   pre-release-verify:
-    name: Pre-release verification
+    name: 🔬 Pre-release verification
     uses: ./.github/workflows/release_candidate.yml
 
   release:
-    name: Semantic Release
+    name: 🏷️ Semantic Release
     needs: pre-release-verify
     runs-on: ubuntu-latest
     environment: production   # requires approval in GitHub repo Settings → Environments → production
@@ -87,7 +87,7 @@ jobs:
           subject-path: dist/*
 
   docker-publish:
-    name: Build & Push Docker
+    name: 🐳 Build & Push Docker
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
     runs-on: ubuntu-latest
