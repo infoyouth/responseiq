@@ -25,6 +25,7 @@ from responseiq.config.policy_config import (
     RequiredCheck,
     load_policy_config,
 )
+from responseiq.services.audit_service import AuditEventType, log_event
 from responseiq.utils.logger import logger
 
 
@@ -109,11 +110,32 @@ class TrustGateValidator:
         for step in validation_steps:
             step_result = await step(request, result)
             if not step_result:
+                await log_event(
+                    AuditEventType.TRUST_GATE_BLOCKED,
+                    f"Trust Gate BLOCKED incident {request.incident_id}: {result.reason}",
+                    incident_id=str(request.incident_id),
+                    outcome="blocked",
+                    metadata={
+                        "reason": str(result.reason),
+                        "checks_failed": result.checks_failed,
+                        "policy_mode": result.policy_mode.value if result.policy_mode else None,
+                    },
+                )
                 return result
 
         # Step 2: Execute required checks
         checks_result = await self._execute_required_checks(request, result)
         if not checks_result:
+            await log_event(
+                AuditEventType.TRUST_GATE_BLOCKED,
+                f"Trust Gate BLOCKED incident {request.incident_id}: required checks failed",
+                incident_id=str(request.incident_id),
+                outcome="blocked",
+                metadata={
+                    "checks_failed": result.checks_failed,
+                    "policy_mode": result.policy_mode.value if result.policy_mode else None,
+                },
+            )
             return result
 
         # Step 3: Apply policy mode logic
@@ -121,6 +143,16 @@ class TrustGateValidator:
         result.message = self._get_approval_message(request)
 
         logger.info(f"Trust gate validation PASSED for incident {request.incident_id}")
+        await log_event(
+            AuditEventType.TRUST_GATE_PASSED,
+            f"Trust Gate PASSED incident {request.incident_id} — policy_mode={result.policy_mode.value if result.policy_mode else 'unknown'}",
+            incident_id=str(request.incident_id),
+            outcome="success",
+            metadata={
+                "policy_mode": result.policy_mode.value if result.policy_mode else None,
+                "checks_passed": result.checks_passed,
+            },
+        )
         return result
 
     async def _validate_severity(self, request: RemediationRequest, result: ValidationResult) -> bool:

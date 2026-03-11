@@ -95,6 +95,38 @@ class ProofBundleRecord(SQLModel, table=True):  # type: ignore[call-arg]
     created_at: datetime = Field(default_factory=_now)
 
 
+class AuditEventLog(SQLModel, table=True):  # type: ignore[call-arg]
+    """SOC2 CC6/CC7: Immutable, append-only audit event log.
+
+    Records every significant action across the ResponseIQ pipeline —
+    Trust Gate decisions, HMAC failures, PR interventions, rollbacks,
+    human feedback, and proof sealing. Written by
+    ``audit_service.log_event()``; never updated or deleted in-process.
+
+    Browsable via ``GET /api/v1/audit/events`` with date-range,
+    event_type, incident_id, and outcome filters.
+    """
+
+    __table_args__ = {"extend_existing": True}
+    id: int | None = Field(default=None, primary_key=True)
+    # Event identity
+    event_type: str = Field(index=True, description="AuditEventType value e.g. 'trust_gate.passed'")
+    incident_id: Optional[str] = Field(default=None, index=True, description="Related incident identifier (if any)")
+    # Actor: 'system', 'user:<id>', 'bot', 'webhook:datadog', etc.
+    actor: str = Field(default="system", description="Who/what generated this event")
+    # Outcome: success | blocked | warned | failed
+    outcome: str = Field(default="success", description="Event outcome: success, blocked, warned, failed")
+    # Human-readable summary
+    action: str = Field(description="One-line human-readable description of what happened")
+    # Supplementary detail (JSON-encoded dict — optional)
+    metadata_json: Optional[str] = Field(default=None, description="JSON blob with event-specific detail")
+    # Request context (best-effort; not always available from background tasks)
+    ip_address: Optional[str] = Field(default=None)
+    user_agent: Optional[str] = Field(default=None)
+    # Record housekeeping
+    timestamp: datetime = Field(default_factory=_now, index=True)
+
+
 class WatchdogRecord(SQLModel, table=True):  # type: ignore[call-arg]
     """#3 v2.18.0: Audit record for each post-apply watchdog run.
 
