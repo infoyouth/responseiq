@@ -23,6 +23,7 @@ from sqlmodel import Session, select
 
 from ..config.settings import settings
 from ..db import get_engine, get_session
+from ..services.audit_service import AuditEventType, log_event_sync
 from ..models.base import Incident, Log
 from ..schemas.webhooks import (
     DatadogWebhookPayload,
@@ -127,6 +128,13 @@ def _verify_hmac(
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expected, candidate):
         logger.warning("Webhook signature mismatch — request rejected")
+        log_event_sync(
+            AuditEventType.WEBHOOK_HMAC_FAILED,
+            "Webhook HMAC-SHA256 signature mismatch — request rejected (403)",
+            actor="webhook:unknown",
+            outcome="failed",
+            metadata={"detail": "Invalid webhook signature"},
+        )
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
 

@@ -20,6 +20,7 @@ from sqlmodel import select
 from .db import get_session, init_db
 from .models.base import Incident, Log
 from .routers.blueprints import router as blueprints_router
+from .routers.audit import router as audit_router
 from .routers.causal_graph import router as causal_graph_router
 from .routers.conversations import router as conversations_router
 from .routers.feedback import router as feedback_router
@@ -128,6 +129,7 @@ app.include_router(shadow_report_router)  # v2.17.0: PDF/CSV Pilot Report
 app.include_router(proof_record_router)  # v2.18.0 #2: ProofBundle audit endpoint
 app.include_router(watchdog_router)  # v2.18.0 #3: Post-apply watchdog
 app.include_router(streaming_router)  # P-Modern-3: SSE streaming analysis endpoint
+app.include_router(audit_router)  # SOC2: immutable audit event log
 
 # serve static UI
 static_dir = Path(__file__).parent / "static"

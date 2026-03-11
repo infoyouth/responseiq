@@ -18,6 +18,7 @@ from responseiq.db import get_session
 from responseiq.models.base import FeedbackRecord
 from responseiq.schemas.feedback import FeedbackIn, FeedbackOut, FeedbackSummary
 from responseiq.schemas.semantic import SimilaritySearchResult
+from responseiq.services.audit_service import AuditEventType, log_event_sync
 from responseiq.services.semantic_search_service import SemanticSearchService
 from responseiq.utils.logger import logger
 from responseiq.utils.tracing import score_langfuse
@@ -68,6 +69,14 @@ def submit_feedback(payload: FeedbackIn, session=Depends(get_session)):
         log_id=payload.log_id,
         approved=payload.approved,
         record_id=record.id,
+    )
+    log_event_sync(
+        AuditEventType.HUMAN_FEEDBACK_SUBMITTED,
+        f"Human feedback submitted for log {payload.log_id}: {'approved' if payload.approved else 'rejected'}",
+        incident_id=str(payload.log_id),
+        actor="user",
+        outcome="success",
+        metadata={"approved": payload.approved, "comment": payload.comment},
     )
     return FeedbackOut(
         id=record.id,  # type: ignore[arg-type]

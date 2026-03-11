@@ -201,6 +201,18 @@ class Settings(BaseSettings):
     # Observability
     otel_exporter_otlp_endpoint: Optional[str] = None
 
+    # ---------------------------------------------------------------------------
+    # SOC2 Audit Log retention (CC6/CC7)
+    # ---------------------------------------------------------------------------
+    # AUDIT_RETENTION_DAYS — how long audit events are kept before they may be
+    # purged.  2555 days = 7 years (standard SOC2 Type II / financial records).
+    # Set to 0 to disable automatic expiry (events kept indefinitely).
+    audit_retention_days: int = Field(
+        default=2555,
+        ge=0,
+        description="Audit log retention in days (0 = keep forever). Default: 2555 (7 years).",
+    )
+
     # Paths
     base_dir: Path = Path(__file__).resolve().parent.parent.parent
     keywords_config_path: Optional[Path] = None
