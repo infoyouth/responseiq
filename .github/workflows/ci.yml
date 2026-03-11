@@ -238,21 +238,15 @@ jobs:
     if: always()
     steps:
       - name: 🚦 Evaluate gate
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: |
-          results='${{ toJSON(needs) }}'
-          if echo "$results" | python3 -c "
-import sys, json
-needs = json.load(sys.stdin)
-failed = [k for k, v in needs.items() if v['result'] == 'failure']
-if failed:
-    print('FAILED jobs:', ', '.join(failed))
-    sys.exit(1)
-print('All jobs passed or were skipped.')
-"; then
-            exit 0
-          else
-            exit 1
-          fi
+          echo "One or more required jobs failed or were cancelled."
+          echo "quality-checks:    ${{ needs.quality-checks.result }}"
+          echo "check-docker-build: ${{ needs.check-docker-build.result }}"
+          echo "license-check:     ${{ needs.license-check.result }}"
+          exit 1
+      - name: ✅ All checks passed
+        run: echo "All required checks passed or were skipped."
 
   check-docker-build:
     name: Verify Docker build
