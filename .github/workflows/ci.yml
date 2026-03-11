@@ -60,7 +60,7 @@ jobs:
               - 'Dockerfile'
 
   quality-checks:
-    name: 🧪 Code Quality & Tests
+    name: 🧪 Code Quality & Tests (3.12)
     needs: check-changes
     runs-on: ubuntu-latest
     if: needs.check-changes.outputs.python == 'true'
