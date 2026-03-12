@@ -31,6 +31,10 @@ permissions: read-all
 env:
   PYTHON_VERSION: '3.12'
   CACHE_NAME: responseiq-uv
+  # Force all composite/third-party actions to run on Node 24.
+  # Required because codecov/codecov-action v5 internally pins github-script@v7 (node20).
+  # Remove once codecov ships a release that updates that internal dependency.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   check-changes:
