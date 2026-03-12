@@ -101,15 +101,17 @@ jobs:
 
       - name: 🏥 API health smoke test
         shell: bash
+        env:
+          API_PORT: ${{ matrix.api-port }}
         run: |
-          /tmp/responseiq-post/bin/python -m uvicorn responseiq.app:app --host 127.0.0.1 --port ${{ matrix.api-port }} &
+          /tmp/responseiq-post/bin/python -m uvicorn responseiq.app:app --host 127.0.0.1 --port "$API_PORT" &
           APP_PID=$!
           cleanup() {
             kill "$APP_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
           sleep 5
-          curl -fsS http://127.0.0.1:$\{\{ matrix.api-port }}/health
+          curl -fsS "http://127.0.0.1:${API_PORT}/health"
 
   notify-failure:
     name: 🚨 Open issue on failure
