@@ -4,7 +4,8 @@ on:
   workflow_call:
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   rc-verify:
