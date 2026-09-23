@@ -1,0 +1,7 @@
+{
+  "affected_files": ["auth_service.py"],
+  "expected_failure": "KeyError: 'last_seen'",
+  "expected_success": "refresh_session returns successfully after login",
+  "policy_mode": "pr_only_until_validated",
+  "evidence_level": "application_reproduction"
+}
