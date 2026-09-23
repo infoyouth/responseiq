@@ -21,7 +21,7 @@ jobs:
   release:
     name: 🏷️ Semantic Release
     needs: pre-release-verify
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     concurrency: release
     outputs:
       new_release_published: ${{ steps.semantic.outputs.released }}
@@ -113,7 +113,7 @@ jobs:
     name: 🧪 Publish and verify TestPyPI
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment:
       name: testpypi
       url: https://test.pypi.org/project/responseiq/
@@ -170,7 +170,7 @@ jobs:
     name: 🚀 Publish to PyPI
     needs: publish-testpypi
     if: needs.publish-testpypi.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment:
       name: production
       url: https://pypi.org/project/responseiq/
@@ -202,7 +202,7 @@ jobs:
       - release
       - publish-pypi
     if: needs.release.outputs.new_release_published == 'true' && needs.publish-pypi.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment: production   # explicit gate — covered transitively by release, but explicit for auditability
     env:
       REGISTRY: ghcr.io
