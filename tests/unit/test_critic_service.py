@@ -176,11 +176,11 @@ class TestCallCriticLLM:
 
     @pytest.mark.asyncio
     async def test_langfuse_generation_is_tracked(self):
-        """When Langfuse is configured, start_generation and end are called."""
+        """When Langfuse is configured, a generation observation is ended."""
         mock_client = _mock_critic_client()
         mock_lf_gen = MagicMock()
         mock_lf = MagicMock()
-        mock_lf.start_generation.return_value = mock_lf_gen
+        mock_lf.start_observation.return_value = mock_lf_gen
         with (
             patch("instructor.from_openai", return_value=mock_client),
             patch("responseiq.services.critic_service.settings") as mock_settings,
@@ -191,5 +191,5 @@ class TestCallCriticLLM:
             mock_settings.llm_base_url = None
             mock_router.model_for.return_value = "gpt-4o-mini"
             await _call_critic_llm("DB timeout", "increase pool size")
-        mock_lf.start_generation.assert_called_once()
+        mock_lf.start_observation.assert_called_once()
         mock_lf_gen.end.assert_called_once()
