@@ -21,7 +21,7 @@ jobs:
   release:
     name: 🏷️ Semantic Release
     needs: pre-release-verify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production   # requires approval in GitHub repo Settings → Environments → production
     concurrency: release
     outputs:
@@ -90,7 +90,7 @@ jobs:
     name: 🐳 Build & Push Docker
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production   # explicit gate — covered transitively by release, but explicit for auditability
     env:
       REGISTRY: ghcr.io

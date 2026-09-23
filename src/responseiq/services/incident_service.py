@@ -39,6 +39,10 @@ def process_log_ingestion(log_id: int) -> None:
                 log.severity = detected_severity
                 session.add(log)
 
+            if log.id is None:
+                logger.error("Log entry has no database ID during processing.")
+                return
+
             # Create a new incident record
             incident = Incident(
                 log_id=log.id,
