@@ -99,6 +99,20 @@ jobs:
           /tmp/responseiq-post/bin/responseiq --help
           /tmp/responseiq-post/bin/python -m responseiq.cli --help
 
+      - name: 🔢 Verify installed package version
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          /tmp/responseiq-post/bin/python - <<'PY'
+          import importlib.metadata
+          import os
+
+          expected = os.environ["EXPECTED_VERSION"]
+          actual = importlib.metadata.version("responseiq")
+          if actual != expected:
+              raise SystemExit(f"Package version mismatch: expected {expected}, got {actual}")
+          print(f"Verified responseiq=={actual}")
+
       - name: 🏥 API health smoke test
         shell: bash
         env:
