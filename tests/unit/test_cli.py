@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import at module level — avoids module-cache pollution in xdist workers
-from responseiq.cli import _run_demo, main
+from responseiq.cli import _run_demo, _run_doctor, main
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +127,37 @@ class TestMainSubcommandDispatch:
                 main()
         mock_init.assert_called_once()
         assert exc_info.value.code == 0
+
+    def test_doctor_reports_local_fallback(self, tmp_path, monkeypatch, capsys):
+        """Doctor treats missing optional services as warnings, not failures."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.delenv("RESPONSEIQ_LLM_BASE_URL", raising=False)
+        monkeypatch.delenv("LLM_BASE_URL", raising=False)
+        monkeypatch.delenv("RESPONSEIQ_OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("RESPONSEIQ_GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+
+        assert _run_doctor() == 0
+        output = capsys.readouterr().out
+        assert "LLM provider" in output
+        assert "rule-engine fallback active" in output
+        assert "Doctor complete" in output
+
+    def test_doctor_checks_configured_llm_endpoint(self, tmp_path, monkeypatch, capsys):
+        """Doctor checks the configured OpenAI-compatible endpoint."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.setenv("RESPONSEIQ_LLM_BASE_URL", "http://localhost:11434/v1")
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_urlopen.return_value.__enter__.return_value = MagicMock()
+            assert _run_doctor() == 0
+
+        output = capsys.readouterr().out
+        assert "LLM endpoint" in output
+        assert "http://localhost:11434/v1/models" in output
 
     def test_run_init_smoke_test_subprocess_called(self, tmp_path):
         """_run_init runs a scan smoke-test subprocess when samples/crash.log exists and LLM != none."""

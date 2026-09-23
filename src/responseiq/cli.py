@@ -281,6 +281,62 @@ def _run_demo() -> None:
     print()
 
 
+def _run_doctor() -> int:
+    """Check local prerequisites and report actionable setup guidance."""
+    from urllib.error import URLError
+    from urllib.parse import urlparse
+    from urllib.request import Request, urlopen
+
+    root = _find_project_root()
+    checks: list[tuple[str, str, str]] = []
+
+    checks.append(("Project root", "ok" if (root / "pyproject.toml").exists() else "error", str(root)))
+    env_path = root / ".env"
+    checks.append(("Configuration", "ok" if env_path.exists() else "warn", str(env_path)))
+
+    base_url = os.getenv("RESPONSEIQ_LLM_BASE_URL") or os.getenv("LLM_BASE_URL")
+    openai_key = os.getenv("RESPONSEIQ_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
+    if base_url:
+        health_url = base_url.rstrip("/") + "/models"
+        if urlparse(health_url).scheme not in {"http", "https"}:
+            checks.append(("LLM endpoint", "warn", f"unsupported URL scheme ({health_url})"))
+        else:
+            try:
+                request = Request(health_url, method="GET")  # noqa: S310
+                with urlopen(request, timeout=3):  # noqa: S310
+                    checks.append(("LLM endpoint", "ok", health_url))
+            except (OSError, URLError) as exc:
+                checks.append(("LLM endpoint", "warn", f"unreachable ({exc})"))
+    elif openai_key:
+        checks.append(("LLM provider", "ok", "OpenAI API key configured"))
+    else:
+        checks.append(("LLM provider", "warn", "none configured; rule-engine fallback active"))
+
+    github_token = os.getenv("RESPONSEIQ_GITHUB_TOKEN") or os.getenv("GITHUB_TOKEN")
+    checks.append(
+        (
+            "GitHub integration",
+            "ok" if github_token else "warn",
+            "token configured" if github_token else "dry-run mode (no token)",
+        )
+    )
+    checks.append(("Git repository", "ok" if (root / ".git").exists() else "warn", "source context available"))
+
+    print("ResponseIQ Doctor")
+    print("=" * 60)
+    for name, status, detail in checks:
+        marker = {"ok": "OK", "warn": "WARN", "error": "ERROR"}[status]
+        print(f"[{marker:5}] {name:20} {detail}")
+
+    errors = sum(status == "error" for _, status, _ in checks)
+    print()
+    if errors:
+        print("Doctor found blocking setup errors.")
+        return 1
+    print("Doctor complete. Warnings are optional setup items.")
+    return 0
+
+
 def main():
     # ── top-level commands dispatched before argparse ───────────────────────
     if len(sys.argv) >= 2 and sys.argv[1] == "init":
@@ -291,12 +347,16 @@ def main():
         _run_demo()
         sys.exit(0)
 
+    if len(sys.argv) >= 2 and sys.argv[1] == "doctor":
+        sys.exit(_run_doctor())
+
     parser = argparse.ArgumentParser(
         description=(
             "ResponseIQ CLI — AI-native self-healing infrastructure copilot.\n\n"
             "Special commands (run before flags are parsed):\n"
             "  responseiq init   Interactive setup wizard (writes .env)\n"
-            "  responseiq demo   Zero-config live demo"
+            "  responseiq demo   Zero-config live demo\n"
+            "  responseiq doctor Check local prerequisites"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
