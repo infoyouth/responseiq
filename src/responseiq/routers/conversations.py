@@ -247,8 +247,9 @@ def _trace_conversation_turn(session_id: str, log_id: int, user_content: str, re
     if lf is None:
         return
     try:
-        gen = lf.start_generation(
+        gen = lf.start_observation(
             name="conversation_turn",
+            as_type="generation",
             model=settings.llm_fast_model,
             input=[{"role": "user", "content": user_content}],
             metadata={"session_id": session_id, "log_id": log_id},

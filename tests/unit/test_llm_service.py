@@ -206,7 +206,7 @@ class TestAnalyzeWithOpenAIOtelSpans:
         )
         mock_lf = MagicMock()
         mock_gen = MagicMock()
-        mock_lf.start_generation.return_value = mock_gen
+        mock_lf.start_observation.return_value = mock_gen
 
         with (
             patch("responseiq.ai.llm_service.settings", self._mock_settings()),
@@ -219,7 +219,7 @@ class TestAnalyzeWithOpenAIOtelSpans:
 
             await _analyze_with_openai("ERROR: oom kill")
 
-        mock_lf.start_generation.assert_called_once()
+        mock_lf.start_observation.assert_called_once()
         mock_gen.update.assert_called()
         mock_gen.end.assert_called()
 
@@ -231,7 +231,7 @@ class TestAnalyzeWithOpenAIOtelSpans:
 
         mock_lf = MagicMock()
         mock_gen = MagicMock()
-        mock_lf.start_generation.return_value = mock_gen
+        mock_lf.start_observation.return_value = mock_gen
 
         with (
             patch("responseiq.ai.llm_service.settings", self._mock_settings()),
@@ -296,7 +296,7 @@ class TestGenerateReproductionCodeSpans:
 
         mock_lf = MagicMock()
         mock_gen = MagicMock()
-        mock_lf.start_generation.return_value = mock_gen
+        mock_lf.start_observation.return_value = mock_gen
 
         with (
             patch("responseiq.ai.llm_service.settings", self._mock_settings()),
@@ -309,7 +309,7 @@ class TestGenerateReproductionCodeSpans:
 
             await generate_reproduction_code("NULL at line 5", "def f(): pass")
 
-        mock_lf.start_generation.assert_called_once()
+        mock_lf.start_observation.assert_called_once()
         mock_gen.update.assert_called()
         mock_gen.end.assert_called()
 
@@ -320,7 +320,7 @@ class TestGenerateReproductionCodeSpans:
 
         mock_lf = MagicMock()
         mock_gen = MagicMock()
-        mock_lf.start_generation.return_value = mock_gen
+        mock_lf.start_observation.return_value = mock_gen
 
         with (
             patch("responseiq.ai.llm_service.settings", self._mock_settings()),

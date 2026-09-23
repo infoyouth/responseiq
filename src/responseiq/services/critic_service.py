@@ -96,8 +96,9 @@ async def _call_critic_llm(incident_summary: str, proposed_fix: str) -> Optional
     lf = get_langfuse()
     lf_gen = None
     if lf:
-        lf_gen = lf.start_generation(
+        lf_gen = lf.start_observation(
             name="critic_review",
+            as_type="generation",
             model=fast_model,
             input=prompt,
         )

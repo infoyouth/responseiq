@@ -193,8 +193,9 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
     lf_generation = None
     _analysis_model = _router.model_for("analyze")
     if lf:
-        lf_generation = lf.start_generation(
+        lf_generation = lf.start_observation(
             name="analyze_incident",
+            as_type="generation",
             model=_analysis_model,
             input=[
                 {"role": "system", "content": _ANALYSIS_SYSTEM_PROMPT},
@@ -270,8 +271,9 @@ async def generate_reproduction_code(incident_summary: str, relevant_code: str) 
     lf_generation = None
     _repro_model = _router.model_for("generate_repro")
     if lf:
-        lf_generation = lf.start_generation(
+        lf_generation = lf.start_observation(
             name="generate_reproduction_code",
+            as_type="generation",
             model=_repro_model,
             input=prompt,
         )
