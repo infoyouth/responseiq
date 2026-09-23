@@ -22,7 +22,6 @@ jobs:
     name: 🏷️ Semantic Release
     needs: pre-release-verify
     runs-on: ubuntu-24.04
-    environment: production   # requires approval in GitHub repo Settings → Environments → production
     concurrency: release
     outputs:
       new_release_published: ${{ steps.semantic.outputs.released }}
@@ -35,6 +34,14 @@ jobs:
           token: ${{ secrets.RELEASE_PAT }}
           persist-credentials: true
 
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: ⚡ Install uv
+        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a  # v7
+
       - name: 🏷️ Python Semantic Release
         id: semantic
         uses: python-semantic-release/python-semantic-release@350c48fcb3ffcdfd2e0a235206bc2ecea6b69df0  # v10.5.3
@@ -43,6 +50,27 @@ jobs:
           git_committer_name: "Youth Innovations"
           git_committer_email: "info.youthinno@gmail.com"
           changelog: false  # git-cliff owns CHANGELOG.md
+
+      - name: 🔍 Validate exact release wheel
+        if: steps.semantic.outputs.released == 'true'
+        env:
+          RELEASE_VERSION: ${{ steps.semantic.outputs.version }}
+        run: |
+          test -n "$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          uv venv /tmp/responseiq-release-smoke
+          wheel=$(ls -t dist/*.whl | head -n 1)
+          uv pip install --python /tmp/responseiq-release-smoke/bin/python "$wheel"
+          /tmp/responseiq-release-smoke/bin/python - <<'PY'
+          import os
+          from importlib.metadata import version
+
+          expected = os.environ["RELEASE_VERSION"]
+          actual = version("responseiq")
+          if actual != expected:
+              raise SystemExit(f"Wheel version mismatch: expected {expected}, got {actual}")
+          print(f"Validated wheel version: {actual}")
+          PY
+          /tmp/responseiq-release-smoke/bin/responseiq --help >/dev/null
 
       # ---------------------------------------------------------------------------
       # git-cliff: generate a rich, human-readable CHANGELOG.md after PSR tags
@@ -72,24 +100,105 @@ jobs:
             git commit -m "docs: update CHANGELOG for v${{ steps.semantic.outputs.version }} [skip ci]"
           git push
 
-      - name: 🚀 Publish to PyPI
+      - name: 📦 Upload validated distributions
         if: steps.semantic.outputs.released == 'true'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        with:
+          name: python-package-distributions
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-testpypi:
+    name: 🧪 Publish and verify TestPyPI
+    needs: release
+    if: needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/responseiq/
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: ⚡ Install uv
+        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a  # v7
+
+      - name: ⬇️ Download distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v7.0.0
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: 🚀 Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: 🔍 Install and smoke-test TestPyPI release
+        env:
+          RELEASE_VERSION: ${{ needs.release.outputs.new_release_version }}
+        run: |
+          uv venv /tmp/responseiq-testpypi
+          for attempt in {1..8}; do
+            if uv pip install --python /tmp/responseiq-testpypi/bin/python \
+              --no-cache \
+              --index-url https://test.pypi.org/simple/ \
+              --extra-index-url https://pypi.org/simple/ \
+              "responseiq==${RELEASE_VERSION}"; then
+              break
+            fi
+            if [ "$attempt" -eq 8 ]; then
+              echo "TestPyPI package was not installable after retries"
+              exit 1
+            fi
+            sleep 20
+          done
+          /tmp/responseiq-testpypi/bin/responseiq --help
+          /tmp/responseiq-testpypi/bin/python -m responseiq.cli --help
+
+  publish-pypi:
+    name: 🚀 Publish to PyPI
+    needs: publish-testpypi
+    if: needs.publish-testpypi.result == 'success'
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+      url: https://pypi.org/project/responseiq/
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: ⬇️ Download distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v7.0.0
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: 🚀 Publish to PyPI
         uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
         with:
           attestations: true
-          # No PYPI_TOKEN needed — uses OIDC Trusted Publishing.
-          # One-time setup at: https://pypi.org/manage/project/responseiq/settings/publishing/
 
       - name: 🔐 Attest build provenance (SLSA)
-        if: steps.semantic.outputs.released == 'true'
         uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018  # v1
         with:
           subject-path: dist/*
 
   docker-publish:
     name: 🐳 Build & Push Docker
-    needs: release
-    if: needs.release.outputs.new_release_published == 'true'
+    needs:
+      - release
+      - publish-pypi
+    if: needs.release.outputs.new_release_published == 'true' && needs.publish-pypi.result == 'success'
     runs-on: ubuntu-24.04
     environment: production   # explicit gate — covered transitively by release, but explicit for auditability
     env:
@@ -100,7 +209,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       
       - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: 🔑 Log in to GHCR
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
@@ -119,7 +228,7 @@ jobs:
             type=raw,value=latest
 
       - name: 📦 Build & push Docker image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25  # v5
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           push: true

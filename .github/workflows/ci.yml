@@ -39,7 +39,7 @@ env:
 jobs:
   check-changes:
     name: 🔍 Check for changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       python: ${{ steps.python-changes.outputs.any_changed }}
       integration: ${{ steps.integration-changes.outputs.any_changed }}
@@ -72,7 +72,7 @@ jobs:
   quality-checks:
     name: 🧪 Code Quality & Tests (3.12)
     needs: check-changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: needs.check-changes.outputs.python == 'true'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -163,7 +163,7 @@ jobs:
             fi
           }
 
-          check_status "🎨 ruff format"   "reports/ruff-format.txt" "All checks passed|unchanged"
+          check_status "🎨 ruff format"   "reports/ruff-format.txt" "All checks passed|unchanged|already formatted"
           check_status "🔍 ruff lint"     "reports/ruff-lint.txt"   "All checks passed"
           check_status "🔒 security scan" "reports/security.txt"    "All checks passed"
           check_status "🔐 pip-audit"     "reports/pip-audit.txt"   "No known vulnerabilities"
@@ -225,7 +225,7 @@ jobs:
 
   license-check:
     name: 📜 License and policy checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check-changes
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -238,7 +238,7 @@ jobs:
 
   ci-success:
     name: 🚦 CI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - check-changes
       - quality-checks
@@ -259,15 +259,15 @@ jobs:
 
   check-docker-build:
     name: 🐳 Verify Docker build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check-changes
     if: needs.check-changes.outputs.integration == 'true'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: 🐳 Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - name: 🔨 Build image (no push)
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25  # v5
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
           push: false
@@ -276,7 +276,7 @@ jobs:
   integration-tests:
     name: 🔗 Integration tests
     needs: check-changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: |
       needs.check-changes.outputs.integration == 'true' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
