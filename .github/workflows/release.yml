@@ -21,30 +21,30 @@ jobs:
   release:
     name: 🏷️ Semantic Release
     needs: pre-release-verify
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     concurrency: release
     outputs:
       new_release_published: ${{ steps.semantic.outputs.released }}
       new_release_version: ${{ steps.semantic.outputs.version }}
     
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PAT }}
           persist-credentials: true
 
       - name: 🐍 Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
       - name: ⚡ Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
       - name: 🏷️ Python Semantic Release
         id: semantic
-        uses: python-semantic-release/python-semantic-release@350c48fcb3ffcdfd2e0a235206bc2ecea6b69df0  # v10.5.3
+        uses: python-semantic-release/python-semantic-release@b700dbeb1f431a0fcc30a79f3f0869407fe07278  # v10.7.0
         with:
           github_token: ${{ secrets.RELEASE_PAT }}
           git_committer_name: "Youth Innovations"
@@ -78,7 +78,7 @@ jobs:
       - name: 📝 Generate CHANGELOG (git-cliff)
         if: steps.semantic.outputs.released == 'true'
         continue-on-error: true  # git-cliff exits 1 on unparseable commits; file is still written
-        uses: orhun/git-cliff-action@c93ef52f3d0ddcdcc9bd5447d98d458a11cd4f72  # v4
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff  # v4
         with:
           config: cliff.toml
           args: --verbose --latest
@@ -102,7 +102,7 @@ jobs:
 
       - name: 📦 Upload validated distributions
         if: steps.semantic.outputs.released == 'true'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: python-package-distributions
           path: dist/
@@ -113,7 +113,7 @@ jobs:
     name: 🧪 Publish and verify TestPyPI
     needs: release
     if: needs.release.outputs.new_release_published == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment:
       name: testpypi
       url: https://test.pypi.org/project/responseiq/
@@ -123,21 +123,21 @@ jobs:
 
     steps:
       - name: 🐍 Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.12"
 
       - name: ⚡ Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7  # v10.2.0
 
       - name: ⬇️ Download distributions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: python-package-distributions
           path: dist/
 
       - name: 🚀 Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
@@ -170,7 +170,7 @@ jobs:
     name: 🚀 Publish to PyPI
     needs: publish-testpypi
     if: needs.publish-testpypi.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment:
       name: production
       url: https://pypi.org/project/responseiq/
@@ -181,18 +181,18 @@ jobs:
 
     steps:
       - name: ⬇️ Download distributions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: python-package-distributions
           path: dist/
 
       - name: 🚀 Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # release/v1
         with:
           attestations: true
 
       - name: 🔐 Attest build provenance (SLSA)
-        uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018  # v1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4
         with:
           subject-path: dist/*
 
@@ -202,20 +202,20 @@ jobs:
       - release
       - publish-pypi
     if: needs.release.outputs.new_release_published == 'true' && needs.publish-pypi.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     environment: production   # explicit gate — covered transitively by release, but explicit for auditability
     env:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
     
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       
       - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
       - name: 🔑 Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -223,7 +223,7 @@ jobs:
 
       - name: 🏷️ Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
