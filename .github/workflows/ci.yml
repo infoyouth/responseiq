@@ -40,7 +40,7 @@ env:
 jobs:
   check-changes:
     name: 🔍 Check for changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       python: ${{ steps.python-changes.outputs.any_changed }}
       integration: ${{ steps.integration-changes.outputs.any_changed }}
@@ -73,7 +73,7 @@ jobs:
   quality-checks:
     name: 🧪 Code Quality & Tests (3.12)
     needs: check-changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: needs.check-changes.outputs.python == 'true'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -226,7 +226,7 @@ jobs:
 
   license-check:
     name: 📜 License and policy checks
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: check-changes
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -239,7 +239,7 @@ jobs:
 
   ci-success:
     name: 🚦 CI
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs:
       - check-changes
       - quality-checks
@@ -260,7 +260,7 @@ jobs:
 
   check-docker-build:
     name: 🐳 Verify Docker build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: check-changes
     if: needs.check-changes.outputs.integration == 'true'
     steps:
@@ -277,7 +277,7 @@ jobs:
   integration-tests:
     name: 🔗 Integration tests
     needs: check-changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: |
       needs.check-changes.outputs.integration == 'true' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')

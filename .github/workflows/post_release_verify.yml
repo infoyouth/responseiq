@@ -20,7 +20,7 @@ permissions:
 jobs:
   verify:
     name: ✅ Verify from PyPI (Py${{ matrix.python-version }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -131,7 +131,7 @@ jobs:
     name: 🚨 Open issue on failure
     needs: verify
     if: failure()
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
 
     steps:
       - name: 🚨 Open failure issue
