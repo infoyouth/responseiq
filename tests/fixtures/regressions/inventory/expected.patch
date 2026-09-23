@@ -1,0 +1,14 @@
+diff --git a/inventory_service.py b/inventory_service.py
+--- a/inventory_service.py
++++ b/inventory_service.py
+@@ -138,5 +138,5 @@
+-    rows = conn.execute("SELECT * FROM inventory WHERE qty < low_stock_threshold")
+-    if not rows:
+-        return []                         # ← BUG: conn.close() never called!
+-    conn.close()
+-    return rows
++    try:
++        rows = conn.execute("SELECT * FROM inventory WHERE qty < low_stock_threshold")
++        return rows
++    finally:
++        conn.close()

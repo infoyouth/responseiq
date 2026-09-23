@@ -1,0 +1,7 @@
+{
+  "id": "sandbox-payment-silent-success",
+  "service": "payment_service",
+  "root_cause": "process_charge swallows payment failures and reports succeeded",
+  "failure_signature": "NetworkRetryExhausted",
+  "evidence_level": "application_reproduction"
+}

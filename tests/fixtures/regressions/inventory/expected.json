@@ -1,0 +1,7 @@
+{
+  "affected_files": ["inventory_service.py"],
+  "expected_failure": "_PoolExhaustedError",
+  "expected_success": "repeated empty-result queries release connections",
+  "policy_mode": "pr_only_until_validated",
+  "evidence_level": "application_reproduction"
+}

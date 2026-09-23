@@ -1,0 +1,7 @@
+{
+  "id": "sandbox-inventory-connection-leak",
+  "service": "inventory_service",
+  "root_cause": "get_low_stock_items returns without closing its connection on empty results",
+  "failure_signature": "_PoolExhaustedError",
+  "evidence_level": "application_reproduction"
+}
