@@ -25,6 +25,12 @@ pip install responseiq && responseiq demo
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/infoyouth/responseiq)
 
+## Support ResponseIQ
+
+If ResponseIQ is useful to you, you can support the project with any amount you choose. Every contribution is appreciated and helps keep the project moving.
+
+[![Sponsor ResponseIQ](https://img.shields.io/badge/Sponsor-ResponseIQ-ea4aaa?logo=github)](https://github.com/sponsors/infoyouth)
+
 ---
 
 ## How it works
