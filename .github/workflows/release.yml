@@ -40,7 +40,7 @@ jobs:
           python-version: "3.12"
 
       - name: ⚡ Install uv
-        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a  # v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
 
       - name: 🏷️ Python Semantic Release
         id: semantic
@@ -128,7 +128,7 @@ jobs:
           python-version: "3.12"
 
       - name: ⚡ Install uv
-        uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a  # v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
 
       - name: ⬇️ Download distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v7.0.0
