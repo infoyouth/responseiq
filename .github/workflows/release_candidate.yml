@@ -27,6 +27,45 @@ jobs:
       - name: ⚡ Install uv
         uses: astral-sh/setup-uv@6ee6290f1cbc4156c0bdd66691b2c144ef8df19a  # v7
 
+      - name: 📦 Sync development environment
+        run: uv sync --group dev --active
+
+      - name: 🔢 Verify package version consistency
+        run: |
+          uv run python - <<'PY'
+          import re
+          import tomllib
+          from pathlib import Path
+
+          declared = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          version_source = Path("src/responseiq/__version__.py").read_text()
+          match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']$', version_source, re.MULTILINE)
+          if match is None:
+              raise SystemExit("Could not read src/responseiq/__version__.py")
+          runtime = match.group(1)
+          if declared != runtime:
+              raise SystemExit(f"Version mismatch: pyproject.toml={declared}, __version__.py={runtime}")
+          print(f"Version consistent: {declared}")
+
+      - name: 🎨 Format check
+        run: uv run ruff format --check src tests
+
+      - name: 🔍 Lint
+        run: uv run ruff check src tests
+
+      - name: 🔬 Type check
+        run: uv run mypy src
+
+      - name: 🔒 Security scan
+        run: uv run ruff check --select S src
+
+      - name: 🛡️ Dependency audit
+        continue-on-error: true
+        run: uv run pip-audit --format cyclonedx-json -o /tmp/responseiq-pip-audit.json
+
+      - name: 🧪 Run full test suite
+        run: uv run pytest -n auto --dist=loadscope --maxfail=1 --disable-warnings -q
+
       - name: 🏗️ Build distributables
         run: |
           rm -rf dist
