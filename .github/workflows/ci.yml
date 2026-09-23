@@ -11,6 +11,7 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
+      - "renovate.json"
       - ".github/workflows/**"
       - "action.yml"
       - "uv.lock"
