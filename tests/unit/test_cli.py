@@ -159,6 +159,47 @@ class TestMainSubcommandDispatch:
         assert "LLM endpoint" in output
         assert "http://localhost:11434/v1/models" in output
 
+    def test_doctor_reports_openai_provider(self, tmp_path, monkeypatch, capsys):
+        """Doctor recognizes a configured hosted LLM provider."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.delenv("RESPONSEIQ_LLM_BASE_URL", raising=False)
+        monkeypatch.setenv("RESPONSEIQ_OPENAI_API_KEY", "sk-test")
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+
+        assert _run_doctor() == 0
+        assert "OpenAI API key configured" in capsys.readouterr().out
+
+    def test_doctor_reports_unsupported_endpoint_scheme(self, tmp_path, monkeypatch, capsys):
+        """Doctor rejects non-HTTP endpoint schemes without making a request."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.setenv("RESPONSEIQ_LLM_BASE_URL", "ftp://localhost:11434/v1")
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+
+        assert _run_doctor() == 0
+        assert "unsupported URL scheme" in capsys.readouterr().out
+
+    def test_doctor_reports_unreachable_endpoint(self, tmp_path, monkeypatch, capsys):
+        """Doctor turns endpoint connection failures into actionable warnings."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.setenv("RESPONSEIQ_LLM_BASE_URL", "http://localhost:11434/v1")
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+
+        with patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
+            assert _run_doctor() == 0
+
+        assert "unreachable" in capsys.readouterr().out
+
+    def test_doctor_blocks_missing_project_root(self, tmp_path, monkeypatch, capsys):
+        """Doctor returns failure when run outside a project root."""
+        monkeypatch.delenv("RESPONSEIQ_LLM_BASE_URL", raising=False)
+        monkeypatch.delenv("LLM_BASE_URL", raising=False)
+        monkeypatch.delenv("RESPONSEIQ_OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+
+        assert _run_doctor() == 1
+        assert "blocking setup errors" in capsys.readouterr().out
+
     def test_run_init_smoke_test_subprocess_called(self, tmp_path):
         """_run_init runs a scan smoke-test subprocess when samples/crash.log exists and LLM != none."""
         from responseiq.cli import _run_init
