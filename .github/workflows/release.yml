@@ -147,11 +147,14 @@ jobs:
         run: |
           uv venv /tmp/responseiq-testpypi
           for attempt in {1..8}; do
-            if uv pip install --python /tmp/responseiq-testpypi/bin/python \
+            wheel_url=$(curl -fsS https://test.pypi.org/pypi/responseiq/json \
+              | jq -r --arg version "$RELEASE_VERSION" \
+                '.info.version as $published | select($published == $version) | .urls[] | select(.filename | endswith(".whl")) | .url' \
+              | head -n 1 || true)
+            if [ -n "$wheel_url" ] && uv pip install --python /tmp/responseiq-testpypi/bin/python \
               --no-cache \
-              --index-url https://test.pypi.org/simple/ \
-              --extra-index-url https://pypi.org/simple/ \
-              "responseiq==${RELEASE_VERSION}"; then
+              --index-url https://pypi.org/simple/ \
+              "$wheel_url"; then
               break
             fi
             if [ "$attempt" -eq 8 ]; then
