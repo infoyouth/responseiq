@@ -18,7 +18,7 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import instructor  # type: ignore[import-untyped]
 from openai import AsyncOpenAI
@@ -104,7 +104,7 @@ def _get_instructor_client() -> instructor.AsyncInstructor:
             from litellm import AsyncCompletions  # type: ignore[import-untyped]
 
             litellm.set_verbose = False
-            return instructor.from_litellm(AsyncCompletions())
+            return cast(Any, instructor.from_litellm(AsyncCompletions()))
         except ImportError:
             logger.warning(
                 "RESPONSEIQ_USE_LITELLM=true but 'litellm' is not installed. "

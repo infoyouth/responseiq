@@ -41,7 +41,7 @@ def process_log_ingestion(log_id: int) -> None:
 
             # Create a new incident record
             incident = Incident(
-                log_id=log.id,
+                log_id=log_id,
                 severity=detected_severity,
                 description=detected_reason,
                 source=detected_source,

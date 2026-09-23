@@ -10,7 +10,7 @@ permissions:
 jobs:
   rc-verify:
     name: 🔬 RC Verify (Py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +60,6 @@ jobs:
         run: uv run ruff check --select S src
 
       - name: 🛡️ Dependency audit
-        continue-on-error: true
         run: uv run pip-audit --format cyclonedx-json -o /tmp/responseiq-pip-audit.json
 
       - name: 🧪 Run full test suite
