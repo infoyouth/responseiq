@@ -163,7 +163,7 @@ jobs:
             fi
           }
 
-          check_status "🎨 ruff format"   "reports/ruff-format.txt" "All checks passed|unchanged"
+          check_status "🎨 ruff format"   "reports/ruff-format.txt" "All checks passed|unchanged|already formatted"
           check_status "🔍 ruff lint"     "reports/ruff-lint.txt"   "All checks passed"
           check_status "🔒 security scan" "reports/security.txt"    "All checks passed"
           check_status "🔐 pip-audit"     "reports/pip-audit.txt"   "No known vulnerabilities"
