@@ -45,7 +45,7 @@ jobs:
       python: ${{ steps.python-changes.outputs.any_changed }}
       integration: ${{ steps.integration-changes.outputs.any_changed }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: 🔍 Detect python-related changes
         uses: tj-actions/changed-files@22103cc46bda19c2b464ffe86db46df6922fd323  # v47.0.5
         id: python-changes
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-26.04
     if: needs.check-changes.outputs.python == 'true'
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: 🐍 Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
@@ -229,7 +229,7 @@ jobs:
     runs-on: ubuntu-26.04
     needs: check-changes
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: 📜 License scan (placeholder)
         run: |
           echo "License/policy scan step is a placeholder."
@@ -264,7 +264,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.integration == 'true'
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: 🐳 Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - name: 🔨 Build image (no push)
@@ -282,7 +282,7 @@ jobs:
       needs.check-changes.outputs.integration == 'true' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_integration == 'true')
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - name: 🐳 Verify Docker runtime
         run: docker --version
       - name: ⚡ Install UV
