@@ -375,6 +375,11 @@ class TestTrustGateE2E:
 
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(pr_only_policy)
+            critical_incident["prepared_branch"] = "responseiq-fix-incident-001"
+            critical_incident["github_repository"] = "example/service"
+            service.pr_service.create_prepared_draft_pr = MagicMock(
+                return_value="https://github.com/example/service/pull/42"
+            )
 
             # Mock reproduction service to avoid confidence downgrade
             mock_proof = MagicMock()
@@ -395,6 +400,8 @@ class TestTrustGateE2E:
                 assert recommendation.execution_mode == PolicyMode.PR_ONLY
                 assert "Create pull request with proposed changes" in recommendation.next_steps
                 assert "Request code review from team lead" in recommendation.next_steps
+                assert recommendation.draft_pr_url == "https://github.com/example/service/pull/42"
+                service.pr_service.create_prepared_draft_pr.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_blast_radius_enforcement(self, production_policy, critical_incident):
