@@ -18,6 +18,23 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from responseiq.ai.schemas import IncidentAnalysis
+
+
+def test_incident_analysis_patch_fields_are_optional():
+    analysis = IncidentAnalysis(title="T", severity="low", description="d", remediation="r")
+
+    assert analysis.unified_diff is None
+    assert analysis.test_commands == []
+
+
+def test_analysis_prompt_requires_structured_patch_fields():
+    from responseiq.ai.llm_service import _ANALYSIS_SYSTEM_PROMPT
+
+    assert "unified_diff" in _ANALYSIS_SYSTEM_PROMPT
+    assert "test_commands" in _ANALYSIS_SYSTEM_PROMPT
+    assert "markdown fences" in _ANALYSIS_SYSTEM_PROMPT
+
 
 # ---------------------------------------------------------------------------
 # _provider_name — all 5 branches
@@ -182,7 +199,14 @@ class TestAnalyzeWithOpenAIOtelSpans:
     @pytest.mark.asyncio
     async def test_otel_spans_set_and_result_returned(self):
         mock_client = self._mock_instructor_client(
-            {"title": "DB timeout", "severity": "high", "description": "d", "remediation": "r"}
+            {
+                "title": "DB timeout",
+                "severity": "high",
+                "description": "d",
+                "remediation": "r",
+                "unified_diff": "diff --git a/app.py b/app.py",
+                "test_commands": ["pytest -q tests/unit"],
+            }
         )
         with (
             patch("responseiq.ai.llm_service.settings", self._mock_settings()),
@@ -198,6 +222,8 @@ class TestAnalyzeWithOpenAIOtelSpans:
         assert result is not None
         assert result["title"] == "DB timeout"
         assert result["llm_model_used"] == "gpt-4o-mini"
+        assert result["unified_diff"] == "diff --git a/app.py b/app.py"
+        assert result["test_commands"] == ["pytest -q tests/unit"]
 
     @pytest.mark.asyncio
     async def test_langfuse_generation_tracked_when_configured(self):

@@ -10,7 +10,7 @@ synthesis; ``ReproductionCode`` wraps the raw pytest repro script.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,17 @@ class IncidentAnalysis(BaseModel):
         description=(
             "Precise operational action or code change. Prefer a unified-diff snippet when source code is provided."
         )
+    )
+    unified_diff: Optional[str] = Field(
+        default=None,
+        description=(
+            "A raw unified diff for the proposed fix. Return null when source code context is missing or a safe "
+            "patch cannot be determined. Never wrap the diff in markdown fences."
+        ),
+    )
+    test_commands: List[str] = Field(
+        default_factory=list,
+        description="Exact bounded commands that should be run to validate the proposed change.",
     )
 
 

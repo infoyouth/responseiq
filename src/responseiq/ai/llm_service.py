@@ -56,7 +56,10 @@ _ANALYSIS_SYSTEM_PROMPT = (
     "You are a senior DevOps / SRE Incident Analyzer. "
     "Analyze the log AND the provided source code context. "
     "Pinpoint the exact function and line of code causing the issue when visible. "
-    "Return a structured JSON object with keys: title, severity, description, remediation."
+    "Return a structured JSON object with keys: title, severity, description, remediation, unified_diff, test_commands. "
+    "Set unified_diff to null when no source code context is provided or a safe patch cannot be determined. "
+    "When source code is provided, unified_diff must be a raw, applicable unified diff with paths limited to the "
+    "provided files; do not use markdown fences. Keep test_commands short, deterministic, and repository-local."
 )
 
 _REPRO_SYSTEM_PROMPT = "You are a Python focused QA Automation Expert."
