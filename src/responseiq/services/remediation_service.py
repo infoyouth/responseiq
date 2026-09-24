@@ -10,6 +10,7 @@ GitHub PR. This is the central brain of ResponseIQ.
 from __future__ import annotations
 
 import uuid
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,7 @@ from responseiq.services.causal_graph_service import build_causal_graph
 from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
 from responseiq.services.impact import assess_impact
 from responseiq.services.performance_gate import PerformanceGateResult, gate as _perf_gate, measure_latency
+from responseiq.services.pr_service import PRService
 from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.rollback_generator import ExecutableRollbackGenerator
 from responseiq.services.trust_gate import (
@@ -29,6 +31,7 @@ from responseiq.services.trust_gate import (
     TrustGateValidator,
     ValidationResult,
 )
+from responseiq.services.worktree_service import WorktreePreparationError, WorktreePreparationService
 from responseiq.utils.k8s_patcher import KubernetesPatcher
 from responseiq.utils.logger import logger
 
@@ -74,6 +77,7 @@ class RemediationRecommendation:
     # Execution guidance
     required_actions: List[str] = field(default_factory=list)
     next_steps: List[str] = field(default_factory=list)
+    draft_pr_url: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses."""
@@ -98,6 +102,7 @@ class RemediationRecommendation:
             "checks_failed": self.checks_failed,
             "required_actions": self.required_actions,
             "next_steps": self.next_steps,
+            "draft_pr_url": self.draft_pr_url,
             "proof_bundle": (
                 asdict(self.proof_bundle) if self.proof_bundle else None
             ),  # P2: Include proof in audit trail
@@ -135,6 +140,8 @@ class RemediationService:
         self.reproduction_service = ReproductionService()  # P2: Proof-oriented testing
         self.rollback_generator = ExecutableRollbackGenerator()  # P2.1: Executable rollbacks
         self.git_correlation = GitCorrelationService(repo_path=repo_path)  # P3: Change correlation
+        self.pr_service = PRService()
+        self.worktree_service = WorktreePreparationService()
         self.environment = environment
 
         logger.info(f"RemediationService initialized for {environment} environment")
@@ -373,6 +380,53 @@ class RemediationService:
         # Step 8: Generate next steps based on validation result
         recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
 
+        # Draft PR creation is opt-in. A supplied branch is trusted as already
+        # prepared; otherwise an explicit patch is prepared in an isolated worktree.
+        prepared_branch = incident.get("prepared_branch")
+        repository = incident.get("github_repository")
+        patch_text = incident.get("remediation_patch") or incident.get("patch_text")
+        validation_commands = incident.get("validation_commands", [])
+        if (
+            recommendation.allowed
+            and recommendation.execution_mode == PolicyMode.PR_ONLY
+            and repository
+            and patch_text
+            and validation_commands
+            and not prepared_branch
+        ):
+            try:
+                prepared = self.worktree_service.prepare_and_push(
+                    repo_path=self.git_correlation.repo_path,
+                    repo_name=repository,
+                    patch_text=patch_text,
+                    validation_commands=validation_commands,
+                    token=(
+                        incident.get("github_token")
+                        or os.environ.get("GITHUB_TOKEN")
+                        or os.environ.get("RESPONSEIQ_GITHUB_TOKEN")
+                        or os.environ.get("INPUT_GITHUB_TOKEN", "")
+                    ),
+                    base=incident.get("github_base", "main"),
+                )
+                prepared_branch = prepared.branch_name
+            except WorktreePreparationError as exc:
+                logger.warning("Validated worktree preparation failed: %s", exc)
+
+        if (
+            recommendation.allowed
+            and recommendation.execution_mode == PolicyMode.PR_ONLY
+            and prepared_branch
+            and repository
+        ):
+            recommendation.draft_pr_url = self.pr_service.create_prepared_draft_pr(
+                repo_name=repository,
+                branch_name=prepared_branch,
+                title=f"fix: ResponseIQ remediation for {title}",
+                body=self._build_draft_pr_body(recommendation),
+            )
+            if recommendation.draft_pr_url:
+                recommendation.next_steps.append(f"Review draft PR: {recommendation.draft_pr_url}")
+
         # Step 9: P6 — Build causal root-cause graph from all pipeline signals
         recommendation.causal_graph = build_causal_graph(
             incident_id=incident_id,
@@ -400,6 +454,19 @@ class RemediationService:
                 await self.reproduction_service.cleanup_reproduction_test(proof_bundle)
 
         return recommendation
+
+    @staticmethod
+    def _build_draft_pr_body(recommendation: RemediationRecommendation) -> str:
+        """Build a review-first PR body from validated recommendation evidence."""
+        return (
+            "## ResponseIQ Automated Remediation\n\n"
+            f"**Incident:** `{recommendation.incident_id}`\n\n"
+            f"**Rationale:** {recommendation.rationale}\n\n"
+            f"**Remediation:**\n{recommendation.remediation_plan}\n\n"
+            f"**Test plan:**\n{recommendation.test_plan or 'See attached validation evidence.'}\n\n"
+            f"**Rollback plan:**\n{recommendation.rollback_plan or 'Review before merge.'}\n\n"
+            "This is a draft PR. Review the diff and evidence before merging."
+        )
 
     def _create_failed_recommendation(self, incident_id: str, reason: str) -> RemediationRecommendation:
         """Create a failed remediation recommendation."""

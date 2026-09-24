@@ -16,6 +16,7 @@ from responseiq.config.policy_config import (
     create_custom_policy,
 )
 from responseiq.services.remediation_service import RemediationService
+from responseiq.services.worktree_service import WorktreePreparationError
 
 
 class TestTrustGateE2E:
@@ -375,6 +376,11 @@ class TestTrustGateE2E:
 
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(pr_only_policy)
+            critical_incident["prepared_branch"] = "responseiq-fix-incident-001"
+            critical_incident["github_repository"] = "example/service"
+            service.pr_service.create_prepared_draft_pr = MagicMock(
+                return_value="https://github.com/example/service/pull/42"
+            )
 
             # Mock reproduction service to avoid confidence downgrade
             mock_proof = MagicMock()
@@ -395,6 +401,52 @@ class TestTrustGateE2E:
                 assert recommendation.execution_mode == PolicyMode.PR_ONLY
                 assert "Create pull request with proposed changes" in recommendation.next_steps
                 assert "Request code review from team lead" in recommendation.next_steps
+                assert recommendation.draft_pr_url == "https://github.com/example/service/pull/42"
+                service.pr_service.create_prepared_draft_pr.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_policy_mode_pr_only_prepares_patch_before_pr(self, critical_incident, mock_ai_analysis):
+        pr_only_policy = create_custom_policy(
+            mode=PolicyMode.PR_ONLY,
+            min_severity=SeverityThreshold.MEDIUM,
+            min_confidence=0.6,
+        )
+        critical_incident["github_repository"] = "example/service"
+        critical_incident["remediation_patch"] = "validated patch"
+        critical_incident["validation_commands"] = [["pytest", "-q"]]
+        with (
+            patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
+            patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
+        ):
+            mock_analyze.return_value = mock_ai_analysis
+            mock_api_key.get_secret_value.return_value = "test-key"
+            service = RemediationService(environment="test")
+            service.trust_gate.update_policy(pr_only_policy)
+            service.worktree_service.prepare_and_push = MagicMock(
+                return_value=MagicMock(branch_name="responseiq-prepared-fix")
+            )
+            service.pr_service.create_prepared_draft_pr = MagicMock(
+                return_value="https://github.com/example/service/pull/43"
+            )
+            mock_proof = MagicMock()
+            mock_proof.reproduction_test.repro_method = "llm_synthesis"
+            mock_proof.reproduction_test.status = "FAILED_AS_EXPECTED"
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=mock_proof)
+            service.reproduction_service.execute_reproduction_test = AsyncMock(return_value=mock_proof)
+            with (
+                patch.object(service.trust_gate, "_run_security_scan", return_value=True),
+                patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
+                patch.object(service.trust_gate, "_run_tests", return_value=True),
+            ):
+                recommendation = await service.remediate_incident(critical_incident)
+
+        assert recommendation.draft_pr_url == "https://github.com/example/service/pull/43"
+        service.worktree_service.prepare_and_push.assert_called_once()
+        service.pr_service.create_prepared_draft_pr.assert_called_once()
+
+        service.worktree_service.prepare_and_push.side_effect = WorktreePreparationError("validation failed")
+        recommendation = await service.remediate_incident(critical_incident)
+        assert recommendation.draft_pr_url is None
 
     @pytest.mark.asyncio
     async def test_blast_radius_enforcement(self, production_policy, critical_incident):

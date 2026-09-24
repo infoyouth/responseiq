@@ -128,6 +128,45 @@ class TestMainSubcommandDispatch:
         mock_init.assert_called_once()
         assert exc_info.value.code == 0
 
+    def test_fix_arguments_forward_repository_and_token(self, monkeypatch):
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "responseiq",
+                "--mode",
+                "fix",
+                "--target",
+                "incident.log",
+                "--repo",
+                "example/service",
+                "--url",
+                "https://github.com/example/service.git",
+                "--token",
+                "test-token",
+                "--patch-file",
+                "fix.patch",
+                "--validate",
+                "pytest -q",
+            ],
+        )
+        with (
+            patch("responseiq.cli.PluginRegistry") as mock_registry,
+            patch("responseiq.cli._print_result"),
+        ):
+            mock_plugin = MagicMock()
+            mock_plugin.run.return_value = {"fixes": []}
+            mock_registry.return_value.plugins = {"fix": object()}
+            mock_registry.return_value.get_plugin.return_value = lambda: mock_plugin
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+
+        assert exc_info.value.code == 0
+        assert mock_plugin.run.call_args.args[0]["context"]["args"]["github_repository"] == "example/service"
+        assert mock_plugin.run.call_args.args[0]["context"]["args"]["patch_file"] == "fix.patch"
+        assert mock_plugin.run.call_args.args[0]["context"]["args"]["validation_commands"] == ["pytest -q"]
+        assert mock_plugin.run.call_args.args[0]["context"]["env"]["GITHUB_TOKEN"] == "test-token"
+
     def test_doctor_reports_local_fallback(self, tmp_path, monkeypatch, capsys):
         """Doctor treats missing optional services as warnings, not failures."""
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")

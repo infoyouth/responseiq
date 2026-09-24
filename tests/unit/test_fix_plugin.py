@@ -15,7 +15,10 @@ Coverage matrix:
   - _filter_noise_lines          → strips version headers, env repr blocks, bare paths
 """
 
+import io
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from responseiq.plugins.fix import FixPlugin
 from responseiq.schemas.incident import IncidentOut
@@ -71,6 +74,17 @@ def _build_state(target: str | None = None) -> dict:
 
 
 class TestFixPluginValidation:
+    def test_stdin_target_reads_piped_logs(self, monkeypatch):
+        monkeypatch.setattr("sys.stdin", io.StringIO("ERROR: piped incident\n"))
+        with patch("responseiq.services.analyzer.analyze_log_async", new_callable=AsyncMock, return_value=None):
+            state = FixPlugin().run(_build_state("-"))
+        assert state["fix_result"] == "no_actionable_incidents"
+
+    def test_missing_patch_file_is_reported(self, tmp_path):
+        plugin = FixPlugin()
+        with pytest.raises(FileNotFoundError, match="Patch file not found"):
+            plugin._read_patch_file(str(tmp_path / "missing.patch"))
+
     def test_no_target_returns_error(self):
         plugin = FixPlugin()
         state = plugin.run({"context": {"args": {}}})
@@ -173,6 +187,47 @@ class TestSuccessfulRemediation:
         assert state["fix_result"] == "success"
         assert len(state["fixes"]) == 1
         assert state["fixes"][0]["title"] == "Fix It"
+
+    def test_patch_and_validation_options_reach_remediation(self, tmp_path):
+        log = tmp_path / "app.log"
+        log.write_text("incident line 0")
+        patch_file = tmp_path / "fix.patch"
+        patch_file.write_text("diff --git a/app.py b/app.py\n")
+        incident = _make_incident_out(severity="high")
+        captured = {}
+
+        async def _fake_analyze(_message):
+            return incident
+
+        async def _fake_remediate(remediation_incident, context_path=None):
+            captured.update(remediation_incident)
+            return _make_recommendation()
+
+        state = {
+            "context": {
+                "args": {
+                    "target": str(log),
+                    "patch_file": str(patch_file),
+                    "validation_commands": ["pytest -q", "ruff check src"],
+                    "github_repository": "example/service",
+                },
+                "env": {"GITHUB_TOKEN": "test-token"},
+            }
+        }
+        with (
+            patch("responseiq.services.analyzer.analyze_log_async", side_effect=_fake_analyze),
+            patch(
+                "responseiq.services.remediation_service.RemediationService.remediate_incident",
+                side_effect=_fake_remediate,
+            ),
+        ):
+            result = FixPlugin().run(state)
+
+        assert result["fix_result"] == "success"
+        assert captured["remediation_patch"] == patch_file.read_text()
+        assert captured["validation_commands"] == [["pytest", "-q"], ["ruff", "check", "src"]]
+        assert captured["github_repository"] == "example/service"
+        assert captured["github_token"] == "test-token"
 
     def test_critical_incident_remediated(self, tmp_path):
         incidents = [_make_incident_out(severity="critical", title="OOM Killer")]
