@@ -174,6 +174,47 @@ class TestSuccessfulRemediation:
         assert len(state["fixes"]) == 1
         assert state["fixes"][0]["title"] == "Fix It"
 
+    def test_patch_and_validation_options_reach_remediation(self, tmp_path):
+        log = tmp_path / "app.log"
+        log.write_text("incident line 0")
+        patch_file = tmp_path / "fix.patch"
+        patch_file.write_text("diff --git a/app.py b/app.py\n")
+        incident = _make_incident_out(severity="high")
+        captured = {}
+
+        async def _fake_analyze(_message):
+            return incident
+
+        async def _fake_remediate(remediation_incident, context_path=None):
+            captured.update(remediation_incident)
+            return _make_recommendation()
+
+        state = {
+            "context": {
+                "args": {
+                    "target": str(log),
+                    "patch_file": str(patch_file),
+                    "validation_commands": ["pytest -q", "ruff check src"],
+                    "github_repository": "example/service",
+                },
+                "env": {"GITHUB_TOKEN": "test-token"},
+            }
+        }
+        with (
+            patch("responseiq.services.analyzer.analyze_log_async", side_effect=_fake_analyze),
+            patch(
+                "responseiq.services.remediation_service.RemediationService.remediate_incident",
+                side_effect=_fake_remediate,
+            ),
+        ):
+            result = FixPlugin().run(state)
+
+        assert result["fix_result"] == "success"
+        assert captured["remediation_patch"] == patch_file.read_text()
+        assert captured["validation_commands"] == [["pytest", "-q"], ["ruff", "check", "src"]]
+        assert captured["github_repository"] == "example/service"
+        assert captured["github_token"] == "test-token"
+
     def test_critical_incident_remediated(self, tmp_path):
         incidents = [_make_incident_out(severity="critical", title="OOM Killer")]
         recs = [_make_recommendation(title="Increase heap")]

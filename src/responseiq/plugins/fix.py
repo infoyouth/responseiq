@@ -10,6 +10,7 @@ Invoked by the CLI as ``responseiq --mode fix --target <path>``.
 """
 
 import asyncio
+import shlex
 import uuid
 from pathlib import Path
 from typing import List
@@ -52,6 +53,12 @@ class FixPlugin(BasePlugin):
             from responseiq.services.remediation_service import RemediationService
 
             svc = RemediationService(environment="development")
+            cli_args = agent_state.get("context", {}).get("args", {})
+            patch_text = self._read_patch_file(cli_args.get("patch_file"))
+            validation_commands = [shlex.split(command) for command in cli_args.get("validation_commands") or []]
+            repository = cli_args.get("github_repository") or agent_state.get("context", {}).get("env", {}).get(
+                "GITHUB_REPOSITORY"
+            )
 
             # Step 1: scan all messages concurrently
             scan_results = await asyncio.gather(*[analyze_log_async(m) for m in msgs])
@@ -71,6 +78,13 @@ class FixPlugin(BasePlugin):
                             "severity": sev,
                             "log_content": msg,
                             "source": result.source,
+                            "remediation_patch": patch_text,
+                            "validation_commands": validation_commands,
+                            "github_repository": repository,
+                            "github_token": (
+                                agent_state.get("context", {}).get("env", {}).get("GITHUB_TOKEN")
+                                or agent_state.get("context", {}).get("env", {}).get("RESPONSEIQ_GITHUB_TOKEN", "")
+                            ),
                         }
                     )
 
@@ -98,6 +112,15 @@ class FixPlugin(BasePlugin):
         agent_state["total_scanned"] = len(messages)
         agent_state["total_fixed"] = len(fixes)
         return agent_state
+
+    @staticmethod
+    def _read_patch_file(patch_file: str | None) -> str | None:
+        if not patch_file:
+            return None
+        path = Path(patch_file)
+        if not path.is_file():
+            raise FileNotFoundError(f"Patch file not found: {patch_file}")
+        return path.read_text(encoding="utf-8")
 
     def _collect_messages(self, path: Path) -> List[str]:
         if path.is_file():

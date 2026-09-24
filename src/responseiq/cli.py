@@ -391,6 +391,21 @@ def main():
     parser.add_argument("--action", choices=["scan", "fix", "shadow", "watch"], help="Alias for --mode")
     parser.add_argument("--url", help="Repository URL (e.g., https://github.com/owner/repo)")
     parser.add_argument("--token", help="GitHub Token")
+    parser.add_argument(
+        "--repo",
+        dest="github_repository",
+        help="GitHub repository slug (owner/repo) for an approved draft PR",
+    )
+    parser.add_argument(
+        "--patch-file",
+        help="Unified diff to validate in an isolated worktree before opening a draft PR",
+    )
+    parser.add_argument(
+        "--validate",
+        action="append",
+        dest="validation_commands",
+        help="Validation command to run in the isolated worktree; repeat for multiple commands",
+    )
 
     # Explainability — emit REASONING.md alongside fix output
     parser.add_argument(
@@ -428,10 +443,14 @@ def main():
     # Set Env vars from args if provided
     if args.token:
         os.environ["GITHUB_TOKEN"] = args.token
+        os.environ["RESPONSEIQ_GITHUB_TOKEN"] = args.token
     if args.url:
         if "github.com/" in args.url:
             repo_slug = args.url.split("github.com/")[-1].replace(".git", "")
             os.environ["GITHUB_REPOSITORY"] = repo_slug
+
+    if args.github_repository:
+        os.environ["GITHUB_REPOSITORY"] = args.github_repository
 
     # Initialize AgentState with global context and trace_id
     trace_id = os.environ.get("TRACEPARENT") or os.environ.get("TRACE_ID")

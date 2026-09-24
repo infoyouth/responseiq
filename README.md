@@ -165,7 +165,21 @@ responseiq --mode shadow --target ./logs/ --shadow-report
 
 # 6. Watch mode — continuous tail daemon (new in v2.24)
 responseiq --mode watch --target ./logs/app.log
+
+# 7. Validate an explicit patch and open a draft PR
+export RESPONSEIQ_POLICY_MODE=pr_only
+responseiq --mode fix --target ./logs/error.log \
+  --repo your-org/your-repo \
+  --patch-file ./responseiq-fix.patch \
+  --validate "pytest -q" \
+  --validate "ruff check src"
 ```
+
+When `--patch-file`, `--repo`, and at least one `--validate` command are
+provided, an approved `pr_only` remediation is applied in a temporary Git
+worktree. The original checkout is never modified. The branch is committed,
+validated, pushed, and opened as a draft PR. Without those options, `fix`
+remains analysis-only and returns the recommendation for review.
 
 **No LLM key?** The rule-engine fallback activates automatically. `responseiq init` is optional.
 

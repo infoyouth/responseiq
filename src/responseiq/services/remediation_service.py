@@ -403,6 +403,7 @@ class RemediationService:
                     token=(
                         incident.get("github_token")
                         or os.environ.get("GITHUB_TOKEN")
+                        or os.environ.get("RESPONSEIQ_GITHUB_TOKEN")
                         or os.environ.get("INPUT_GITHUB_TOKEN", "")
                     ),
                     base=incident.get("github_base", "main"),
