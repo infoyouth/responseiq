@@ -36,6 +36,15 @@ def test_analysis_prompt_requires_structured_patch_fields():
     assert "markdown fences" in _ANALYSIS_SYSTEM_PROMPT
 
 
+def test_git_compatible_diff_requires_headers_and_allowed_files():
+    from responseiq.ai.llm_service import _is_git_compatible_diff
+
+    valid = "diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1 @@\n-old\n+new\n"
+    assert _is_git_compatible_diff(valid, ["app.py"])
+    assert not _is_git_compatible_diff("--- a/app.py\n+++ b/app.py\n@@ -1 +1 @@", ["app.py"])
+    assert not _is_git_compatible_diff(valid.replace("app.py", "other.py"), ["app.py"])
+
+
 # ---------------------------------------------------------------------------
 # _provider_name — all 5 branches
 # ---------------------------------------------------------------------------

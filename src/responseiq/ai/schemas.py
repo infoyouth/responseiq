@@ -41,6 +41,20 @@ class IncidentAnalysis(BaseModel):
     )
 
 
+class PatchProposal(BaseModel):
+    """Structured patch proposal returned by the dedicated patch-generation pass."""
+
+    unified_diff: str = Field(
+        min_length=1,
+        description="A raw, applicable unified diff. Never use markdown fences or explanatory text.",
+    )
+    test_commands: List[str] = Field(
+        default_factory=list,
+        description="Short, deterministic repository-local commands for validating the patch.",
+    )
+    rationale: str = Field(description="Brief explanation of why the patch addresses the incident.")
+
+
 class ReproductionCode(BaseModel):
     """Structured output for reproduction test generation."""
 
