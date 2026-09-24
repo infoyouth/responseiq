@@ -15,7 +15,10 @@ Coverage matrix:
   - _filter_noise_lines          → strips version headers, env repr blocks, bare paths
 """
 
+import io
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from responseiq.plugins.fix import FixPlugin
 from responseiq.schemas.incident import IncidentOut
@@ -71,6 +74,17 @@ def _build_state(target: str | None = None) -> dict:
 
 
 class TestFixPluginValidation:
+    def test_stdin_target_reads_piped_logs(self, monkeypatch):
+        monkeypatch.setattr("sys.stdin", io.StringIO("ERROR: piped incident\n"))
+        with patch("responseiq.services.analyzer.analyze_log_async", new_callable=AsyncMock, return_value=None):
+            state = FixPlugin().run(_build_state("-"))
+        assert state["fix_result"] == "no_actionable_incidents"
+
+    def test_missing_patch_file_is_reported(self, tmp_path):
+        plugin = FixPlugin()
+        with pytest.raises(FileNotFoundError, match="Patch file not found"):
+            plugin._read_patch_file(str(tmp_path / "missing.patch"))
+
     def test_no_target_returns_error(self):
         plugin = FixPlugin()
         state = plugin.run({"context": {"args": {}}})
