@@ -3,27 +3,21 @@
 [![CI](https://github.com/infoyouth/responseiq/actions/workflows/ci.yml/badge.svg)](https://github.com/infoyouth/responseiq/actions)
 [![GitHub Release](https://img.shields.io/github/v/release/infoyouth/responseiq)](https://github.com/infoyouth/responseiq/releases)
 [![PyPI](https://img.shields.io/pypi/v/responseiq)](https://pypi.org/project/responseiq/)
-[![Downloads](https://static.pepy.tech/badge/responseiq)](https://pepy.tech/project/responseiq)
 [![License](https://img.shields.io/github/license/infoyouth/responseiq)](LICENSE)
 [![Coverage](https://codecov.io/gh/infoyouth/responseiq/branch/main/graph/badge.svg)](https://codecov.io/gh/infoyouth/responseiq)
 [![Python](https://img.shields.io/pypi/pyversions/responseiq)](https://pypi.org/project/responseiq/)
-[![SWE-bench Pass@1](https://img.shields.io/badge/SWE--bench%20Pass%401-20%25-blue)](reports/swe_bench_eval.md)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/infoyouth/responseiq/badge)](https://scorecard.dev/viewer/?uri=github.com/infoyouth/responseiq)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/10437/badge)](https://www.bestpractices.dev/projects/10437)
-[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-> **Your 3am alert fixed itself and opened a PR before you woke up.**
+> **Turn an incident log into a reviewable remediation decision.**
 
-ResponseIQ is a **self-healing infrastructure copilot**. It reads your crash logs, loads the actual source code from your repositories using Tree-sitter AST parsing, and generates surgical fixes — complete with a rollback script, a Trust Gate audit trail, and a GitHub PR — all without requiring human intervention at 3am.
+ResponseIQ is a **trust-first incident remediation copilot**. It analyzes crash logs with Ollama or OpenAI, applies policy and safety checks, records rollback and proof evidence, and can validate an explicit patch in an isolated Git worktree before opening a GitHub draft PR.
 
 **Zero config. Try it now:**
 
 ```bash
 pip install responseiq && responseiq demo
 ```
-
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/infoyouth/responseiq)
 
 ## Support ResponseIQ
 
@@ -43,14 +37,15 @@ kubectl logs payment-svc --since=1h | responseiq --mode fix --target - --explain
 docker logs --tail 200 my-api | responseiq --mode fix --target - --explain
 ```
 
-ResponseIQ will:
+ResponseIQ can:
 1. **Filter** out noise lines automatically
-2. **Resolve** container paths like `/app/services/auth.py` to the real source files in your repos
-3. **Load** the actual crashing functions via Tree-sitter AST into the AI context
-4. **Generate a fix** with a full explanation of why it chose that approach
-5. **Run it through 7 safety guardrails** before doing anything
-6. **Open a GitHub PR** (or print the patch in dry-run mode if no token is set)
-7. **Write a `REASONING.md`** audit log you can paste straight into your post-mortem
+2. **Analyze** high-severity incidents with a local or hosted LLM, or use the rule-engine fallback
+3. **Apply Trust Gate checks** before recommending or submitting remediation
+4. **Validate an explicit patch** in a temporary isolated Git worktree
+5. **Open a GitHub draft PR** after validation when repository, token, patch, and test commands are supplied
+6. **Write a `REASONING.md`** audit log you can paste straight into your post-mortem
+
+Without an explicit patch and validation workflow, `fix` produces a remediation recommendation for review; it does not claim to autonomously modify production.
 
 ---
 
@@ -58,11 +53,11 @@ ResponseIQ will:
 
 Most log analysis tools pattern-match on error strings. ResponseIQ does something different: **it reads your code**.
 
-When your auth service crashes at `/app/services/auth_service.py:120`, ResponseIQ resolves that container path to the actual file, loads the function with its surrounding context via Tree-sitter, and gives the AI exactly what it needs to understand the bug — not just the error message. That is why it generates a *fix*, not just a description.
+When source mappings are configured and a stack trace identifies `/app/services/auth_service.py:120`, ResponseIQ can resolve that path and load relevant source context via Tree-sitter. This improves the remediation recommendation; every proposed change still requires validation and human review.
 
 ---
 
-## Benchmark
+## Benchmark (project-reported)
 
 Evaluated against **SWE-bench Verified** — the same dataset used to rank SWE-agent, Devin, and OpenHands.
 
@@ -70,7 +65,7 @@ Evaluated against **SWE-bench Verified** — the same dataset used to rank SWE-a
 |---|---|---|---|---|
 | llama3.2 (local Ollama) | 20 | **20%** | 29s | No |
 
-1-in-5 incidents get a correct, Trust-Gate-approved patch in ~30 seconds using a free local model. See [reports/swe_bench_eval.md](reports/swe_bench_eval.md) for the per-repo breakdown.
+The reported result is an internal evaluation, not an independent benchmark or production success guarantee. See [reports/swe_bench_eval.md](reports/swe_bench_eval.md) for methodology and per-repo results.
 
 ---
 
@@ -103,11 +98,11 @@ flowchart TD
 | **Multi-repo path resolution** | Maps container paths like `/app/services/auth.py` to your real source — local or remote |
 | **Trust Gate — 7 guardrails** | No bare except, no secrets, syntax valid, blast radius assessed, and more — every patch must pass all 7 |
 | **SHA-256 proof chain** | Every decision is sealed into a `ProofBundle` — SOC2-ready audit trail |
-| **GitHub PR bot** | Opens a draft PR and responds to `/responseiq approve`, `/responseiq reject`, `/responseiq explain` |
+| **GitHub PR workflow** | Opens a draft PR after an explicit patch passes isolated validation |
 | **Rollback script** | Generates an executable `rollback_<id>.py` alongside every patch |
 | **Works without any API key** | Full rule-engine fallback is always available |
 
-### New in v2.24 — Modern AI stack
+### Optional integrations and extensions
 
 | Feature | What it does |
 |---|---|
@@ -136,7 +131,7 @@ Dedicated parsers extract rich structured context — goroutine IDs, stack frame
 
 | Feature | What it does |
 |---|---|
-| **Post-apply watchdog** | After applying a patch, monitors your error-rate metric (Datadog, Prometheus, or `/health` probe). Automatically executes the rollback script if the rate spikes above the configured threshold. |
+| **Post-apply watchdog** | Optional component for monitoring error-rate signals and triggering rollback after guarded application; configure and test it before production use. |
 | **K8s YAML patcher** | Edits Kubernetes Deployment manifests using `ruamel.yaml` — comments, quotes, and indentation survive the diff. |
 | **Stateful conversations** | Each incident gets a persistent multi-turn AI session. Redis-backed in production; transparent in-memory fallback in dev/test. |
 | **PII scrubbing** | Regex email redaction is always on. Set `RESPONSEIQ_NER_SCRUB=true` and install spaCy to add NER-level PERSON/ORG/location scrubbing. |
@@ -163,7 +158,7 @@ responseiq --mode fix --target ./logs/error.log --explain
 # 5. Shadow mode — read-only triage, nothing is changed
 responseiq --mode shadow --target ./logs/ --shadow-report
 
-# 6. Watch mode — continuous tail daemon (new in v2.24)
+# 6. Watch mode — continuous tail daemon
 responseiq --mode watch --target ./logs/app.log
 
 # 7. Validate an explicit patch and open a draft PR
@@ -277,7 +272,7 @@ responseiq --mode shadow --target ./samples/ --shadow-report
   2. [CRITICAL] Memory leak — _request_log unbounded growth
   3. [HIGH]     ZeroDivisionError: division by zero (reset race)
 ------------------------------------------------------------
-  Tip: run with --mode fix to apply safe remediations.
+  Tip: run with --mode fix to review remediation recommendations.
 ------------------------------------------------------------
 ```
 
