@@ -18,7 +18,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from responseiq.ai.schemas import IncidentAnalysis
+from responseiq.ai.schemas import IncidentAnalysis, PatchProposal
 
 
 def test_incident_analysis_patch_fields_are_optional():
@@ -43,6 +43,81 @@ def test_git_compatible_diff_requires_headers_and_allowed_files():
     assert _is_git_compatible_diff(valid, ["app.py"])
     assert not _is_git_compatible_diff("--- a/app.py\n+++ b/app.py\n@@ -1 +1 @@", ["app.py"])
     assert not _is_git_compatible_diff(valid.replace("app.py", "other.py"), ["app.py"])
+
+
+def _valid_patch() -> str:
+    return "diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1 @@\n-old\n+new\n"
+
+
+class TestGeneratePatchWithLLM:
+    @pytest.mark.asyncio
+    async def test_returns_none_without_provider(self):
+        from responseiq.ai.llm_service import generate_patch_with_llm
+
+        settings = MagicMock(openai_api_key=None, llm_base_url=None)
+        with patch("responseiq.ai.llm_service.settings", settings):
+            assert await generate_patch_with_llm("incident", "source", ["app.py"]) is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("incident", "source", "allowed_files"),
+        [("", "source", ["app.py"]), ("incident", "", ["app.py"]), ("incident", "source", [])],
+    )
+    async def test_returns_none_without_required_context(self, incident, source, allowed_files):
+        from responseiq.ai.llm_service import generate_patch_with_llm
+
+        settings = MagicMock(openai_api_key=MagicMock(), llm_base_url=None)
+        with patch("responseiq.ai.llm_service.settings", settings):
+            assert await generate_patch_with_llm(incident, source, allowed_files) is None
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_attempts_without_retrying_forever(self):
+        from responseiq.ai.llm_service import generate_patch_with_llm
+
+        result = MagicMock()
+        result.unified_diff = "--- app.py\n+++ app.py\n@@ -1 +1 @@"
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock(return_value=result)
+        settings = MagicMock(openai_api_key=MagicMock(), llm_base_url=None, llm_max_tokens=100)
+        with (
+            patch("responseiq.ai.llm_service.settings", settings),
+            patch("responseiq.ai.llm_service._get_instructor_client", return_value=client),
+            patch("responseiq.ai.llm_service._router.model_for", return_value="llama3.2"),
+        ):
+            assert await generate_patch_with_llm("incident", "source", ["app.py"], max_attempts=2) is None
+
+        assert client.chat.completions.create.await_count == 2
+        assert all(
+            "Previous attempt failed validation" in call.kwargs["messages"][1]["content"]
+            for call in client.chat.completions.create.call_args_list[1:]
+        )
+
+    @pytest.mark.asyncio
+    async def test_retries_exception_then_returns_valid_proposal(self):
+        from responseiq.ai.llm_service import generate_patch_with_llm
+
+        proposal = PatchProposal(unified_diff=_valid_patch(), test_commands=["pytest -q"], rationale="fix")
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock(side_effect=[RuntimeError("temporary"), proposal])
+        settings = MagicMock(openai_api_key=MagicMock(), llm_base_url=None, llm_max_tokens=100)
+        with (
+            patch("responseiq.ai.llm_service.settings", settings),
+            patch("responseiq.ai.llm_service._get_instructor_client", return_value=client),
+            patch("responseiq.ai.llm_service._router.model_for", return_value="llama3.2"),
+        ):
+            result = await generate_patch_with_llm("incident", "source", ["app.py"])
+
+        assert result is not None
+        assert result["unified_diff"] == _valid_patch()
+        assert result["llm_model_used"] == "llama3.2"
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_attempt_count(self):
+        from responseiq.ai.llm_service import generate_patch_with_llm
+
+        settings = MagicMock(openai_api_key=MagicMock(), llm_base_url=None)
+        with patch("responseiq.ai.llm_service.settings", settings), pytest.raises(ValueError, match="max_attempts"):
+            await generate_patch_with_llm("incident", "source", ["app.py"], max_attempts=0)
 
 
 # ---------------------------------------------------------------------------
