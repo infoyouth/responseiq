@@ -10,6 +10,7 @@ GitHub PR. This is the central brain of ResponseIQ.
 from __future__ import annotations
 
 import uuid
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -30,6 +31,7 @@ from responseiq.services.trust_gate import (
     TrustGateValidator,
     ValidationResult,
 )
+from responseiq.services.worktree_service import WorktreePreparationError, WorktreePreparationService
 from responseiq.utils.k8s_patcher import KubernetesPatcher
 from responseiq.utils.logger import logger
 
@@ -139,6 +141,7 @@ class RemediationService:
         self.rollback_generator = ExecutableRollbackGenerator()  # P2.1: Executable rollbacks
         self.git_correlation = GitCorrelationService(repo_path=repo_path)  # P3: Change correlation
         self.pr_service = PRService()
+        self.worktree_service = WorktreePreparationService()
         self.environment = environment
 
         logger.info(f"RemediationService initialized for {environment} environment")
@@ -377,10 +380,37 @@ class RemediationService:
         # Step 8: Generate next steps based on validation result
         recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
 
-        # Draft PR creation is opt-in and requires a branch prepared and
-        # validated by the caller. ResponseIQ never commits the workspace here.
+        # Draft PR creation is opt-in. A supplied branch is trusted as already
+        # prepared; otherwise an explicit patch is prepared in an isolated worktree.
         prepared_branch = incident.get("prepared_branch")
         repository = incident.get("github_repository")
+        patch_text = incident.get("remediation_patch") or incident.get("patch_text")
+        validation_commands = incident.get("validation_commands", [])
+        if (
+            recommendation.allowed
+            and recommendation.execution_mode == PolicyMode.PR_ONLY
+            and repository
+            and patch_text
+            and validation_commands
+            and not prepared_branch
+        ):
+            try:
+                prepared = self.worktree_service.prepare_and_push(
+                    repo_path=self.git_correlation.repo_path,
+                    repo_name=repository,
+                    patch_text=patch_text,
+                    validation_commands=validation_commands,
+                    token=(
+                        incident.get("github_token")
+                        or os.environ.get("GITHUB_TOKEN")
+                        or os.environ.get("INPUT_GITHUB_TOKEN", "")
+                    ),
+                    base=incident.get("github_base", "main"),
+                )
+                prepared_branch = prepared.branch_name
+            except WorktreePreparationError as exc:
+                logger.warning("Validated worktree preparation failed: %s", exc)
+
         if (
             recommendation.allowed
             and recommendation.execution_mode == PolicyMode.PR_ONLY
