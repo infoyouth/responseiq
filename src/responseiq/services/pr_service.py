@@ -91,3 +91,25 @@ class PRService:
         else:
             logger.error("Failed to create Pull Request via API.")
             return False
+
+    def create_prepared_draft_pr(
+        self,
+        repo_name: str,
+        branch_name: str,
+        title: str,
+        body: str,
+        base: str = "main",
+    ) -> str | None:
+        """Open a draft PR for a branch validated by an external workflow.
+
+        This method deliberately does not stage, commit, or push files. The
+        caller must prepare and validate *branch_name* before invoking it.
+        """
+        return self.gh.create_pr(
+            repo_name=repo_name,
+            title=title,
+            body=body,
+            head=branch_name,
+            base=base,
+            draft=True,
+        )

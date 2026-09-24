@@ -30,7 +30,15 @@ class GitHubIntegration:
         self.token = settings.github_token.get_secret_value() if settings.github_token else None
         self.client = GitHub(TokenAuthStrategy(self.token)) if self.token else None
 
-    def create_pr(self, repo_name: str, title: str, body: str, head: str, base: str = "main") -> Optional[str]:
+    def create_pr(
+        self,
+        repo_name: str,
+        title: str,
+        body: str,
+        head: str,
+        base: str = "main",
+        draft: bool = False,
+    ) -> Optional[str]:
         """
         Creates a Pull Request in the specified repository.
         """
@@ -47,6 +55,7 @@ class GitHubIntegration:
                 body=body,
                 head=head,
                 base=base,
+                draft=draft,
             )
             html_url = response.parsed_data.html_url
             logger.info(f"Successfully created PR: {html_url}")
