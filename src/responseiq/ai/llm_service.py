@@ -25,7 +25,7 @@ from openai import AsyncOpenAI
 from opentelemetry import trace as _otel_trace
 
 from responseiq.ai.model_utils import router as _router
-from responseiq.ai.schemas import IncidentAnalysis, ReproductionCode
+from responseiq.ai.schemas import IncidentAnalysis, PatchProposal, ReproductionCode
 from responseiq.config.settings import settings
 from responseiq.utils.log_scrubber import restore, scrub
 from responseiq.utils.logger import logger
@@ -56,10 +56,34 @@ _ANALYSIS_SYSTEM_PROMPT = (
     "You are a senior DevOps / SRE Incident Analyzer. "
     "Analyze the log AND the provided source code context. "
     "Pinpoint the exact function and line of code causing the issue when visible. "
-    "Return a structured JSON object with keys: title, severity, description, remediation."
+    "Return a structured JSON object with keys: title, severity, description, remediation, unified_diff, test_commands. "
+    "Set unified_diff to null when no source code context is provided or a safe patch cannot be determined. "
+    "When source code is provided, unified_diff must be a raw, applicable unified diff with paths limited to the "
+    "provided files; do not use markdown fences. Keep test_commands short, deterministic, and repository-local."
 )
 
 _REPRO_SYSTEM_PROMPT = "You are a Python focused QA Automation Expert."
+
+_PATCH_SYSTEM_PROMPT = (
+    "You are a senior Python maintainer producing a minimal bug fix. Return only the structured PatchProposal. "
+    "The unified_diff must be a raw git-compatible unified diff with --- and +++ file headers, no markdown fences, "
+    "and may modify only files listed in ALLOWED FILES. Make the smallest safe change supported by the incident and "
+    "source. If a safe patch cannot be determined, do not invent one; explain the limitation in rationale."
+)
+
+
+def _is_git_compatible_diff(unified_diff: str, allowed_files: list[str]) -> bool:
+    """Check the minimum structure required before a diff reaches git apply."""
+    diff = unified_diff.strip()
+    if not all(marker in diff for marker in ("diff --git ", "--- ", "+++ ", "@@")):
+        return False
+    changed_files = {
+        line.removeprefix("diff --git a/").split(" b/", 1)[0]
+        for line in diff.splitlines()
+        if line.startswith("diff --git a/") and " b/" in line
+    }
+    return bool(changed_files) and changed_files.issubset(set(allowed_files))
+
 
 _REPRO_USER_TEMPLATE = (
     "You are an expert QA Automation Engineer. "
@@ -235,6 +259,53 @@ async def _analyze_with_openai(log_text: str, code_context: str = "") -> Optiona
             lf_generation.end()
         logger.warning(f"LLM analysis failed: {e}. Falling back to local parsers.")
         return None
+
+
+async def generate_patch_with_llm(
+    incident_summary: str,
+    relevant_code: str,
+    allowed_files: list[str],
+    max_attempts: int = 2,
+) -> Optional[Dict[str, Any]]:
+    """Generate a bounded structured patch proposal from Llama/OpenAI-compatible models."""
+    if not settings.openai_api_key and not settings.llm_base_url:
+        return None
+    if not incident_summary.strip() or not relevant_code.strip() or not allowed_files:
+        return None
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
+
+    prompt = (
+        f"INCIDENT:\n{incident_summary}\n\n"
+        f"ALLOWED FILES:\n{chr(10).join(allowed_files)}\n\n"
+        f"SOURCE CODE:\n{relevant_code}\n\n"
+        "Return one minimal patch. The diff must apply to the supplied source files."
+    )
+    model = _router.model_for("analyze")
+    client = _get_instructor_client()
+
+    for attempt in range(max_attempts):
+        try:
+            result: PatchProposal = await client.chat.completions.create(
+                model=model,
+                response_model=PatchProposal,
+                messages=[
+                    {"role": "system", "content": _PATCH_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.0,
+                max_tokens=settings.llm_max_tokens,
+            )
+            if _is_git_compatible_diff(result.unified_diff, allowed_files):
+                return result.model_dump() | {"llm_model_used": model}
+            logger.warning(
+                "Patch generation attempt %d/%d returned an invalid or out-of-scope diff", attempt + 1, max_attempts
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Patch generation attempt %d/%d failed: %s", attempt + 1, max_attempts, exc)
+        prompt += "\nPrevious attempt failed validation. Return a complete raw unified diff now."
+
+    return None
 
 
 async def generate_reproduction_code(incident_summary: str, relevant_code: str) -> Optional[str]:
