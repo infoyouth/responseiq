@@ -106,6 +106,40 @@ class TestP2ProofOrientedRemediation:
             assert ValidationEvidence.PRE_FIX_FAILURE not in updated_bundle.missing_evidence
             assert updated_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE]["passed"] is True
 
+    @pytest.mark.parametrize(
+        ("returncode", "expected_status"),
+        [
+            (0, ReproductionStatus.PASSED_UNEXPECTEDLY),
+            (2, ReproductionStatus.EXECUTION_ERROR),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_execute_reproduction_test_records_unsuccessful_baseline(
+        self, repro_service, high_impact_incident, returncode, expected_status
+    ):
+        proof_bundle = await repro_service.analyze_and_generate_reproduction(high_impact_incident)
+
+        with patch("asyncio.create_subprocess_exec") as mock_subprocess:
+            mock_process = AsyncMock()
+            mock_process.returncode = returncode
+            mock_process.communicate.return_value = (b"baseline validation output", b"")
+            mock_subprocess.return_value = mock_process
+
+            updated_bundle = await repro_service.execute_reproduction_test(proof_bundle)
+
+        assert updated_bundle.reproduction_test.status == expected_status
+        assert updated_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE]["passed"] is False
+
+    @pytest.mark.asyncio
+    async def test_execute_reproduction_test_records_runner_error(self, repro_service, high_impact_incident):
+        proof_bundle = await repro_service.analyze_and_generate_reproduction(high_impact_incident)
+
+        with patch("asyncio.create_subprocess_exec", side_effect=OSError("runner unavailable")):
+            updated_bundle = await repro_service.execute_reproduction_test(proof_bundle)
+
+        assert updated_bundle.reproduction_test.status == ReproductionStatus.EXECUTION_ERROR
+        assert updated_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE]["passed"] is False
+
     @pytest.mark.asyncio
     async def test_validate_fix_with_reproduction(self, repro_service, high_impact_incident):
         """Test P2 Step 5: Verify fix works by running reproduction test again."""
@@ -129,6 +163,33 @@ class TestP2ProofOrientedRemediation:
             assert updated_bundle.fix_confidence == 0.9
             assert ValidationEvidence.POST_FIX_SUCCESS not in updated_bundle.missing_evidence
             assert updated_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS]["passed"] is True
+
+    @pytest.mark.asyncio
+    async def test_validate_fix_records_failed_reproduction(self, repro_service, high_impact_incident):
+        proof_bundle = await repro_service.analyze_and_generate_reproduction(high_impact_incident)
+        proof_bundle.pre_fix_evidence = "Test failed before fix"
+
+        with patch("asyncio.create_subprocess_exec") as mock_subprocess:
+            mock_process = AsyncMock()
+            mock_process.returncode = 1
+            mock_process.communicate.return_value = (b"test still failing", b"")
+            mock_subprocess.return_value = mock_process
+
+            updated_bundle = await repro_service.validate_fix_with_reproduction(proof_bundle)
+
+        assert updated_bundle.fix_confidence == 0.1
+        assert updated_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS]["passed"] is False
+
+    @pytest.mark.asyncio
+    async def test_validate_fix_records_runner_error(self, repro_service, high_impact_incident):
+        proof_bundle = await repro_service.analyze_and_generate_reproduction(high_impact_incident)
+        proof_bundle.pre_fix_evidence = "Test failed before fix"
+
+        with patch("asyncio.create_subprocess_exec", side_effect=OSError("runner unavailable")):
+            updated_bundle = await repro_service.validate_fix_with_reproduction(proof_bundle)
+
+        assert updated_bundle.fix_confidence == 0.0
+        assert updated_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS]["passed"] is False
 
     @pytest.mark.asyncio
     async def test_remediation_service_p2_integration(self, high_impact_incident):
