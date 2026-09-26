@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -103,9 +103,8 @@ class RemediationRecommendation:
             "required_actions": self.required_actions,
             "next_steps": self.next_steps,
             "draft_pr_url": self.draft_pr_url,
-            "proof_bundle": (
-                asdict(self.proof_bundle) if self.proof_bundle else None
-            ),  # P2: Include proof in audit trail
+            "proof_bundle": self.proof_bundle.to_dict() if self.proof_bundle else None,
+            # P2: Include proof and its derived evidence level in the audit trail
             "proof_integrity": (
                 {
                     "integrity_hash": self.proof_bundle.integrity.integrity_hash,
