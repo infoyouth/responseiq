@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from responseiq.schemas.proof import (
+    EvidenceLevel,
     ProofBundle,
     ReproductionStatus,
     ReproductionTest,
@@ -103,6 +104,7 @@ class TestP2ProofOrientedRemediation:
             assert updated_bundle.pre_fix_evidence is not None
             assert "Connection refused" in updated_bundle.pre_fix_evidence
             assert ValidationEvidence.PRE_FIX_FAILURE not in updated_bundle.missing_evidence
+            assert updated_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE]["passed"] is True
 
     @pytest.mark.asyncio
     async def test_validate_fix_with_reproduction(self, repro_service, high_impact_incident):
@@ -126,6 +128,7 @@ class TestP2ProofOrientedRemediation:
             assert "PASSED" in updated_bundle.post_fix_evidence
             assert updated_bundle.fix_confidence == 0.9
             assert ValidationEvidence.POST_FIX_SUCCESS not in updated_bundle.missing_evidence
+            assert updated_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS]["passed"] is True
 
     @pytest.mark.asyncio
     async def test_remediation_service_p2_integration(self, high_impact_incident):
@@ -215,6 +218,32 @@ class TestP2ProofOrientedRemediation:
         )
         assert complete_bundle.blocks_guarded_apply is False
         assert complete_bundle.has_complete_proof is True
+
+    def test_evidence_level_uses_successful_validation_only(self):
+        bundle = ProofBundle(incident_id="test-level", created_at=datetime.now())
+        assert bundle.evidence_level is None
+
+        bundle.reproduction_test = ReproductionTest(
+            test_id="test-level",
+            test_path="tests/repro/test_level.py",
+            incident_signature="ValueError",
+            environment_type="generic",
+        )
+        assert bundle.evidence_level == EvidenceLevel.SYNTHETIC_SIGNATURE
+
+        bundle.validation_results[ValidationEvidence.TYPE_CHECK] = {"passed": False}
+        assert bundle.evidence_level == EvidenceLevel.SYNTHETIC_SIGNATURE
+
+        bundle.validation_results[ValidationEvidence.TYPE_CHECK] = {"passed": True}
+        assert bundle.evidence_level == EvidenceLevel.STATIC_VALIDATION
+
+        bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": True}
+        bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS] = {"passed": True}
+        assert bundle.evidence_level == EvidenceLevel.APPLICATION_REPRODUCTION
+
+        bundle.validation_results[ValidationEvidence.INTEGRATION_TEST] = {"passed": True}
+        assert bundle.evidence_level == EvidenceLevel.INTEGRATION_VALIDATION
+        assert bundle.to_dict()["evidence_level"] == EvidenceLevel.INTEGRATION_VALIDATION.value
 
     def test_error_signature_extraction(self, repro_service):
         """Test extraction of error signatures from incident descriptions."""

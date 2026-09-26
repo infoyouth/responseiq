@@ -507,17 +507,20 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
             if process.returncode == 1:
                 proof_bundle.reproduction_test.status = ReproductionStatus.FAILED_AS_EXPECTED
                 proof_bundle.pre_fix_evidence = execution_output
+                proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": True}
                 # Remove PRE_FIX_FAILURE from missing evidence
                 if ValidationEvidence.PRE_FIX_FAILURE in proof_bundle.missing_evidence:
                     proof_bundle.missing_evidence.remove(ValidationEvidence.PRE_FIX_FAILURE)
             elif process.returncode == 0:
                 # Tests Passed = ❌ FAIL (Bug NOT Reproduced)
+                proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": False}
                 proof_bundle.reproduction_test.status = ReproductionStatus.PASSED_UNEXPECTEDLY
                 proof_bundle.reproduction_test.execution_output = (
                     f"Test PASSED unexpectedly (Exit 0). Expected failure to reproduce bug.\n{execution_output}"
                 )
             else:
                 # Other Exit Codes (Internal Error/Syntax Error)
+                proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": False}
                 proof_bundle.reproduction_test.status = ReproductionStatus.EXECUTION_ERROR
                 proof_bundle.reproduction_test.execution_output = (
                     f"Test Execution Error (Exit {process.returncode}).\n{execution_output}"
@@ -526,6 +529,7 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
             proof_bundle.reproduction_test.execution_time = datetime.now()
 
         except Exception as e:
+            proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": False}
             proof_bundle.reproduction_test.status = ReproductionStatus.EXECUTION_ERROR
             proof_bundle.reproduction_test.execution_output = f"Execution failed: {str(e)}"
             proof_bundle.reproduction_test.execution_time = datetime.now()
@@ -594,16 +598,19 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
             # Test should now pass after fix (Exit 0)
             if process.returncode == 0:
                 proof_bundle.post_fix_evidence = execution_output
+                proof_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS] = {"passed": True}
                 proof_bundle.fix_confidence = 0.9  # High confidence if test now passes
                 # Remove POST_FIX_SUCCESS from missing evidence
                 if ValidationEvidence.POST_FIX_SUCCESS in proof_bundle.missing_evidence:
                     proof_bundle.missing_evidence.remove(ValidationEvidence.POST_FIX_SUCCESS)
             else:
                 # Fix didn't work - test still fails
+                proof_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS] = {"passed": False}
                 proof_bundle.fix_confidence = 0.1
                 proof_bundle.post_fix_evidence = f"Fix failed - test still fails: {execution_output}"
 
         except Exception as e:
+            proof_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS] = {"passed": False}
             proof_bundle.post_fix_evidence = f"Post-fix validation failed: {str(e)}"
             proof_bundle.fix_confidence = 0.0
 

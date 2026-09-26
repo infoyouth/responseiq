@@ -11,7 +11,7 @@ pytest script, runtime output, and patch diff.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -34,6 +34,16 @@ class ValidationEvidence(Enum):
     SECURITY_SCAN = "security_scan"
     TYPE_CHECK = "type_check"
     INTEGRATION_TEST = "integration_test"
+
+
+class EvidenceLevel(str, Enum):
+    """Strongest validation tier supported by a proof bundle."""
+
+    SYNTHETIC_SIGNATURE = "synthetic_signature"
+    STATIC_VALIDATION = "static_validation"
+    APPLICATION_REPRODUCTION = "application_reproduction"
+    INTEGRATION_VALIDATION = "integration_validation"
+    PRODUCTION_OBSERVED = "production_observed"
 
 
 class ContextResolutionReason(str, Enum):
@@ -279,6 +289,40 @@ class ProofBundle:
     # P5: Performance regression gate result
     # Populated after gate.evaluate() is called during post-fix verification.
     perf_gate_result: Optional[object] = None  # PerformanceGateResult (avoid circular import)
+
+    def _validation_passed(self, evidence_type: ValidationEvidence) -> bool:
+        result = self.validation_results.get(evidence_type)
+        if isinstance(result, dict):
+            return result.get("passed") is True
+        return result is True
+
+    @property
+    def evidence_level(self) -> Optional[EvidenceLevel]:
+        """Return the strongest level backed by explicitly successful evidence."""
+        if self._validation_passed(ValidationEvidence.INTEGRATION_TEST):
+            return EvidenceLevel.INTEGRATION_VALIDATION
+
+        if self._validation_passed(ValidationEvidence.PRE_FIX_FAILURE) and self._validation_passed(
+            ValidationEvidence.POST_FIX_SUCCESS
+        ):
+            return EvidenceLevel.APPLICATION_REPRODUCTION
+
+        if any(
+            self._validation_passed(evidence_type)
+            for evidence_type in (ValidationEvidence.SECURITY_SCAN, ValidationEvidence.TYPE_CHECK)
+        ):
+            return EvidenceLevel.STATIC_VALIDATION
+
+        if self.reproduction_test is not None:
+            return EvidenceLevel.SYNTHETIC_SIGNATURE
+
+        return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize the bundle with its derived evidence level."""
+        result = asdict(self)
+        result["evidence_level"] = self.evidence_level.value if self.evidence_level else None
+        return result
 
     @property
     def has_complete_proof(self) -> bool:
