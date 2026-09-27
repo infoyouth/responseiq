@@ -11,6 +11,7 @@ import pytest
 from responseiq.config.policy_config import (
     DenyReason,
     PolicyMode,
+    RequiredCheck,
     SeverityThreshold,
     create_custom_policy,
 )
@@ -346,6 +347,17 @@ class TestTrustGateValidatorChecks:
             assert len(result.checks_failed) == 1
 
     @pytest.mark.asyncio
+    async def test_unknown_required_check_fails_closed(self, validator_with_checks, minimal_request):
+        validator_with_checks.policy.required_checks = [RequiredCheck("unknown", "Unknown check")]
+        result = ValidationResult(allowed=False)
+
+        success = await validator_with_checks._execute_required_checks(minimal_request, result)
+
+        assert success is False
+        assert result.reason == DenyReason.CHECKS_FAILED
+        assert result.checks_failed == ["unknown"]
+
+    @pytest.mark.asyncio
     async def test_security_scan_execution(self, validator_with_checks):
         """Test security scan subprocess execution."""
         # Mock successful bandit execution
@@ -385,13 +397,12 @@ class TestTrustGateValidatorChecks:
 
     @pytest.mark.asyncio
     async def test_security_scan_tool_missing(self, validator_with_checks):
-        """Test security scan when bandit is not installed."""
+        """A missing security scanner must not count as a successful check."""
         # Mock FileNotFoundError (tool missing)
         with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError):
             result = await validator_with_checks._run_security_scan()
 
-            # Should not fail if tool is missing (graceful degradation)
-            assert result is True
+            assert result is False
 
     @pytest.mark.asyncio
     async def test_syntax_check_python_files(self, validator_with_checks):
@@ -475,6 +486,19 @@ class TestTrustGateValidatorChecks:
             result = await validator_with_checks._run_tests()
 
             assert result is False
+
+    @pytest.mark.asyncio
+    async def test_run_tests_runner_error_fails_closed(self, validator_with_checks):
+        with patch("asyncio.create_subprocess_exec", side_effect=OSError("pytest unavailable")):
+            result = await validator_with_checks._run_tests()
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_run_tests_is_not_treated_as_pass_when_nested_run_is_skipped(self, validator_with_checks):
+        result = await validator_with_checks._run_tests()
+
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_check_execution_with_timeout_handling(self, validator_with_checks, minimal_request):

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     # Application Info
     app_name: str = "ResponseIQ MVP"
     environment: str = "dev"  # dev, test, prod
+    policy_mode: Literal["suggest_only", "pr_only", "guarded_apply"] = Field(
+        default="pr_only",
+        validation_alias="RESPONSEIQ_POLICY_MODE",
+        description="Remediation execution policy; guarded_apply requires explicit opt-in.",
+    )
 
     # Database
     database_url: str = "sqlite:///./responseiq.db"

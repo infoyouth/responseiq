@@ -188,6 +188,26 @@ class TestSuccessfulRemediation:
         assert len(state["fixes"]) == 1
         assert state["fixes"][0]["title"] == "Fix It"
 
+    def test_policy_mode_setting_reaches_remediation_service(self, tmp_path):
+        from responseiq.config.policy_config import PolicyMode
+
+        log = tmp_path / "app.log"
+        log.write_text("incident line")
+        incident = _make_incident_out(severity="high")
+        service = MagicMock()
+        service.remediate_incident = AsyncMock(return_value=_make_recommendation())
+
+        with (
+            patch("responseiq.plugins.fix.settings") as settings,
+            patch("responseiq.services.analyzer.analyze_log_async", new_callable=AsyncMock, return_value=incident),
+            patch("responseiq.services.remediation_service.RemediationService", return_value=service) as service_class,
+        ):
+            settings.policy_mode = "suggest_only"
+            result = FixPlugin().run(_build_state(str(log)))
+
+        assert result["fix_result"] == "success"
+        service_class.assert_called_once_with(environment="development", policy_mode=PolicyMode.SUGGEST_ONLY)
+
     def test_patch_and_validation_options_reach_remediation(self, tmp_path):
         log = tmp_path / "app.log"
         log.write_text("incident line 0")

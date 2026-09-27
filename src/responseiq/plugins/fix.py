@@ -3,8 +3,8 @@
 """Fix plugin — full remediation pipeline runner.
 
 Runs scan → triage → Trust Gate → patch synthesis on a target log
-file or directory. Operates in ``suggest_only`` mode by default so
-nothing is written to disk without an explicit policy upgrade.
+file or directory. Uses ``pr_only`` policy by default; opening a draft PR
+still requires an explicit patch, repository, and validation commands.
 
 Invoked by the CLI as ``responseiq --mode fix --target <path>``.
 """
@@ -16,6 +16,9 @@ from pathlib import Path
 from typing import List
 
 from loguru import logger
+
+from responseiq.config.policy_config import PolicyMode
+from responseiq.config.settings import settings
 
 from .base import BasePlugin
 
@@ -52,7 +55,10 @@ class FixPlugin(BasePlugin):
             from responseiq.services.analyzer import analyze_log_async
             from responseiq.services.remediation_service import RemediationService
 
-            svc = RemediationService(environment="development")
+            svc = RemediationService(
+                environment="development",
+                policy_mode=PolicyMode(settings.policy_mode),
+            )
             cli_args = agent_state.get("context", {}).get("args", {})
             patch_text = self._read_patch_file(cli_args.get("patch_file"))
             validation_commands = [shlex.split(command) for command in cli_args.get("validation_commands") or []]
