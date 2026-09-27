@@ -215,23 +215,23 @@ class TestEvaluateSnapshotRolling:
 
 
 class TestEvaluateInsufficientData:
-    def test_passes_with_no_data(self):
+    def test_fails_closed_with_no_data(self):
         g = _fresh()
         result = g.evaluate("brand_new_endpoint")
-        assert result.passed is True
+        assert result.passed is False
         assert "insufficient_data" in result.reason
 
-    def test_passes_with_only_pre_fix(self):
+    def test_fails_closed_with_only_pre_fix(self):
         g = _fresh()
         g.record_pre_fix(EP, 100.0)
         result = g.evaluate(EP)
-        assert result.passed is True  # no post_fix yet
+        assert result.passed is False  # no post_fix baseline comparison
 
-    def test_passes_with_only_post_fix(self):
+    def test_fails_closed_with_only_post_fix(self):
         g = _fresh()
         g.record_post_fix(EP, 100.0)
         result = g.evaluate(EP)
-        assert result.passed is True  # no pre_fix
+        assert result.passed is False  # no pre_fix baseline comparison
 
     def test_zero_baseline_guard(self):
         """Evaluating when baseline resolves to 0.0 should not divide by zero."""

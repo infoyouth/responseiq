@@ -93,29 +93,42 @@ jobs:
 
       # Fast Checks — all via ruff (matches Makefile exactly, zero drift)
       - name: 🎨 Format check (ruff)
-        run: uv run ruff format --check src tests 2>&1 | tee reports/ruff-format.txt
+        run: |
+          set -o pipefail
+          uv run ruff format --check src tests 2>&1 | tee reports/ruff-format.txt
 
       - name: 🔍 Lint (ruff)
-        run: uv run ruff check src tests 2>&1 | tee reports/ruff-lint.txt
+        run: |
+          set -o pipefail
+          uv run ruff check src tests 2>&1 | tee reports/ruff-lint.txt
 
       - name: 🔬 Type check (mypy)
-        run: uv run mypy src --txt-report reports/mypy-report 2>&1 | tee reports/mypy.txt
+        run: |
+          set -o pipefail
+          uv run mypy src --txt-report reports/mypy-report 2>&1 | tee reports/mypy.txt
 
       # Security Checks
       - name: 🔒 Security scan (ruff --select S)
-        run: uv run ruff check --select S src 2>&1 | tee reports/security.txt
+        run: |
+          set -o pipefail
+          uv run ruff check --select S src 2>&1 | tee reports/security.txt
 
       - name: 🛡️ Dependency audit (pip-audit)
-        run: uv run pip-audit --format cyclonedx-json -o reports/pip-audit.json 2>&1 | tee reports/pip-audit.txt || true
+        run: |
+          set -o pipefail
+          uv run pip-audit --format cyclonedx-json -o reports/pip-audit.json 2>&1 | tee reports/pip-audit.txt
 
       # Tests — generate JUnit XML + coverage reports
       - name: 🧪 Run tests (pytest + coverage)
         run: |
+          set -o pipefail
           uv run pytest \
             -n auto \
             --dist=loadscope \
             --junitxml=reports/pytest.xml \
             --cov=src/responseiq \
+            --cov-branch \
+            --cov-fail-under=80 \
             --cov-report=xml:reports/coverage.xml \
             --cov-report=html:reports/coverage-html \
             --cov-report=term-missing \

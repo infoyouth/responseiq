@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess  # nosec B404
+import sys
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -18,6 +19,10 @@ from responseiq.utils.logger import logger
 
 class WorktreePreparationError(RuntimeError):
     """Raised when a remediation cannot be prepared and validated safely."""
+
+
+class WorktreeValidationError(WorktreePreparationError):
+    """Raised when the candidate patch cannot apply or a validation command fails."""
 
 
 @dataclass(frozen=True)
@@ -38,6 +43,7 @@ class WorktreePreparationService:
         repo_name: str,
         patch_text: str,
         validation_commands: Sequence[Sequence[str]],
+        required_checks: Sequence[str] = (),
         token: str,
         base: str = "main",
         branch_name: str | None = None,
@@ -45,7 +51,7 @@ class WorktreePreparationService:
         """Prepare a patch outside the caller's checkout and push it after validation."""
         if not patch_text.strip():
             raise WorktreePreparationError("A non-empty unified diff is required")
-        if not validation_commands:
+        if not validation_commands and not required_checks:
             raise WorktreePreparationError("At least one validation command is required")
         if not token:
             raise WorktreePreparationError("A GitHub token is required to push the validated branch")
@@ -57,13 +63,18 @@ class WorktreePreparationService:
         try:
             self._run_git(repo_path, ["worktree", "add", "-b", branch, str(worktree_path), base])
             patch_path.write_text(patch_text, encoding="utf-8")
-            self._run_git(worktree_path, ["apply", "--check", str(patch_path)])
-            self._run_git(worktree_path, ["apply", str(patch_path)])
+            try:
+                self._run_git(worktree_path, ["apply", "--check", str(patch_path)])
+                self._run_git(worktree_path, ["apply", str(patch_path)])
+            except WorktreePreparationError as exc:
+                raise WorktreeValidationError(f"Candidate patch failed to apply: {exc}") from exc
 
             for command in validation_commands:
                 if not command or any(not part for part in command):
-                    raise WorktreePreparationError("Validation commands must contain non-empty argv entries")
+                    raise WorktreeValidationError("Validation commands must contain non-empty argv entries")
                 self._run_command(worktree_path, command)
+
+            self._run_required_checks(worktree_path, required_checks, validation_commands)
 
             self._run_git(worktree_path, ["config", "user.name", "ResponseIQ Bot"])
             self._run_git(worktree_path, ["config", "user.email", "bot@responseiq.io"])
@@ -85,7 +96,42 @@ class WorktreePreparationService:
 
     @staticmethod
     def _run_command(cwd: Path, command: Sequence[str]) -> str:
-        return WorktreePreparationService._run(list(command), cwd, "validation")
+        try:
+            return WorktreePreparationService._run(list(command), cwd, "validation")
+        except WorktreePreparationError as exc:
+            raise WorktreeValidationError(str(exc)) from exc
+
+    @staticmethod
+    def _run_required_checks(
+        cwd: Path,
+        required_checks: Sequence[str],
+        validation_commands: Sequence[Sequence[str]],
+    ) -> None:
+        changed_files = set(WorktreePreparationService._run_git(cwd, ["diff", "--name-only"]).splitlines())
+        untracked_files = WorktreePreparationService._run_git(
+            cwd,
+            ["ls-files", "--others", "--exclude-standard"],
+        ).splitlines()
+        python_files = sorted(path for path in changed_files.union(untracked_files) if path.endswith(".py"))
+
+        for check_name in required_checks:
+            if check_name == "tests":
+                if not any("pytest" in part for command in validation_commands for part in command):
+                    WorktreePreparationService._run_command(cwd, [sys.executable, "-m", "pytest", "-q"])
+            elif check_name == "security_scan":
+                if python_files:
+                    WorktreePreparationService._run_command(
+                        cwd,
+                        ["ruff", "check", "--select", "S", *python_files],
+                    )
+            elif check_name == "syntax_check":
+                if python_files:
+                    WorktreePreparationService._run_command(
+                        cwd,
+                        [sys.executable, "-m", "py_compile", *python_files],
+                    )
+            else:
+                raise WorktreeValidationError(f"Unknown required candidate check: {check_name}")
 
     @staticmethod
     def _run(command: list[str], cwd: Path, kind: str) -> str:

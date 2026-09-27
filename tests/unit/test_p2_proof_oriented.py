@@ -306,6 +306,23 @@ class TestP2ProofOrientedRemediation:
         assert bundle.evidence_level == EvidenceLevel.INTEGRATION_VALIDATION
         assert bundle.to_dict()["evidence_level"] == EvidenceLevel.INTEGRATION_VALIDATION.value
 
+    def test_static_synthetic_reproduction_cannot_claim_application_evidence(self):
+        bundle = ProofBundle(
+            incident_id="static-repro",
+            created_at=datetime.now(),
+            reproduction_test=ReproductionTest(
+                test_id="static-repro",
+                test_path="tests/repro/test_static.py",
+                incident_signature="ValueError",
+                environment_type="generic",
+                repro_method="static_fallback",
+            ),
+        )
+        bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": True}
+        bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS] = {"passed": True}
+
+        assert bundle.evidence_level == EvidenceLevel.SYNTHETIC_SIGNATURE
+
     def test_error_signature_extraction(self, repro_service):
         """Test extraction of error signatures from incident descriptions."""
         # Python exception

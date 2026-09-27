@@ -6,6 +6,7 @@ Tests P1 roadmap components: policy modes, rules, and validation.
 from dataclasses import replace
 
 import pytest
+from hypothesis import given, settings as hypothesis_settings, strategies as st
 
 from responseiq.config.policy_config import (
     DEFAULT_POLICIES,
@@ -77,6 +78,17 @@ class TestPolicyConfigValidation:
         # Invalid values
         assert policy.validate_blast_radius("invalid") is False
         assert policy.validate_blast_radius("") is False
+
+    @pytest.mark.property
+    @hypothesis_settings(max_examples=100)
+    @given(values=st.lists(st.floats(min_value=0, max_value=1, allow_nan=False), min_size=3, max_size=3))
+    def test_confidence_policy_is_monotonic(self, values):
+        lower_threshold, confidence, higher_threshold = sorted(values)
+        permissive = PolicyConfig(min_confidence=lower_threshold)
+        strict = PolicyConfig(min_confidence=higher_threshold)
+
+        if strict.validate_confidence(confidence):
+            assert permissive.validate_confidence(confidence)
 
     def test_protected_path_pattern_matching(self):
         """Test protected path rule pattern matching."""
@@ -242,6 +254,12 @@ class TestRequiredChecks:
 
         assert check.enabled is True  # Default enabled
         assert check.timeout_seconds == 300  # Default timeout
+
+    def test_policy_rejects_unknown_required_check(self):
+        with pytest.raises(ValueError, match="Unknown required check"):
+            PolicyConfig(required_checks=[RequiredCheck("custom_lint", "Unknown check")])
+        with pytest.raises(ValueError, match="Unknown required check"):
+            create_custom_policy(required_checks=[RequiredCheck("custom_lint", "Unknown check")])
 
     def test_default_required_checks(self):
         """Test default required checks are comprehensive."""

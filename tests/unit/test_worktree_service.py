@@ -3,7 +3,11 @@ import sys
 
 import pytest
 
-from responseiq.services.worktree_service import WorktreePreparationError, WorktreePreparationService
+from responseiq.services.worktree_service import (
+    WorktreePreparationError,
+    WorktreePreparationService,
+    WorktreeValidationError,
+)
 from responseiq.utils.git_utils import GitClient
 
 
@@ -61,6 +65,93 @@ def test_prepare_and_push_applies_validates_and_cleans_worktree(tmp_path, monkey
     assert (repo / "app.txt").read_text(encoding="utf-8") == "before\n"
     assert not list(tmp_path.glob("responseiq-worktree-*"))
     assert run_git(repo, "show", "responseiq-test-fix:app.txt") == "after\n"
+
+
+def test_required_checks_run_against_patched_candidate(tmp_path, monkeypatch):
+    repo = create_repo(tmp_path)
+    (repo / "app.py").write_text("def is_fixed():\n    return False\n", encoding="utf-8")
+    tests_dir = repo / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_app.py").write_text(
+        "from app import is_fixed\n\n\ndef test_candidate_patch():\n    assert is_fixed()\n",
+        encoding="utf-8",
+    )
+    run_git(repo, "add", "app.py", "tests/test_app.py")
+    run_git(repo, "commit", "-m", "add candidate regression test")
+    monkeypatch.setattr(GitClient, "push", lambda *args: True)
+
+    result = WorktreePreparationService().prepare_and_push(
+        repo_path=repo,
+        repo_name="example/repo",
+        patch_text="""diff --git a/app.py b/app.py
+--- a/app.py
++++ b/app.py
+@@ -1,2 +1,2 @@
+ def is_fixed():
+-    return False
++    return True
+""",
+        validation_commands=[],
+        required_checks=["tests", "security_scan", "syntax_check"],
+        token="test-token",
+        branch_name="responseiq-required-checks",
+    )
+
+    assert run_git(repo, "show", f"{result.branch_name}:app.py") == "def is_fixed():\n    return True\n"
+
+
+def test_security_check_includes_new_python_files(tmp_path, monkeypatch):
+    repo = create_repo(tmp_path)
+    monkeypatch.setattr(GitClient, "push", lambda *args: pytest.fail("invalid candidate must not be pushed"))
+
+    with pytest.raises(WorktreeValidationError, match=r"ruff check --select S unsafe\.py"):
+        WorktreePreparationService().prepare_and_push(
+            repo_path=repo,
+            repo_name="example/repo",
+            patch_text="""diff --git a/unsafe.py b/unsafe.py
+new file mode 100644
+--- /dev/null
++++ b/unsafe.py
+@@ -0,0 +1,2 @@
++import subprocess
++subprocess.run("echo unsafe", shell=True)
+""",
+            validation_commands=[],
+            required_checks=["security_scan"],
+            token="test-token",
+            branch_name="responseiq-new-python-security",
+        )
+
+
+def test_failed_candidate_validation_does_not_push_or_change_checkout(tmp_path, monkeypatch):
+    repo = create_repo(tmp_path)
+    pushed = []
+    monkeypatch.setattr(GitClient, "push", lambda *args: pushed.append(args) or True)
+
+    with pytest.raises(WorktreeValidationError, match="validation command failed"):
+        WorktreePreparationService().prepare_and_push(
+            repo_path=repo,
+            repo_name="example/repo",
+            patch_text="""diff --git a/app.txt b/app.txt
+--- a/app.txt
++++ b/app.txt
+@@ -1 +1 @@
+-before
++after
+""",
+            validation_commands=[
+                [
+                    sys.executable,
+                    "-c",
+                    "from pathlib import Path; assert Path('app.txt').read_text() == 'before\\n'",
+                ]
+            ],
+            token="test-token",
+        )
+
+    assert not pushed
+    assert (repo / "app.txt").read_text(encoding="utf-8") == "before\n"
+    assert not list(tmp_path.glob("responseiq-worktree-*"))
 
 
 @pytest.mark.parametrize(
