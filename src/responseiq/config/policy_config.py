@@ -9,6 +9,7 @@ evaluates before any remediation is applied or submitted as a PR.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, List, Optional
@@ -182,7 +183,7 @@ DEFAULT_POLICIES = {
 
 def load_policy_config(environment: str = "production") -> PolicyConfig:
     """Load policy configuration for specified environment."""
-    return DEFAULT_POLICIES.get(environment, DEFAULT_POLICIES["production"])
+    return deepcopy(DEFAULT_POLICIES.get(environment, DEFAULT_POLICIES["production"]))
 
 
 def create_custom_policy(**overrides: Any) -> PolicyConfig:

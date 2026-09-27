@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -133,9 +133,16 @@ class RemediationService:
     Provides safe, policy-governed, explainable incident remediation.
     """
 
-    def __init__(self, environment: str = "production", repo_path: Optional[Path] = None):
+    def __init__(
+        self,
+        environment: str = "production",
+        repo_path: Optional[Path] = None,
+        policy_mode: Optional[PolicyMode] = None,
+    ):
         self.k8s_patcher = KubernetesPatcher()
         self.trust_gate = TrustGateValidator(environment=environment)
+        if policy_mode is not None:
+            self.trust_gate.update_policy(replace(self.trust_gate.policy, mode=policy_mode))
         self.reproduction_service = ReproductionService()  # P2: Proof-oriented testing
         self.rollback_generator = ExecutableRollbackGenerator()  # P2.1: Executable rollbacks
         self.git_correlation = GitCorrelationService(repo_path=repo_path)  # P3: Change correlation

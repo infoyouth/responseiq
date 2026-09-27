@@ -310,6 +310,15 @@ class TestPolicyConfigDefaults:
         assert unknown_policy.mode == PolicyMode.SUGGEST_ONLY
         assert unknown_policy.min_severity == SeverityThreshold.HIGH
 
+    def test_loaded_policies_do_not_share_mutable_state(self):
+        first = load_policy_config("production")
+        second = load_policy_config("production")
+
+        first.mode = PolicyMode.GUARDED_APPLY
+
+        assert second.mode == PolicyMode.SUGGEST_ONLY
+        assert DEFAULT_POLICIES["production"].mode == PolicyMode.SUGGEST_ONLY
+
 
 class TestCustomPolicyCreation:
     """Test custom policy creation and validation."""

@@ -323,7 +323,7 @@ class TrustGateValidator:
                 return await self._run_tests()
             else:
                 logger.warning(f"Unknown check type: {check.name}")
-                return True  # Unknown checks pass by default
+                return False
 
         except asyncio.TimeoutError:
             logger.error(f"Check '{check.name}' timed out after {check.timeout_seconds} seconds")
@@ -344,8 +344,8 @@ class TrustGateValidator:
             return process.returncode == 0
 
         except FileNotFoundError:
-            logger.warning("Bandit not found, skipping security scan")
-            return True  # Don't fail if tool is missing
+            logger.error("Bandit not found; required security scan cannot run")
+            return False
 
     async def _run_syntax_check(self, files: List[str]) -> bool:
         """Run syntax validation on Python files."""
@@ -381,8 +381,8 @@ class TrustGateValidator:
             # Subprocess is mocked, allow test to proceed
             pass
         elif "pytest" in sys.modules or "unittest" in sys.modules:
-            logger.debug("Skipping test execution - running in test environment")
-            return True
+            logger.warning("Cannot run required tests recursively; validation is inconclusive")
+            return False
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -402,7 +402,7 @@ class TrustGateValidator:
 
         except Exception as e:
             logger.warning(f"Test execution failed: {e}")
-            return True  # Continue if tests can't run
+            return False
 
     def _get_approval_message(self, request: RemediationRequest) -> str:
         """Generate approval message based on policy mode."""

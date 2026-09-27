@@ -2,12 +2,20 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from responseiq.config.policy_config import DEFAULT_POLICIES, PolicyMode
 from responseiq.services.remediation_service import RemediationService
 
 
 @pytest.fixture
 def remediation_service():
     return RemediationService()
+
+
+def test_explicit_policy_mode_does_not_mutate_environment_default():
+    service = RemediationService(environment="development", policy_mode=PolicyMode.PR_ONLY)
+
+    assert service.trust_gate.policy.mode == PolicyMode.PR_ONLY
+    assert DEFAULT_POLICIES["development"].mode == PolicyMode.GUARDED_APPLY
 
 
 @pytest.mark.asyncio

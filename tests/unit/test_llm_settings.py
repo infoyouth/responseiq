@@ -21,6 +21,11 @@ from responseiq.config.settings import Settings
 
 
 class TestLLMSettingsDefaults:
+    def test_policy_mode_defaults_to_pr_only(self, monkeypatch):
+        monkeypatch.delenv("RESPONSEIQ_POLICY_MODE", raising=False)
+        settings = Settings(_env_file=None)
+        assert settings.policy_mode == "pr_only"
+
     def test_analysis_model_default(self, monkeypatch):
         monkeypatch.delenv("LLM_ANALYSIS_MODEL", raising=False)
         s = Settings(_env_file=None)
@@ -60,6 +65,18 @@ class TestLLMSettingsDefaults:
 
 
 class TestLLMSettingsEnvOverrides:
+    def test_policy_mode_override(self, monkeypatch):
+        monkeypatch.setenv("RESPONSEIQ_POLICY_MODE", "guarded_apply")
+        settings = Settings(_env_file=None)
+        assert settings.policy_mode == "guarded_apply"
+
+    def test_policy_mode_rejects_unknown_value(self, monkeypatch):
+        from pydantic import ValidationError
+
+        monkeypatch.setenv("RESPONSEIQ_POLICY_MODE", "apply_anyway")
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None)
+
     def test_analysis_model_override(self, monkeypatch):
         monkeypatch.setenv("LLM_ANALYSIS_MODEL", "gpt-4-turbo")
         s = Settings()
