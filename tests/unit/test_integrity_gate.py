@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import pytest
 from hypothesis import HealthCheck, given, settings as hypothesis_settings, strategies as st
 
-from responseiq.schemas.proof import EvidenceIntegrity, ProofBundle
+from responseiq.schemas.proof import EvidenceIntegrity, EvidenceLevel, ProofBundle, ReproductionTest, ValidationEvidence
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -36,6 +36,49 @@ def _bundle(**kwargs) -> ProofBundle:
 
 
 class TestSealForensicEvidence:
+    def test_production_observation_requires_time_and_traffic_thresholds(self):
+        bundle = _bundle(reproduction_test=ReproductionTest("test", "test.py", "Error", "filesystem"))
+        bundle.validation_results[ValidationEvidence.PRODUCTION_OBSERVED] = {"passed": True}
+        bundle.production_elapsed_seconds = 1799
+        bundle.production_request_volume = 100
+        bundle.production_request_baseline = 100
+        assert bundle.evidence_level == EvidenceLevel.SYNTHETIC_SIGNATURE
+
+        bundle.production_elapsed_seconds = 1800
+        bundle.production_request_volume = 99
+        assert bundle.evidence_level == EvidenceLevel.SYNTHETIC_SIGNATURE
+
+        bundle.production_request_volume = 100
+        assert bundle.evidence_level == EvidenceLevel.PRODUCTION_OBSERVED
+
+    def test_canonical_payload_is_sealed_and_verifiable(self):
+        bundle = _bundle(
+            pre_fix_evidence="pre: failure",
+            post_fix_evidence="post: success",
+            security_scan_output="ruff clean",
+        )
+        bundle.validation_results = {"tests": {"passed": True}}
+        bundle.seal_forensic_evidence()
+
+        assert bundle.integrity.payload_json == bundle.canonical_payload_json()
+        assert bundle.integrity.previous_hash is None
+        assert bundle.verify_evidence_integrity() is True
+
+        bundle.security_scan_output = "tampered"
+        assert bundle.verify_evidence_integrity() is False
+
+    def test_reseal_links_to_previous_chain_hash(self):
+        bundle = _bundle(pre_fix_evidence="pre: failure")
+        bundle.seal_forensic_evidence()
+        first_chain_hash = bundle.integrity.chain_hash
+
+        bundle.post_fix_evidence = "post: success"
+        bundle.seal_forensic_evidence()
+
+        assert bundle.integrity.previous_hash == first_chain_hash
+        assert bundle.integrity.chain_hash != first_chain_hash
+        assert bundle.verify_evidence_integrity() is True
+
     def test_integrity_hash_populated_after_seal(self):
         """After sealing, ProofBundle.integrity.integrity_hash must be non-None."""
         bundle = _bundle(pre_fix_evidence="test failed: AssertionError at line 42")

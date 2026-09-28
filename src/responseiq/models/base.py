@@ -82,6 +82,8 @@ class ProofBundleRecord(SQLModel, table=True):  # type: ignore[call-arg]
     # Cryptographic integrity fields (copied from EvidenceIntegrity)
     integrity_hash: Optional[str] = Field(default=None, description="SHA-256 hex of evidence payload")
     chain_hash: Optional[str] = Field(default=None, description="SHA-256(integrity_hash + prev_hash)")
+    previous_hash: Optional[str] = Field(default=None, description="Previous chain hash")
+    payload_json: Optional[str] = Field(default=None, description="Canonical sealed ProofBundle payload")
     algorithm: str = Field(default="SHA-256")
     sealed_at: Optional[datetime] = Field(default=None, description="When ProofBundle.seal_forensic_evidence() ran")
     pre_fix_hash: Optional[str] = Field(default=None, description="SHA-256 of pre-fix test output")
