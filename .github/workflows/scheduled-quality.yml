@@ -47,4 +47,14 @@ jobs:
       - name: Run targeted mutations
         run: |
           uv run --with mutmut==3.8.0 mutmut run --max-children 2
-          uv run --with mutmut==3.8.0 mutmut results
+          uv run --with mutmut==3.8.0 mutmut results --all true > mutmut-results.txt
+          killed=$(grep -c ': killed$' mutmut-results.txt)
+          survived=$(grep -c ': survived$' mutmut-results.txt)
+          timeout=$(grep -c ': timeout$' mutmut-results.txt)
+          scored=$((killed + survived))
+          score=$(awk -v killed="$killed" -v scored="$scored" 'BEGIN { printf "%.2f", (killed * 100) / scored }')
+          echo "Mutation score: ${score}% (${killed} killed, ${survived} survived, ${timeout} timed out)"
+          if awk -v score="$score" 'BEGIN { exit !(score < 70) }'; then
+            echo "Mutation score is below the 70% minimum."
+            exit 1
+          fi

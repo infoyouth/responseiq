@@ -37,16 +37,16 @@ class FixtureRunner:
         return module_dir
 
     def apply_patch(self, module_dir: Path) -> None:
-        self._run(
+        self.run_command(
             ["git", "apply", "--unidiff-zero", str(self.spec.fixture_dir / "expected.patch")],
             cwd=module_dir,
             check=True,
         )
 
     def run(self, module_dir: Path, script: str) -> subprocess.CompletedProcess[str]:
-        return self._run([sys.executable, "-c", script], cwd=module_dir, check=False)
+        return self.run_command([sys.executable, "-c", script], cwd=module_dir, check=False)
 
-    def _run(self, command: list[str], *, cwd: Path, check: bool) -> subprocess.CompletedProcess[str]:
+    def run_command(self, command: list[str], *, cwd: Path, check: bool) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             command,
             cwd=cwd,

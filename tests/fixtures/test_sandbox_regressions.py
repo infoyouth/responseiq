@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -65,14 +64,16 @@ def test_auth_fixture_fails_before_patch_and_passes_after_patch(tmp_path: Path) 
 def test_auth_fixture_rejects_patch_that_does_not_fix_refresh_failure(tmp_path: Path) -> None:
     expected = AUTH.spec.expected
     module_dir = AUTH.prepare(tmp_path, name="auth_wrong_patch")
-    wrong_patch = (AUTH_FIXTURE / "expected.patch").read_text(encoding="utf-8").replace(
-        '"last_seen": time.time()', '"unused": time.time()'
+    wrong_patch = (
+        (AUTH_FIXTURE / "expected.patch")
+        .read_text(encoding="utf-8")
+        .replace('"last_seen": time.time()', '"unused": time.time()')
     )
     patch_path = tmp_path / "wrong.patch"
     patch_path.write_text(wrong_patch, encoding="utf-8")
 
-    AUTH._run(["git", "apply", "--check", str(patch_path)], cwd=module_dir, check=True)
-    AUTH._run(["git", "apply", str(patch_path)], cwd=module_dir, check=True)
+    AUTH.run_command(["git", "apply", "--check", str(patch_path)], cwd=module_dir, check=True)
+    AUTH.run_command(["git", "apply", str(patch_path)], cwd=module_dir, check=True)
 
     result = _run_auth_flow(AUTH, module_dir)
     assert result.returncode != 0
@@ -99,7 +100,8 @@ assert result["status"] == "succeeded"
     fixed_dir = PAYMENT.prepare(tmp_path, patched=True, name="payment_fixed")
     after = _run_script(
         PAYMENT,
-        fixed_dir, script.replace('assert result["status"] == "succeeded"', "raise AssertionError('swallowed')")
+        fixed_dir,
+        script.replace('assert result["status"] == "succeeded"', "raise AssertionError('swallowed')"),
     )
     assert after.returncode != 0
     assert expected["expected_failure"] in after.stderr
