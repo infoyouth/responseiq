@@ -88,14 +88,14 @@ class PerformanceGateResult:
 
 
 def _insufficient_data_result(endpoint: str, reason: str, threshold_pct: float) -> PerformanceGateResult:
-    """Return a passed=True result when there is not enough data to evaluate."""
+    """Return a failed result when there is not enough data to evaluate safely."""
     return PerformanceGateResult(
         endpoint=endpoint,
         baseline_p95_ms=0.0,
         post_fix_p95_ms=0.0,
         delta_pct=0.0,
         threshold_pct=threshold_pct,
-        passed=True,  # no data → gate passes (benefit of the doubt)
+        passed=False,
         reason=reason,
         baseline_sample_n=0,
         post_fix_sample_n=0,
@@ -184,7 +184,7 @@ class PerformanceGate:
         Evaluation strategy (in order):
           1. If pre_fix + post_fix samples exist → use them directly.
           2. If a baseline snapshot + rolling samples exist → use them.
-          3. Not enough data → pass with reason "insufficient_data".
+          3. Not enough data → fail closed with reason "insufficient_data".
 
         Args:
             endpoint:  The operation name to evaluate.
@@ -210,7 +210,7 @@ class PerformanceGate:
         if baseline_p95 is not None and rolling:
             return self._compare_snapshot(endpoint, baseline_p95, rolling, thr, threshold_pct)
 
-        # Strategy 3: insufficient data — gate passes (benefit of the doubt)
+        # Strategy 3: insufficient data — gate fails closed.
         return _insufficient_data_result(endpoint, "insufficient_data: no baseline available", threshold_pct)
 
     def baseline_p95(self, endpoint: str) -> Optional[float]:

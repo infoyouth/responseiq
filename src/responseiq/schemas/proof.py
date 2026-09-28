@@ -302,8 +302,13 @@ class ProofBundle:
         if self._validation_passed(ValidationEvidence.INTEGRATION_TEST):
             return EvidenceLevel.INTEGRATION_VALIDATION
 
-        if self._validation_passed(ValidationEvidence.PRE_FIX_FAILURE) and self._validation_passed(
-            ValidationEvidence.POST_FIX_SUCCESS
+        has_real_reproduction = (
+            self.reproduction_test is not None and self.reproduction_test.repro_method != "static_fallback"
+        )
+        if (
+            has_real_reproduction
+            and self._validation_passed(ValidationEvidence.PRE_FIX_FAILURE)
+            and self._validation_passed(ValidationEvidence.POST_FIX_SUCCESS)
         ):
             return EvidenceLevel.APPLICATION_REPRODUCTION
 

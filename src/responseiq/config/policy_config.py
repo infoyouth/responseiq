@@ -54,6 +54,9 @@ class RequiredCheck:
     timeout_seconds: int = 300
 
 
+_SUPPORTED_REQUIRED_CHECKS = frozenset({"tests", "security_scan", "syntax_check"})
+
+
 @dataclass
 class ProtectedPathRule:
     """Defines paths that require special handling or are forbidden."""
@@ -80,7 +83,7 @@ class PolicyConfig:
     required_checks: List[RequiredCheck] = field(
         default_factory=lambda: [
             RequiredCheck("tests", "Unit/integration tests must pass"),
-            RequiredCheck("security_scan", "Security linting with Bandit"),
+            RequiredCheck("security_scan", "Security linting with Ruff security rules"),
             RequiredCheck("syntax_check", "Code syntax validation"),
         ]
     )
@@ -110,6 +113,15 @@ class PolicyConfig:
     # Additional metadata
     policy_version: str = "1.0"
     last_updated: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        self.validate_required_checks()
+
+    def validate_required_checks(self) -> None:
+        """Reject required checks that the Trust Gate cannot execute."""
+        unknown = sorted({check.name for check in self.required_checks} - _SUPPORTED_REQUIRED_CHECKS)
+        if unknown:
+            raise ValueError(f"Unknown required check(s): {', '.join(unknown)}")
 
     def is_path_protected(self, file_path: str) -> tuple[bool, Optional[ProtectedPathRule]]:
         """Check if a file path matches any protected path rules."""
@@ -196,4 +208,5 @@ def create_custom_policy(**overrides: Any) -> PolicyConfig:
         else:
             raise ValueError(f"Invalid policy configuration key: {key}")
 
+    base_policy.validate_required_checks()
     return base_policy

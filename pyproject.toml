@@ -217,7 +217,24 @@ ignore_missing_imports = true
 # Run only the proper test suite; demo_utils_local requires optional dev deps
 testpaths = ["tests"]
 asyncio_mode = "strict"
-norecursedirs = ["demo_utils_local", "rollbacks", "scripts", "docs", "fixtures", "terraform", "helm", "tests/repro", "tests/integration"]
+markers = ["property: bounded Hypothesis property tests"]
+norecursedirs = [".hypothesis", "demo_utils_local", "rollbacks", "scripts", "docs", "fixtures", "terraform", "helm", "tests/repro", "tests/integration"]
+
+[tool.mutmut]
+source_paths = ["src/responseiq"]
+only_mutate = [
+    "src/responseiq/services/trust_gate.py",
+    "src/responseiq/services/worktree_service.py",
+    "src/responseiq/config/policy_config.py",
+    "src/responseiq/services/performance_gate.py",
+]
+pytest_add_cli_args_test_selection = [
+    "tests/unit/test_trust_gate_validator.py",
+    "tests/unit/test_trust_gate_policy.py",
+    "tests/unit/test_worktree_service.py",
+    "tests/unit/test_performance_gate.py",
+]
+mutate_only_covered_lines = true
 
 [tool.responseiq]
 # Configure what ResponseIQ scans/ignores.

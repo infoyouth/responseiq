@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from responseiq.ai.llm_service import analyze_with_llm
-from responseiq.config.policy_config import PolicyMode
+from responseiq.config.policy_config import DenyReason, PolicyMode
 from responseiq.schemas.causal_graph import CausalGraph
 from responseiq.schemas.proof import ProofBundle, ReproductionStatus
 from responseiq.services.causal_graph_service import build_causal_graph
@@ -31,7 +31,11 @@ from responseiq.services.trust_gate import (
     TrustGateValidator,
     ValidationResult,
 )
-from responseiq.services.worktree_service import WorktreePreparationError, WorktreePreparationService
+from responseiq.services.worktree_service import (
+    WorktreePreparationError,
+    WorktreePreparationService,
+    WorktreeValidationError,
+)
 from responseiq.utils.k8s_patcher import KubernetesPatcher
 from responseiq.utils.logger import logger
 
@@ -310,20 +314,20 @@ class RemediationService:
                 "High-confidence logic verification was unavailable. Downgrading to PR_ONLY."
             )
 
-        # P5 Policy Enforcement: Downgrade execution mode on latency regression
+        # P5 Policy Enforcement: Downgrade execution mode when performance is
+        # regressed or cannot be evaluated from available baseline data.
         if (
             not perf_result.passed
             and validation_result.allowed
             and validation_result.policy_mode == PolicyMode.GUARDED_APPLY
         ):
             logger.warning(
-                "\U0001f6a6 PERF GATE OVERRIDE: Downgrading to PR_ONLY due to latency regression. %s",
+                "\U0001f6a6 PERF GATE OVERRIDE: Downgrading to PR_ONLY because the performance gate did not pass. %s",
                 perf_result.reason,
             )
             validation_result.policy_mode = PolicyMode.PR_ONLY
             validation_result.message += (
-                f" | PERF GATE: Latency regression detected (+{perf_result.delta_pct:.1f}%). "
-                "Autonomous apply blocked until regression is investigated."
+                f" | PERF GATE: {perf_result.reason}. Guarded apply is blocked until performance evidence passes."
             )
 
         # P2 Integrity Gate v2.15.0: populate post_fix_evidence and re-seal with full pre+post context.
@@ -406,6 +410,9 @@ class RemediationService:
                     repo_name=repository,
                     patch_text=patch_text,
                     validation_commands=validation_commands,
+                    required_checks=[
+                        check.name for check in self.trust_gate.policy.get_required_checks(enabled_only=True)
+                    ],
                     token=(
                         incident.get("github_token")
                         or os.environ.get("GITHUB_TOKEN")
@@ -415,6 +422,32 @@ class RemediationService:
                     base=incident.get("github_base", "main"),
                 )
                 prepared_branch = prepared.branch_name
+                validation_result.checks_passed.append("candidate_validation")
+                validation_result.evidence["candidate_validation"] = {
+                    "status": "passed",
+                    "commands": [list(command) for command in validation_commands],
+                    "required_checks": [
+                        check.name for check in self.trust_gate.policy.get_required_checks(enabled_only=True)
+                    ],
+                    "branch_name": prepared.branch_name,
+                    "commit_sha": prepared.commit_sha,
+                }
+            except WorktreeValidationError as exc:
+                logger.warning("Candidate patch validation failed: %s", exc)
+                validation_result.allowed = False
+                validation_result.reason = DenyReason.CHECKS_FAILED
+                validation_result.message = "Candidate patch validation failed"
+                validation_result.checks_failed.append("candidate_validation")
+                validation_result.required_actions.append("Fix candidate patch validation failures before opening a PR")
+                candidate_evidence = {
+                    "status": "failed",
+                    "commands": [list(command) for command in validation_commands],
+                    "error": str(exc),
+                }
+                validation_result.evidence["candidate_validation"] = candidate_evidence
+                recommendation.allowed = False
+                recommendation.risk_assessment["validation_passed"] = False
+                recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
             except WorktreePreparationError as exc:
                 logger.warning("Validated worktree preparation failed: %s", exc)
 

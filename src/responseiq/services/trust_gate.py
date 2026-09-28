@@ -333,18 +333,23 @@ class TrustGateValidator:
             return False
 
     async def _run_security_scan(self) -> bool:
-        """Run Bandit security scan."""
+        """Run Ruff's Bandit-compatible security rules."""
         try:
             process = await asyncio.create_subprocess_exec(
-                "bandit", "-r", "src/", "-f", "json", "--quiet", stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                "ruff",
+                "check",
+                "--select",
+                "S",
+                "src/",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
             stdout, stderr = await process.communicate()
 
-            # Bandit returns 0 for no issues, 1 for issues found
             return process.returncode == 0
 
         except FileNotFoundError:
-            logger.error("Bandit not found; required security scan cannot run")
+            logger.error("Ruff not found; required security scan cannot run")
             return False
 
     async def _run_syntax_check(self, files: List[str]) -> bool:

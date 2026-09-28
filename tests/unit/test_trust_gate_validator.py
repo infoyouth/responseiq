@@ -371,12 +371,11 @@ class TestTrustGateValidatorChecks:
 
             assert result is True
             mock_subprocess.assert_called_once_with(
-                "bandit",
-                "-r",
+                "ruff",
+                "check",
+                "--select",
+                "S",
                 "src/",
-                "-f",
-                "json",
-                "--quiet",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )

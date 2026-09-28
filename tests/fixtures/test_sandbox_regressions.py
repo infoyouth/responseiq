@@ -86,6 +86,37 @@ def test_auth_fixture_fails_before_patch_and_passes_after_patch(tmp_path: Path) 
     assert after.returncode == 0, after.stderr
 
 
+def test_auth_fixture_rejects_patch_that_does_not_fix_refresh_failure(tmp_path: Path) -> None:
+    expected = json.loads((AUTH_FIXTURE / "expected.json").read_text(encoding="utf-8"))
+    module_dir = tmp_path / "auth_wrong_patch"
+    module_dir.mkdir()
+    (module_dir / AUTH_SOURCE.name).write_bytes(AUTH_SOURCE.read_bytes())
+    wrong_patch = AUTH_PATCH.read_text(encoding="utf-8").replace('"last_seen": time.time()', '"unused": time.time()')
+    patch_path = tmp_path / "wrong.patch"
+    patch_path.write_text(wrong_patch, encoding="utf-8")
+
+    subprocess.run(
+        ["git", "apply", "--check", str(patch_path)],
+        cwd=module_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    subprocess.run(
+        ["git", "apply", str(patch_path)],
+        cwd=module_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    result = _run_auth_flow(module_dir)
+    assert result.returncode != 0
+    assert expected["expected_failure"] in result.stderr
+
+
 def test_payment_fixture_does_not_report_failed_charge_as_success(tmp_path: Path) -> None:
     """The payment fixture must preserve an upstream failure for its caller."""
     expected = json.loads((PAYMENT_FIXTURE / "expected.json").read_text(encoding="utf-8"))

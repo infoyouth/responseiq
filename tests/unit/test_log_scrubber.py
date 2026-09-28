@@ -15,6 +15,7 @@ Covers:
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from hypothesis import given, settings as hypothesis_settings, strategies as st
 
 from responseiq.utils.log_scrubber import restore, scrub
 
@@ -215,6 +216,34 @@ class TestEdgeCases:
         assert_no_pii(scrubbed, "550e8400-e29b-41d4-a716-446655440000")
         # All redacted
         assert len(mapping) >= 4
+
+
+class TestScrubberProperties:
+    @pytest.mark.property
+    @hypothesis_settings(max_examples=100, deadline=None)
+    @given(
+        parts=st.lists(
+            st.one_of(
+                st.text(max_size=80),
+                st.sampled_from(
+                    [
+                        "user@example.com",
+                        "192.0.2.15",
+                        "Bearer abcdefghijklmnopqrstuvwxyz012345",
+                        "password=SuperSecret99!",
+                        "AKIAIOSFODNN7EXAMPLE",
+                    ]
+                ),
+            ),
+            max_size=15,
+        )
+    )
+    def test_scrub_restore_round_trip_for_arbitrary_logs(self, parts):
+        original = " ".join(parts)
+        scrubbed, mapping = scrub(original)
+
+        assert all(secret not in scrubbed for secret in mapping.values())
+        assert restore(scrubbed, mapping) == original
 
 
 # ---------------------------------------------------------------------------

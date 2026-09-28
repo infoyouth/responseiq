@@ -4,6 +4,7 @@ Validates P1 roadmap requirements for safe, policy-governed remediation.
 """
 
 from pathlib import Path
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,8 +16,9 @@ from responseiq.config.policy_config import (
     SeverityThreshold,
     create_custom_policy,
 )
+from responseiq.schemas.proof import ProofBundle, ReproductionTest
 from responseiq.services.remediation_service import RemediationService
-from responseiq.services.worktree_service import WorktreePreparationError
+from responseiq.services.worktree_service import WorktreeValidationError
 
 
 class TestTrustGateE2E:
@@ -158,8 +160,51 @@ class TestTrustGateE2E:
 
                 # Verify approval
                 assert recommendation.allowed
-                assert recommendation.execution_mode == PolicyMode.GUARDED_APPLY
+                assert recommendation.execution_mode == PolicyMode.PR_ONLY
                 assert recommendation.confidence >= development_policy.min_confidence
+                assert "insufficient_data" in recommendation.policy_validation.message
+
+    @pytest.mark.asyncio
+    async def test_static_fallback_reproduction_downgrades_guarded_apply(
+        self, development_policy, critical_incident, mock_ai_analysis
+    ):
+        proof = ProofBundle(
+            incident_id=critical_incident["id"],
+            created_at=datetime.now(timezone.utc),
+            reproduction_test=ReproductionTest(
+                test_id="static-repro",
+                test_path="tests/repro/test_static_repro.py",
+                incident_signature="OutOfMemoryError",
+                environment_type="generic",
+                repro_method="static_fallback",
+            ),
+            pre_fix_evidence="synthetic failure output",
+        )
+
+        with (
+            patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
+            patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
+            patch(
+                "responseiq.services.remediation_service._perf_gate.evaluate",
+                return_value=MagicMock(passed=True, regression_detected=False, delta_pct=0.0, reason="baseline passed"),
+            ),
+        ):
+            mock_analyze.return_value = mock_ai_analysis
+            mock_api_key.get_secret_value.return_value = "test-key"
+            service = RemediationService(environment="test")
+            service.trust_gate.update_policy(development_policy)
+            service.reproduction_service.analyze_and_generate_reproduction = AsyncMock(return_value=proof)
+            service.reproduction_service.execute_reproduction_test = AsyncMock(return_value=proof)
+            with (
+                patch.object(service.trust_gate, "_run_security_scan", return_value=True),
+                patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
+                patch.object(service.trust_gate, "_run_tests", return_value=True),
+            ):
+                recommendation = await service.remediate_incident(critical_incident)
+
+        assert recommendation.allowed is True
+        assert recommendation.execution_mode == PolicyMode.PR_ONLY
+        assert "Static Template" in recommendation.policy_validation.message
 
     @pytest.mark.asyncio
     async def test_protected_paths_enforcement(self, development_policy, protected_path_incident):
@@ -441,11 +486,27 @@ class TestTrustGateE2E:
                 recommendation = await service.remediate_incident(critical_incident)
 
         assert recommendation.draft_pr_url == "https://github.com/example/service/pull/43"
+        assert "candidate_validation" in recommendation.checks_passed
+        assert recommendation.evidence["candidate_validation"]["status"] == "passed"
         service.worktree_service.prepare_and_push.assert_called_once()
+        assert service.worktree_service.prepare_and_push.call_args.kwargs["required_checks"] == [
+            "tests",
+            "security_scan",
+            "syntax_check",
+        ]
         service.pr_service.create_prepared_draft_pr.assert_called_once()
 
-        service.worktree_service.prepare_and_push.side_effect = WorktreePreparationError("validation failed")
-        recommendation = await service.remediate_incident(critical_incident)
+        service.worktree_service.prepare_and_push.side_effect = WorktreeValidationError("validation failed")
+        with (
+            patch.object(service.trust_gate, "_run_security_scan", return_value=True),
+            patch.object(service.trust_gate, "_run_syntax_check", return_value=True),
+            patch.object(service.trust_gate, "_run_tests", return_value=True),
+        ):
+            recommendation = await service.remediate_incident(critical_incident)
+        assert recommendation.allowed is False
+        assert recommendation.policy_validation.allowed is False
+        assert "candidate_validation" in recommendation.checks_failed
+        assert recommendation.evidence["candidate_validation"]["status"] == "failed"
         assert recommendation.draft_pr_url is None
 
     @pytest.mark.asyncio
@@ -501,6 +562,10 @@ class TestTrustGateE2E:
                 "responseiq.services.reproduction_service.generate_reproduction_code", new_callable=AsyncMock
             ) as mock_gen_repro,
             patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
+            patch(
+                "responseiq.services.remediation_service._perf_gate.evaluate",
+                return_value=MagicMock(passed=True, regression_detected=False, delta_pct=0.0, reason="baseline passed"),
+            ),
         ):
             mock_analyze.return_value = mock_ai_analysis
             mock_gen_repro.return_value = "def test_repro(): assert False"
