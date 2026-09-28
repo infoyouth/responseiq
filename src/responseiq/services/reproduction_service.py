@@ -10,7 +10,6 @@ the fix actually resolves it.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import os
 import re
@@ -28,6 +27,7 @@ from responseiq.schemas.proof import (
     ReproductionTest,
     ValidationEvidence,
 )
+from responseiq.services.sandbox_runner import SandboxRunner
 
 
 class ReproductionService:
@@ -37,9 +37,10 @@ class ReproductionService:
     Generates minimal pytest files that deterministically reproduce incidents.
     """
 
-    def __init__(self, repro_base_path: Optional[Path] = None):
+    def __init__(self, repro_base_path: Optional[Path] = None, sandbox_runner: Optional[SandboxRunner] = None):
         self.repro_base_path = repro_base_path or Path("tests/repro")
         self.repro_base_path.mkdir(exist_ok=True)
+        self.sandbox_runner = sandbox_runner or SandboxRunner()
 
     async def analyze_and_generate_reproduction(
         self, incident: Dict[str, Any], context: Optional[Dict[str, Any]] = None
@@ -480,21 +481,9 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
 
         try:
             # Run pytest on the specific test file
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=env,
-            )
-
-            # P2 Hardening: 30s Timeout
-
-            try:
-                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=30.0)
-            except asyncio.TimeoutError:
-                process.kill()
-                stdout, _ = await process.communicate()
-                stdout += b"\n[ResponseIQ] Execution TIMED OUT after 30s."
+            sandbox_result = await self.sandbox_runner.run(cmd, cwd=Path(start_cwd), environment=env)
+            stdout = sandbox_result.output
+            returncode = sandbox_result.returncode
 
             execution_output = stdout.decode("utf-8")
 
@@ -504,14 +493,14 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
             # Update reproduction test status
             # Item 3: The "Negative Proof" Exit Code Handler
             # Exit Code 1 (Tests Failed) = ✅ SUCCESS (Bug Reproduced)
-            if process.returncode == 1:
+            if returncode == 1:
                 proof_bundle.reproduction_test.status = ReproductionStatus.FAILED_AS_EXPECTED
                 proof_bundle.pre_fix_evidence = execution_output
                 proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": True}
                 # Remove PRE_FIX_FAILURE from missing evidence
                 if ValidationEvidence.PRE_FIX_FAILURE in proof_bundle.missing_evidence:
                     proof_bundle.missing_evidence.remove(ValidationEvidence.PRE_FIX_FAILURE)
-            elif process.returncode == 0:
+            elif returncode == 0:
                 # Tests Passed = ❌ FAIL (Bug NOT Reproduced)
                 proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": False}
                 proof_bundle.reproduction_test.status = ReproductionStatus.PASSED_UNEXPECTEDLY
@@ -523,7 +512,7 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
                 proof_bundle.validation_results[ValidationEvidence.PRE_FIX_FAILURE] = {"passed": False}
                 proof_bundle.reproduction_test.status = ReproductionStatus.EXECUTION_ERROR
                 proof_bundle.reproduction_test.execution_output = (
-                    f"Test Execution Error (Exit {process.returncode}).\n{execution_output}"
+                    f"Test Execution Error (Exit {returncode}).\n{execution_output}"
                 )
 
             proof_bundle.reproduction_test.execution_time = datetime.now()
@@ -580,23 +569,15 @@ class Test{test_id.title().replace("_", "")}Reproduction(ResponseIQReproBase):
             env["PYTHONPATH"] = start_cwd
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                sys.executable,
-                "-m",
-                "pytest",
-                str(test_path),
-                "-v",
-                "--tb=short",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=env,
+            sandbox_result = await self.sandbox_runner.run(
+                [sys.executable, "-m", "pytest", str(test_path), "-v", "--tb=short"],
+                cwd=Path(start_cwd),
+                environment=env,
             )
-
-            stdout, _ = await process.communicate()
-            execution_output = stdout.decode("utf-8")
+            execution_output = sandbox_result.output.decode("utf-8")
 
             # Test should now pass after fix (Exit 0)
-            if process.returncode == 0:
+            if sandbox_result.returncode == 0:
                 proof_bundle.post_fix_evidence = execution_output
                 proof_bundle.validation_results[ValidationEvidence.POST_FIX_SUCCESS] = {"passed": True}
                 proof_bundle.fix_confidence = 0.9  # High confidence if test now passes

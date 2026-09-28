@@ -19,6 +19,7 @@ from responseiq.schemas.proof import (
 )
 from responseiq.services.remediation_service import RemediationService
 from responseiq.services.reproduction_service import ReproductionService
+from responseiq.services.sandbox_runner import SandboxLimits, SandboxRunner
 
 
 class TestP2ProofOrientedRemediation:
@@ -29,7 +30,10 @@ class TestP2ProofOrientedRemediation:
     @pytest.fixture
     def repro_service(self, tmp_path):
         """Return a reproduction service configured for testing."""
-        return ReproductionService(repro_base_path=tmp_path / "repro")
+        return ReproductionService(
+            repro_base_path=tmp_path / "repro",
+            sandbox_runner=SandboxRunner(SandboxLimits(network_disabled=False)),
+        )
 
     @pytest.fixture
     def high_impact_incident(self):
