@@ -15,7 +15,7 @@ Covers:
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from hypothesis import given, settings as hypothesis_settings, strategies as st
+from hypothesis import HealthCheck, given, settings as hypothesis_settings, strategies as st
 
 from responseiq.utils.log_scrubber import restore, scrub
 
@@ -220,7 +220,11 @@ class TestEdgeCases:
 
 class TestScrubberProperties:
     @pytest.mark.property
-    @hypothesis_settings(max_examples=100, deadline=None)
+    @hypothesis_settings(
+        max_examples=100,
+        deadline=None,
+        suppress_health_check=[HealthCheck.differing_executors],
+    )
     @given(
         parts=st.lists(
             st.one_of(

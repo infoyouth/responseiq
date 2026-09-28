@@ -6,7 +6,7 @@ Tests P1 roadmap components: policy modes, rules, and validation.
 from dataclasses import replace
 
 import pytest
-from hypothesis import given, settings as hypothesis_settings, strategies as st
+from hypothesis import HealthCheck, given, settings as hypothesis_settings, strategies as st
 
 from responseiq.config.policy_config import (
     DEFAULT_POLICIES,
@@ -80,7 +80,10 @@ class TestPolicyConfigValidation:
         assert policy.validate_blast_radius("") is False
 
     @pytest.mark.property
-    @hypothesis_settings(max_examples=100)
+    @hypothesis_settings(
+        max_examples=100,
+        suppress_health_check=[HealthCheck.differing_executors],
+    )
     @given(values=st.lists(st.floats(min_value=0, max_value=1, allow_nan=False), min_size=3, max_size=3))
     def test_confidence_policy_is_monotonic(self, values):
         lower_threshold, confidence, higher_threshold = sorted(values)

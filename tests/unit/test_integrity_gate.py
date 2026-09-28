@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+from hypothesis import HealthCheck, given, settings as hypothesis_settings, strategies as st
+
 from responseiq.schemas.proof import EvidenceIntegrity, ProofBundle
 
 
@@ -120,6 +123,22 @@ class TestSealForensicEvidence:
 
 
 class TestEvidenceIntegritySealing:
+    @pytest.mark.property
+    @hypothesis_settings(
+        max_examples=50,
+        deadline=None,
+        suppress_health_check=[HealthCheck.differing_executors],
+    )
+    @given(pre_fix=st.text(min_size=1, max_size=200), post_fix=st.text(min_size=1, max_size=200))
+    def test_arbitrary_evidence_round_trips_and_rejects_tampering(self, pre_fix, post_fix):
+        sealed = EvidenceIntegrity().seal_evidence(pre_fix_content=pre_fix, post_fix_content=post_fix)
+
+        assert sealed.verify_pre_fix_evidence(pre_fix)
+        assert sealed.verify_post_fix_evidence(post_fix)
+        assert sealed.chain_verified is True
+        assert sealed.verify_pre_fix_evidence(f"{pre_fix}tampered") is False
+        assert sealed.verify_post_fix_evidence(f"{post_fix}tampered") is False
+
     def test_seal_returns_new_instance(self):
         ei = EvidenceIntegrity()
         sealed = ei.seal_evidence(pre_fix_content="data")
