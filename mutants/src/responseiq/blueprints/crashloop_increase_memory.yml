@@ -1,0 +1,28 @@
+id: crashloop_increase_memory
+title: Increase memory limit for CrashLoopBackOff
+incident_signature: CrashLoopBackOff
+severity: high
+description: >
+  Increase container memory limit temporarily to mitigate CrashLoopBackOff caused by OOMs.
+rationale: >
+  Observed OOM patterns in logs; increasing memory by 25% reduces OOM risk while we investigate root cause.
+confidence: 0.6
+blast_radius: "single-pod / single-deployment"
+actions:
+  - type: kubectl_patch
+    target: deployment/my-service
+    patch: |
+      spec:
+        template:
+          spec:
+            containers:
+              - name: my-container
+                resources:
+                  limits:
+                    memory: "512Mi"
+rollback:
+  - type: kubectl_rollout_undo
+    target: deployment/my-service
+examples:
+  - message: "OOMKilled"
+    severity: high

@@ -1,0 +1,94 @@
+------------------------------------------------------------
+  ResponseIQ Scan Report
+  Target : ./samples/crash.log
+  Status : SUCCESS
+------------------------------------------------------------
+  Scanned  : 17 message(s)
+  Incidents: 17 found
+------------------------------------------------------------
+  1. [HIGH]    Unhandled Exception in Process User Request
+     Source     : ai
+     Description: An unhandled exception occurred in the `process_user_request`
+                  function, indicating a potential issue with the application's error
+                  handling mechanism.
+  2. [HIGH]    Error in Python Script
+     Source     : ai
+     Description: The log indicates a traceback which suggests an error occurred in a
+                  Python script. Further investigation is required to determine the root
+                  cause.
+  3. [HIGH]    Buggy User Request Handling
+     Source     : ai
+     Description: The code attempts to access the `email` field of the `user` dictionary
+                  without checking if it exists. This will raise a KeyError or
+                  AttributeError when the `email` field is absent, potentially causing
+                  unexpected behavior.
+  4. [HIGH]    Potential Email Injection Vulnerability
+     Source     : ai
+     Description: The log line `recipient = user['email'].lower()` may be vulnerable to
+                  email injection attacks. An attacker could inject malicious characters
+                  into the recipient's email address, potentially leading to
+                  unauthorized access or data breaches.
+  5. [CRITICAL] Error in LLM Call
+     Source     : ai
+     Description: A KeyError exception occurred due to missing 'email' key in the input
+                  data. This error is likely caused by an incorrect or incomplete data
+                  format.
+  6. [CRITICAL] Request Processing Halted
+     Source     : ai
+     Description: Request processing halted due to invalid payload length.
+  7. [HIGH]    Memory Pressure Detected
+     Source     : ai
+     Description: The application has reached high memory pressure with an RSS of 1.2
+                  GB, exceeding the threshold of 512 MB.
+  8. [HIGH]    ZeroDivisionError in request log calculation
+     Source     : ai
+     Description: A race condition exists when `_request_count` is reset externally to 0
+                  between the increment and this line, causing a ZeroDivisionError. This
+                  can occur when tests reset `_request_count` to 0 before the buggy
+                  service has a chance to update it.
+  9. [HIGH]    Potential Buffer Overflow Vulnerability
+     Source     : ai
+     Description: The `payload_len` field in the request log may be vulnerable to a
+                  buffer overflow attack. The `len()` function returns the length of the
+                  string, but it does not account for null characters or other edge
+                  cases that could lead to a buffer overflow.
+  10. [CRITICAL] Memory Allocation Error
+     Source     : ai
+     Description: The error indicates that there is not enough memory available to
+                  process the request log. The `_request_log` contains a large number of
+                  entries (2147483) and an eviction policy has not been defined.
+  11. [CRITICAL] ZeroDivisionError during metrics aggregation
+     Source     : ai
+     Description: A division by zero error occurred in the metrics aggregation process,
+                  indicating a potential issue with the data processing pipeline.
+  12. [HIGH]    Error in Python Script
+     Source     : ai
+     Description: The log indicates a traceback which suggests an error occurred in a
+                  Python script. Further investigation is required to determine the root
+                  cause.
+  13. [MEDIUM]  Buggy Code Handling Email Field Absence
+     Source     : ai
+     Description: The code does not handle the case when the `user['email']` field is
+                  absent, leading to a KeyError or AttributeError.
+  14. [MEDIUM]  Average Payload Calculation Error
+     Source     : ai
+     Description: The log indicates an error in calculating the average payload length.
+                  The line `avg_payload = sum(r[
+  15. [CRITICAL] ZeroDivisionError: division by zero
+     Source     : ai
+     Description: A ZeroDivisionError occurred due to a division operation with a
+                  divisor of zero. This is likely caused by an incorrect or missing
+                  value in the input data.
+  16. [HIGH]    Concurrent Call to reset_counters() Causing Issue
+     Source     : ai
+     Description: The log indicates a concurrent call to `reset_counters()` at line 65,
+                  which suggests a race condition in the code. This could be due to
+                  multiple threads or processes attempting to access and modify shared
+                  resources simultaneously.
+  17. [CRITICAL] Service Entering Degraded State
+     Source     : ai
+     Description: The service is entering a degraded state due to 3 incidents in the
+                  last 180 seconds.
+------------------------------------------------------------
+  Tip: run with --mode fix to apply safe remediations.
+------------------------------------------------------------

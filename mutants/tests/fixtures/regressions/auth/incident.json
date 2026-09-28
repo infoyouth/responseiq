@@ -1,0 +1,7 @@
+{
+  "id": "sandbox-auth-session-refresh",
+  "service": "auth_service",
+  "root_cause": "login stores a session without last_seen while refresh_session requires it",
+  "failure_signature": "KeyError: 'last_seen'",
+  "evidence_level": "application_reproduction"
+}

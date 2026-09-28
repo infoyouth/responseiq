@@ -1,0 +1,7 @@
+{
+  "affected_files": ["payment_service.py"],
+  "expected_failure": "NetworkRetryExhausted",
+  "expected_success": "process_charge propagates the upstream payment failure",
+  "policy_mode": "pr_only_until_validated",
+  "evidence_level": "application_reproduction"
+}
