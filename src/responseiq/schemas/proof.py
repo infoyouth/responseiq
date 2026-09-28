@@ -83,6 +83,38 @@ class ContextResolutionFailure:
         }
 
 
+@dataclass(frozen=True)
+class SourceReference:
+    """Resolved source location used to build an LLM context block."""
+
+    path: str
+    line_num: int
+    scope: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": self.path,
+            "line_num": self.line_num,
+            "scope": self.scope,
+        }
+
+
+@dataclass
+class SourceContext:
+    """Rendered source context and its resolution provenance."""
+
+    rendered: str = ""
+    references: List[SourceReference] = field(default_factory=list)
+    failures: List[ContextResolutionFailure] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "rendered": self.rendered,
+            "references": [reference.to_dict() for reference in self.references],
+            "failures": [failure.to_dict() for failure in self.failures],
+        }
+
+
 @dataclass
 class ReproductionTest:
     """
@@ -285,6 +317,7 @@ class ProofBundle:
     # Multi-repo context resolution failures (P2.4)
     # Populated when stack-trace paths could not be resolved to source files.
     context_failures: List[ContextResolutionFailure] = field(default_factory=list)
+    source_context: Optional[SourceContext] = None
 
     # P5: Performance regression gate result
     # Populated after gate.evaluate() is called during post-fix verification.
@@ -327,6 +360,7 @@ class ProofBundle:
         """Serialize the bundle with its derived evidence level."""
         result = asdict(self)
         result["evidence_level"] = self.evidence_level.value if self.evidence_level else None
+        result["source_context"] = self.source_context.to_dict() if self.source_context else None
         return result
 
     @property

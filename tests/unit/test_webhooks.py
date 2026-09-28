@@ -190,6 +190,19 @@ class TestIdempotency:
         k2 = _make_idempotency_key("sentry", "title", "body")
         assert k1 != k2
 
+    def test_make_idempotency_key_ignores_volatile_log_metadata(self):
+        k1 = _make_idempotency_key(
+            "datadog",
+            "database unavailable",
+            "2026-09-28T10:20:30Z request_id=req-123 database unavailable",
+        )
+        k2 = _make_idempotency_key(
+            "datadog",
+            "database unavailable",
+            "2026-09-28T11:45:00Z request_id=req-999 database unavailable",
+        )
+        assert k1 == k2
+
 
 # ---------------------------------------------------------------------------
 # Normalisers

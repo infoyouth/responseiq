@@ -14,6 +14,7 @@ import responseiq.parsers  # noqa: F401
 from responseiq.ai.llm_service import analyze_with_llm
 from responseiq.parsers.registry import registry
 from responseiq.schemas.incident import IncidentOut
+from responseiq.utils.incident_fingerprint import incident_fingerprint
 
 
 def analyze_message(message: str) -> Optional[dict]:
@@ -32,9 +33,10 @@ async def analyze_message_async(message: str) -> Optional[dict]:
     Returns a dict with severity and reason/title.
     """
     # 0. Context Extraction
-    from responseiq.utils.context_extractor import extract_context_from_log
+    from responseiq.utils.context_extractor import extract_source_context
 
-    code_context = await extract_context_from_log(message)
+    source_context = await extract_source_context(message)
+    code_context = source_context.rendered
 
     # 1. AI Analysis Layer (Primary)
     llm_result = await analyze_with_llm(message, code_context=code_context)
@@ -45,6 +47,8 @@ async def analyze_message_async(message: str) -> Optional[dict]:
             "description": llm_result.get("description"),
             "remediation": llm_result.get("remediation"),
             "source": "ai",
+            "fingerprint": incident_fingerprint(message),
+            "source_context": source_context.to_dict(),
         }
 
     # 2. Heuristic/Parser Layer (Fallback)
@@ -56,6 +60,8 @@ async def analyze_message_async(message: str) -> Optional[dict]:
                 "severity": result.get("severity", "medium"),
                 "reason": f"matched:{result.get('title', 'keyword')}",
                 "source": "rule-engine",
+                "fingerprint": incident_fingerprint(message),
+                "source_context": source_context.to_dict(),
             }
     return None
 
@@ -67,9 +73,10 @@ async def analyze_log_async(log_text: str) -> Optional[IncidentOut]:
     """
     # 0. Context Extraction (Magical Step)
     # We try to find the source code related to the log
-    from responseiq.utils.context_extractor import extract_context_from_log
+    from responseiq.utils.context_extractor import extract_source_context
 
-    code_context = await extract_context_from_log(log_text)
+    source_context = await extract_source_context(log_text)
+    code_context = source_context.rendered
 
     # 1. AI
     llm_result = await analyze_with_llm(log_text, code_context=code_context)
@@ -80,6 +87,8 @@ async def analyze_log_async(log_text: str) -> Optional[IncidentOut]:
             severity=llm_result.get("severity", "medium").lower(),
             description=llm_result.get("description"),
             source="ai",
+            fingerprint=incident_fingerprint(log_text),
+            source_context=source_context.to_dict(),
         )
 
     # 2. Parsers
@@ -93,6 +102,8 @@ async def analyze_log_async(log_text: str) -> Optional[IncidentOut]:
                 severity=data.get("severity", "medium"),
                 description=data.get("description", "Matched purely by keyword rules"),
                 source="rule-engine",
+                fingerprint=incident_fingerprint(log_text),
+                source_context=source_context.to_dict(),
             )
     return None
 
