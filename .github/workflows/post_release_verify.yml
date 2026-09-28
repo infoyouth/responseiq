@@ -59,75 +59,12 @@ jobs:
           echo "Verification source: $SOURCE"
           echo "Verifying responseiq==$VERSION"
 
-      - name: 🏗️ Build local package
-        if: steps.version.outputs.source == 'local'
-        shell: bash
+      - name: ✅ Verify released artifact
         run: |
-          rm -rf dist
-          uv build
-
-      - name: 📦 Install local wheel
-        if: steps.version.outputs.source == 'local'
-        shell: bash
-        run: |
-          uv venv /tmp/responseiq-post
-          WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
-          uv pip install --python /tmp/responseiq-post/bin/python "$WHEEL_PATH"
-
-      - name: ⬇️ Install exact release artifact from PyPI (with retry)
-        if: steps.version.outputs.source == 'pypi'
-        shell: bash
-        run: |
-          uv venv /tmp/responseiq-post
-          VERSION="${{ steps.version.outputs.version }}"
-
-          for attempt in {1..8}; do
-            echo "Resolve PyPI metadata attempt $attempt for responseiq==$VERSION"
-            PACKAGE_URL=$(curl -fsSL "https://pypi.org/pypi/responseiq/${VERSION}/json" | \
-              /tmp/responseiq-post/bin/python -c 'import json, sys; data = json.load(sys.stdin); print(next(file["url"] for file in data["urls"] if file["filename"].endswith("-py3-none-any.whl"))') || true
-            if [[ -n "$PACKAGE_URL" ]] && uv pip install --python /tmp/responseiq-post/bin/python --no-cache "$PACKAGE_URL"; then
-              echo "Installed exact PyPI artifact: $PACKAGE_URL"
-              exit 0
-            fi
-            if [[ "$attempt" -eq 8 ]]; then
-              echo "Install failed after retries"
-              exit 1
-            fi
-            sleep 20
-          done
-
-      - name: 💨 CLI smoke tests
-        run: |
-          /tmp/responseiq-post/bin/responseiq --help
-          /tmp/responseiq-post/bin/python -m responseiq.cli --help
-
-      - name: 🔢 Verify installed package version
-        env:
-          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          /tmp/responseiq-post/bin/python - <<'PY'
-          import importlib.metadata
-          import os
-
-          expected = os.environ["EXPECTED_VERSION"]
-          actual = importlib.metadata.version("responseiq")
-          if actual != expected:
-              raise SystemExit(f"Package version mismatch: expected {expected}, got {actual}")
-          print(f"Verified responseiq=={actual}")
-
-      - name: 🏥 API health smoke test
-        shell: bash
-        env:
-          API_PORT: ${{ matrix.api-port }}
-        run: |
-          /tmp/responseiq-post/bin/python -m uvicorn responseiq.app:app --host 127.0.0.1 --port "$API_PORT" &
-          APP_PID=$!
-          cleanup() {
-            kill "$APP_PID" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          sleep 5
-          curl -fsS "http://127.0.0.1:${API_PORT}/health"
+          uv run python scripts/post_release_verify.py \
+            --source "${{ steps.version.outputs.source }}" \
+            --version "${{ steps.version.outputs.version }}" \
+            --api-port "${{ matrix.api-port }}"
 
   notify-failure:
     name: 🚨 Open issue on failure
