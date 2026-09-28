@@ -11,6 +11,7 @@ pytest script, runtime output, and patch diff.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -34,6 +35,7 @@ class ValidationEvidence(Enum):
     SECURITY_SCAN = "security_scan"
     TYPE_CHECK = "type_check"
     INTEGRATION_TEST = "integration_test"
+    PRODUCTION_OBSERVED = "production_observed"
 
 
 class EvidenceLevel(str, Enum):
@@ -177,6 +179,8 @@ class EvidenceIntegrity:
     # Public sealing metadata (tests expect these attributes on the returned object)
     integrity_hash: Optional[str] = None
     chain_hash: Optional[str] = None
+    previous_hash: Optional[str] = None
+    payload_json: Optional[str] = None
     sealed_at: Optional[datetime] = None
     algorithm: str = "SHA-256"
 
@@ -220,6 +224,7 @@ class EvidenceIntegrity:
         pre_fix_content: Optional[str] = None,
         post_fix_content: Optional[str] = None,
         previous_hash: Optional[str] = None,
+        payload: Any = None,
     ) -> "EvidenceIntegrity":
         """Seal evidence and return the sealing object (self).
 
@@ -237,6 +242,7 @@ class EvidenceIntegrity:
         if evidence is not None:
             content_str = self._content_to_canonical_str(evidence.content)
             pre_fix_content = pre_fix_content or content_str
+            payload = evidence.content
 
         # Canonicalize inputs
         pre_canonical = self._content_to_canonical_str(pre_fix_content) if pre_fix_content else None
@@ -252,13 +258,15 @@ class EvidenceIntegrity:
         # derive integrity_hash directly from its canonicalized content so that
         # different evidence yields different integrity hashes (security test
         # requirement). Otherwise fall back to pre/post hashes.
-        if evidence is not None:
-            payload = self._content_to_canonical_str(evidence.content)
-            sealed.integrity_hash = self.generate_hash(payload)
+        if payload is not None:
+            payload_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+            sealed.payload_json = payload_json
+            sealed.integrity_hash = self.generate_hash(payload_json)
         else:
             sealed.integrity_hash = sealed.pre_fix_hash or sealed.post_fix_hash or self.generate_hash("")
 
         # Chain hash combines integrity + previous (if provided)
+        sealed.previous_hash = previous_hash
         combined = f"{sealed.integrity_hash}{previous_hash or ''}"
         sealed.chain_hash = hashlib.sha256(combined.encode()).hexdigest()
 
@@ -281,7 +289,9 @@ class EvidenceIntegrity:
         if not sealed or not evidence:
             return False
 
-        expected = self.generate_hash(self._content_to_canonical_str(evidence.content))
+        expected = self.generate_hash(
+            json.dumps(evidence.content, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+        )
         return getattr(sealed, "integrity_hash", None) == expected
 
 
@@ -305,6 +315,7 @@ class ProofBundle:
     validation_results: Dict[ValidationEvidence, Any] = field(default_factory=dict)
     security_scan_output: Optional[str] = None
     type_check_output: Optional[str] = None
+    validation_metadata: Dict[str, Any] = field(default_factory=dict)
 
     # Confidence and trust scores
     reproduction_confidence: float = 0.0  # How well reproduction matches incident
@@ -323,6 +334,10 @@ class ProofBundle:
     # Populated after gate.evaluate() is called during post-fix verification.
     perf_gate_result: Optional[object] = None  # PerformanceGateResult (avoid circular import)
 
+    production_elapsed_seconds: float = 0.0
+    production_request_volume: int = 0
+    production_request_baseline: int = 0
+
     def _validation_passed(self, evidence_type: ValidationEvidence) -> bool:
         result = self.validation_results.get(evidence_type)
         if isinstance(result, dict):
@@ -332,6 +347,12 @@ class ProofBundle:
     @property
     def evidence_level(self) -> Optional[EvidenceLevel]:
         """Return the strongest level backed by explicitly successful evidence."""
+        if (
+            self._validation_passed(ValidationEvidence.PRODUCTION_OBSERVED)
+            and self.production_elapsed_seconds >= 1800
+            and self.production_request_volume >= self.production_request_baseline
+        ):
+            return EvidenceLevel.PRODUCTION_OBSERVED
         if self._validation_passed(ValidationEvidence.INTEGRATION_TEST):
             return EvidenceLevel.INTEGRATION_VALIDATION
 
@@ -363,6 +384,48 @@ class ProofBundle:
         result["source_context"] = self.source_context.to_dict() if self.source_context else None
         return result
 
+    @staticmethod
+    def _canonical_value(value: Any) -> Any:
+        if isinstance(value, Enum):
+            return value.value
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, dict):
+            return {str(key): ProofBundle._canonical_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [ProofBundle._canonical_value(item) for item in value]
+        if hasattr(value, "__dataclass_fields__"):
+            return ProofBundle._canonical_value(asdict(value))
+        return value
+
+    def canonical_payload(self) -> Dict[str, Any]:
+        """Return all proof inputs in a deterministic, integrity-safe shape."""
+        return self._canonical_value(
+            {
+                "incident_id": self.incident_id,
+                "created_at": self.created_at,
+                "reproduction_test": self.reproduction_test,
+                "pre_fix_evidence": self.pre_fix_evidence,
+                "post_fix_evidence": self.post_fix_evidence,
+                "validation_results": self.validation_results,
+                "security_scan_output": self.security_scan_output,
+                "type_check_output": self.type_check_output,
+                "validation_metadata": self.validation_metadata,
+                "reproduction_confidence": self.reproduction_confidence,
+                "fix_confidence": self.fix_confidence,
+                "missing_evidence": self.missing_evidence,
+                "context_failures": self.context_failures,
+                "source_context": self.source_context,
+                "perf_gate_result": self.perf_gate_result,
+                "production_elapsed_seconds": self.production_elapsed_seconds,
+                "production_request_volume": self.production_request_volume,
+                "production_request_baseline": self.production_request_baseline,
+            }
+        )
+
+    def canonical_payload_json(self) -> str:
+        return json.dumps(self.canonical_payload(), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
     @property
     def has_complete_proof(self) -> bool:
         """True if we have both pre-fix failure and post-fix success evidence.
@@ -390,9 +453,12 @@ class ProofBundle:
             self.integrity = EvidenceIntegrity()
         # IMPORTANT: seal_evidence() returns a *new* EvidenceIntegrity snapshot.
         # Assign it back so ProofBundle.integrity carries the populated hashes.
+        previous_hash = self.integrity.chain_hash
         self.integrity = self.integrity.seal_evidence(
             pre_fix_content=self.pre_fix_evidence,
             post_fix_content=self.post_fix_evidence,
+            previous_hash=previous_hash,
+            payload=self.canonical_payload(),
         )
 
     def verify_evidence_integrity(self) -> bool:
@@ -409,4 +475,8 @@ class ProofBundle:
         if self.post_fix_evidence:
             post_fix_valid = self.integrity.verify_post_fix_evidence(self.post_fix_evidence)
 
-        return pre_fix_valid and post_fix_valid
+        payload_valid = self.integrity.payload_json == self.canonical_payload_json()
+        chain_valid = self.integrity.chain_hash == EvidenceIntegrity.generate_hash(
+            f"{self.integrity.integrity_hash}{self.integrity.previous_hash or ''}"
+        )
+        return pre_fix_valid and post_fix_valid and payload_valid and chain_valid

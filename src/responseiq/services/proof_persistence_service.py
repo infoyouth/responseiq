@@ -54,6 +54,8 @@ async def persist_proof_bundle(
         incident_id=incident_id,
         integrity_hash=integrity.integrity_hash,
         chain_hash=integrity.chain_hash,
+        previous_hash=integrity.previous_hash,
+        payload_json=integrity.payload_json,
         algorithm=integrity.algorithm,
         sealed_at=integrity.sealed_at,
         pre_fix_hash=integrity.pre_fix_hash,

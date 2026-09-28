@@ -114,6 +114,8 @@ class RemediationRecommendation:
                 {
                     "integrity_hash": self.proof_bundle.integrity.integrity_hash,
                     "chain_hash": self.proof_bundle.integrity.chain_hash,
+                    "previous_hash": self.proof_bundle.integrity.previous_hash,
+                    "payload_json": self.proof_bundle.integrity.payload_json,
                     "algorithm": self.proof_bundle.integrity.algorithm,
                     "sealed_at": (
                         self.proof_bundle.integrity.sealed_at.isoformat()
