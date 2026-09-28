@@ -74,7 +74,7 @@ jobs:
           WHEEL_PATH=$(ls -t dist/*.whl | head -n 1)
           uv pip install --python /tmp/responseiq-post/bin/python "$WHEEL_PATH"
 
-      - name: ⬇️ Install from PyPI (with retry)
+      - name: ⬇️ Install exact release artifact from PyPI (with retry)
         if: steps.version.outputs.source == 'pypi'
         shell: bash
         run: |
@@ -82,9 +82,11 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
 
           for attempt in {1..8}; do
-            echo "Install attempt $attempt for responseiq==$VERSION"
-            if uv pip install --python /tmp/responseiq-post/bin/python --no-cache "responseiq==$VERSION"; then
-              echo "Install succeeded"
+            echo "Resolve PyPI metadata attempt $attempt for responseiq==$VERSION"
+            PACKAGE_URL=$(curl -fsSL "https://pypi.org/pypi/responseiq/${VERSION}/json" | \
+              /tmp/responseiq-post/bin/python -c 'import json, sys; data = json.load(sys.stdin); print(next(file["url"] for file in data["urls"] if file["filename"].endswith("-py3-none-any.whl"))') || true
+            if [[ -n "$PACKAGE_URL" ]] && uv pip install --python /tmp/responseiq-post/bin/python --no-cache "$PACKAGE_URL"; then
+              echo "Installed exact PyPI artifact: $PACKAGE_URL"
               exit 0
             fi
             if [[ "$attempt" -eq 8 ]]; then
