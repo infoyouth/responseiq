@@ -116,7 +116,10 @@ jobs:
       - name: 🛡️ Dependency audit (pip-audit)
         run: |
           set -o pipefail
-          uv run pip-audit --format cyclonedx-json -o reports/pip-audit.json 2>&1 | tee reports/pip-audit.txt
+          uv run python scripts/pip_audit_retry.py \
+            --output reports/pip-audit.json \
+            --retries 3 \
+            --delay-seconds 20 2>&1 | tee reports/pip-audit.txt
 
       # Tests — generate JUnit XML + coverage reports
       - name: 🧪 Run tests (pytest + coverage)
