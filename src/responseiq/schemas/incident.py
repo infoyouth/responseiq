@@ -57,3 +57,5 @@ class IncidentOut(BaseModel):
     source: Optional[str] = "unknown"
     impact_score: Optional[float] = None
     impact_factors: Optional[dict[str, Any]] = None
+    fingerprint: Optional[str] = None
+    source_context: Optional[dict[str, Any]] = None

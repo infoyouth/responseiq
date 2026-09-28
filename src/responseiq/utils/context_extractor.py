@@ -17,7 +17,12 @@ import aiofiles
 from tree_sitter_language_pack import get_language as _ts_get_language  # type: ignore
 from tree_sitter_language_pack import get_parser as _ts_get_parser  # type: ignore
 
-from responseiq.schemas.proof import ContextResolutionFailure, ContextResolutionReason
+from responseiq.schemas.proof import (
+    ContextResolutionFailure,
+    ContextResolutionReason,
+    SourceContext,
+    SourceReference,
+)
 from responseiq.utils.logger import logger
 
 # Regex patterns for common stack traces (Python, Node, Go, Java mostly)
@@ -80,13 +85,13 @@ def _find_semantic_scope(node, target_line):
     return None  # If no function scope found (e.g. top level), return None
 
 
-async def extract_context_from_log(
+async def extract_source_context(
     log_text: str,
     root_path: Path = Path("."),
     *,
     resolver: Optional["MultiRepoResolver"] = None,  # type: ignore[name-defined]  # noqa: F821
     context_failures: Optional[List[ContextResolutionFailure]] = None,
-) -> str:
+) -> SourceContext:
     """
     Scans log text for file references, reads the local source code around
     those lines, and returns a formatted context block for the AI.
@@ -108,6 +113,8 @@ async def extract_context_from_log(
         so callers can surface them in ``ProofBundle.context_failures``.
     """
     context_blocks = []
+    references: list[SourceReference] = []
+    failures = context_failures if context_failures is not None else []
     seen_refs = set()
 
     for pattern in PATTERNS:
@@ -131,49 +138,68 @@ async def extract_context_from_log(
                         if legacy and legacy.exists():
                             local_file = legacy
                         else:
-                            if context_failures is not None:
-                                context_failures.append(result.failure)
+                            failures.append(result.failure)
                             continue
 
                 # 2. Legacy resolver (no multi-repo resolver configured)
                 if local_file is None:
                     local_file = resolve_local_path(file_path_str, root_path)
                     if not local_file or not local_file.exists():
-                        if context_failures is not None:
-                            context_failures.append(
-                                ContextResolutionFailure(
-                                    path=file_path_str,
-                                    line_num=line_num,
-                                    reason=ContextResolutionReason.LOCAL_NOT_FOUND,
-                                    detail="resolve_local_path returned None or file absent.",
-                                )
+                        failures.append(
+                            ContextResolutionFailure(
+                                path=file_path_str,
+                                line_num=line_num,
+                                reason=ContextResolutionReason.LOCAL_NOT_FOUND,
+                                detail="resolve_local_path returned None or file absent.",
                             )
+                        )
                         continue
 
                 ref_key = f"{local_file}:{line_num}"
                 if ref_key in seen_refs:
                     continue
                 seen_refs.add(ref_key)
+                references.append(SourceReference(path=str(local_file), line_num=line_num))
 
                 code_snippet = await read_code_around_line(local_file, line_num)
                 if code_snippet:
                     context_blocks.append(f"--- Source: {local_file} (Line {line_num}) ---\n{code_snippet}\n")
             except Exception as e:
                 logger.debug(f"Failed to extract context for {file_path_str}: {e}")
-                if context_failures is not None:
-                    context_failures.append(
-                        ContextResolutionFailure(
-                            path=file_path_str,
-                            line_num=line_num,
-                            reason=ContextResolutionReason.PARSE_ERROR,
-                            detail=str(e),
-                        )
+                failures.append(
+                    ContextResolutionFailure(
+                        path=file_path_str,
+                        line_num=line_num,
+                        reason=ContextResolutionReason.PARSE_ERROR,
+                        detail=str(e),
                     )
+                )
 
     if not context_blocks:
-        return ""
+        return SourceContext(references=references, failures=failures)
 
-    return "\nDETECTED SOURCE CODE CONTEXT:\n" + "\n".join(context_blocks) + "\n"
+    return SourceContext(
+        rendered="\nDETECTED SOURCE CODE CONTEXT:\n" + "\n".join(context_blocks) + "\n",
+        references=references,
+        failures=failures,
+    )
+
+
+async def extract_context_from_log(
+    log_text: str,
+    root_path: Path = Path("."),
+    *,
+    resolver: Optional["MultiRepoResolver"] = None,  # type: ignore[name-defined]  # noqa: F821
+    context_failures: Optional[List[ContextResolutionFailure]] = None,
+) -> str:
+    """Return rendered source context for legacy callers."""
+    context = await extract_source_context(
+        log_text,
+        root_path,
+        resolver=resolver,
+        context_failures=context_failures,
+    )
+    return context.rendered
 
 
 def resolve_local_path(path_str: str, root: Path) -> Optional[Path]:

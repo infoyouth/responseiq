@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from responseiq.utils.incident_fingerprint import incident_fingerprint
 import hmac
 import time
 from typing import AsyncGenerator, Dict, Optional
@@ -162,8 +163,7 @@ def _severity_from_sentry(level: Optional[str]) -> str:
 
 
 def _make_idempotency_key(source: str, title: str, log_content: str) -> str:
-    fingerprint = f"{source}:{title}:{log_content[:256]}"
-    return hashlib.sha256(fingerprint.encode()).hexdigest()
+    return incident_fingerprint(f"{title}\n{log_content}", service=source)
 
 
 def _normalize_datadog(payload: DatadogWebhookPayload) -> WebhookIncident:

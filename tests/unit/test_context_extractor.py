@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from responseiq.utils.context_extractor import extract_context_from_log
+from responseiq.utils.context_extractor import extract_context_from_log, extract_source_context
 
 
 @pytest.fixture
@@ -120,6 +120,22 @@ async def test_fallback_behavior_non_supported_files(temp_workspace):
 
 
 @pytest.mark.asyncio
+async def test_structured_context_records_reference_and_rendered_source(temp_workspace):
+    file_path = temp_workspace / "service.py"
+    file_path.write_text("def handle():\n    return 'failed'\n")
+
+    context = await extract_source_context(
+        f'File "{file_path.name}", line 2, in handle',
+        root_path=temp_workspace,
+    )
+
+    assert "return 'failed'" in context.rendered
+    assert context.references[0].path == str(file_path)
+    assert context.references[0].line_num == 2
+    assert context.failures == []
+
+
+@pytest.mark.asyncio
 async def test_missing_file_handling(temp_workspace):
     """
     Verify it handles missing files gracefully.
@@ -134,6 +150,10 @@ async def test_missing_file_handling(temp_workspace):
 
     context = await extract_context_from_log(log_text, root_path=temp_workspace)
     assert context == ""
+
+    structured = await extract_source_context(log_text, root_path=temp_workspace)
+    assert structured.rendered == ""
+    assert structured.failures[0].path == file_path
 
 
 @pytest.mark.asyncio

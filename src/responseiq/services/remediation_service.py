@@ -36,6 +36,7 @@ from responseiq.services.worktree_service import (
     WorktreePreparationService,
     WorktreeValidationError,
 )
+from responseiq.utils.context_extractor import extract_source_context
 from responseiq.utils.k8s_patcher import KubernetesPatcher
 from responseiq.utils.logger import logger
 
@@ -173,10 +174,14 @@ class RemediationService:
         # Step 1: Extract and analyze incident data
         log_content = incident.get("log_content") or incident.get("reason") or "No log provided"
         severity = incident.get("severity", "medium").lower()
+        source_context = await extract_source_context(
+            log_content,
+            root_path=Path(context_path) if context_path else Path("."),
+        )
 
         # Step 2: AI analysis for remediation plan (P5: timed for performance gate)
         async with measure_latency(_perf_gate, "analyze_incident", phase="rolling"):
-            analysis_result = await analyze_with_llm(log_content)
+            analysis_result = await analyze_with_llm(log_content, code_context=source_context.rendered)
 
         if not analysis_result:
             return self._create_failed_recommendation(
@@ -219,8 +224,14 @@ class RemediationService:
             logger.info(f"High-impact incident ({impact_assessment.score:.1f} ≥ 40): Generating reproduction test")
             try:
                 proof_bundle = await self.reproduction_service.analyze_and_generate_reproduction(
-                    incident=incident, context={"impact_assessment": impact_assessment, "ai_analysis": analysis_result}
+                    incident=incident,
+                    context={
+                        "impact_assessment": impact_assessment,
+                        "ai_analysis": analysis_result,
+                        "source_context": source_context.to_dict(),
+                    },
                 )
+                proof_bundle.source_context = source_context
                 if proof_bundle.reproduction_test:
                     logger.info(f"✅ Reproduction test generated: {proof_bundle.reproduction_test.test_path}")
 
@@ -298,6 +309,7 @@ class RemediationService:
 
         # Step 5: Trust gate validation
         validation_result = await self.trust_gate.validate_remediation(remediation_request)
+        validation_result.evidence["source_context"] = source_context.to_dict()
 
         # P2 Policy Enforcement: Downgrade execution mode if proof is weak
         if (
