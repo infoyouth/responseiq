@@ -18,6 +18,7 @@ from responseiq.schemas.causal_graph import (
     EdgeType,
     NodeType,
 )
+from responseiq.schemas.deployment import DeploymentCorrelationResult
 from responseiq.utils.logger import logger
 
 
@@ -28,6 +29,7 @@ def build_causal_graph(
     impact_score: float = 0.0,
     perf_result: Optional[Any] = None,  # PerformanceResult | None
     proof_bundle: Optional[Any] = None,  # ProofBundle | None
+    deployment_correlation: Optional[DeploymentCorrelationResult] = None,
 ) -> CausalGraph:
     """
     Build a CausalGraph from remediation-pipeline signals.
@@ -47,22 +49,38 @@ def build_causal_graph(
     edges: list[CausalEdge] = []
     edge_confidences: list[float] = []
 
-    # --- Node 1: Deploy Event (from P3 Git correlation) ---
-    deploy_node_id: Optional[str] = None
+    # A git commit is a change signal, not proof that a deployment occurred.
+    change_node_id: Optional[str] = None
     if correlation and getattr(correlation, "suspect_commit", None):
-        deploy_node_id = "deploy_event"
+        change_node_id = "change_event"
         nodes.append(
             CausalNode(
-                id=deploy_node_id,
-                type=NodeType.DEPLOY_EVENT,
-                label=f"Suspect commit: {correlation.suspect_commit}",
+                id=change_node_id,
+                type=NodeType.CHANGE_EVENT,
+                label=f"Correlated change: {correlation.suspect_commit}",
                 detail=str(correlation.diff_summary) if correlation.diff_summary else None,
                 confidence=float(correlation.confidence_score),
                 metadata={
                     "sha": str(correlation.suspect_commit_sha or ""),
                     "files": list(correlation.suspect_files),
                     "method": str(correlation.method),
+                    "source": "git",
                 },
+            )
+        )
+
+    deploy_node_id: Optional[str] = None
+    if deployment_correlation is not None:
+        event = deployment_correlation.event
+        deploy_node_id = "deploy_event"
+        nodes.append(
+            CausalNode(
+                id=deploy_node_id,
+                type=NodeType.DEPLOY_EVENT,
+                label=f"Correlated {event.kind.value}: {event.event_id}",
+                detail=f"{event.source} at {event.occurred_at.isoformat()}",
+                confidence=deployment_correlation.confidence,
+                metadata=event.model_dump(mode="json"),
             )
         )
 
@@ -81,14 +99,21 @@ def build_causal_graph(
                 metadata={"delta_pct": delta},
             )
         )
-        if deploy_node_id:
-            conf = round((correlation.confidence_score + 0.9) / 2, 3)  # type: ignore[union-attr]
+        upstream_change = deploy_node_id or change_node_id
+        if upstream_change:
+            if deploy_node_id and deployment_correlation:
+                correlation_confidence = deployment_correlation.confidence
+            elif correlation is not None:
+                correlation_confidence = correlation.confidence_score
+            else:
+                correlation_confidence = 0.0
+            conf = round(min(correlation_confidence, 0.9), 3)
             edges.append(
                 CausalEdge(
-                    source_id=deploy_node_id,
+                    source_id=upstream_change,
                     target_id=latency_node_id,
-                    type=EdgeType.CAUSED,
-                    label="deploy caused latency spike",
+                    type=EdgeType.CORRELATED,
+                    label="change temporally correlated with latency spike",
                     confidence=conf,
                 )
             )
@@ -114,15 +139,15 @@ def build_causal_graph(
             )
         )
         # Edge from whichever upstream node exists
-        upstream = latency_node_id or deploy_node_id
+        upstream = latency_node_id or deploy_node_id or change_node_id
         if upstream:
             conf = round(min(1.0, impact_score / 100.0), 3) if impact_score else 0.5
             edges.append(
                 CausalEdge(
                     source_id=upstream,
                     target_id=error_node_id,
-                    type=EdgeType.TRIGGERED,
-                    label="triggered error condition",
+                    type=EdgeType.CORRELATED,
+                    label="change signal correlated with error condition",
                     confidence=conf,
                 )
             )
@@ -170,7 +195,7 @@ def build_causal_graph(
             metadata={"incident_id": incident_id},
         )
     )
-    upstream_for_policy = error_node_id or latency_node_id or deploy_node_id
+    upstream_for_policy = error_node_id or latency_node_id or deploy_node_id or change_node_id
     if upstream_for_policy:
         edges.append(
             CausalEdge(
@@ -188,8 +213,10 @@ def build_causal_graph(
 
     # --- Summary narrative ---
     summary_parts: list[str] = []
-    if deploy_node_id:
-        summary_parts.append(f"Suspect commit '{correlation.suspect_commit}' was identified")  # type: ignore[union-attr]
+    if change_node_id:
+        summary_parts.append(f"change '{correlation.suspect_commit}' was correlated with the incident")  # type: ignore[union-attr]
+    if deploy_node_id and deployment_correlation:
+        summary_parts.append(f"deployment event '{deployment_correlation.event.event_id}' was correlated")
     if latency_node_id:
         summary_parts.append(f"latency regression of +{getattr(perf_result, 'delta_pct', 0):.1f}% was observed")
     if error_node_id:
