@@ -12,14 +12,17 @@ from __future__ import annotations
 import uuid
 import os
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from responseiq.ai.llm_service import analyze_with_llm
 from responseiq.config.policy_config import DenyReason, PolicyMode
 from responseiq.schemas.causal_graph import CausalGraph
+from responseiq.schemas.deployment import DeploymentCorrelationResult, DeploymentEvent
 from responseiq.schemas.proof import ProofBundle, ReproductionStatus
 from responseiq.services.causal_graph_service import build_causal_graph
+from responseiq.services.deployment_correlation_service import DeploymentCorrelationService
 from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
 from responseiq.services.impact import assess_impact
 from responseiq.services.performance_gate import PerformanceGateResult, gate as _perf_gate, measure_latency
@@ -74,6 +77,7 @@ class RemediationRecommendation:
     checks_failed: List[str] = field(default_factory=list)
     proof_bundle: Optional[ProofBundle] = None  # P2: Proof-oriented evidence
     correlation: Optional[CorrelationResult] = None  # P3: Git change-to-incident correlation
+    deployment_correlation: Optional[DeploymentCorrelationResult] = None
     causal_graph: Optional[CausalGraph] = None  # P6: Causal root-cause graph
 
     # P5.3: LLM audit trail — which model was used for this analysis
@@ -129,6 +133,9 @@ class RemediationRecommendation:
                 else None
             ),  # P2 Integrity Gate: forensic SHA-256 chain for SOC2/compliance
             "correlation": (self.correlation.to_dict() if self.correlation else None),  # P3: Git correlation result
+            "deployment_correlation": (
+                self.deployment_correlation.model_dump(mode="json") if self.deployment_correlation else None
+            ),
             "causal_graph": (self.causal_graph.to_dict() if self.causal_graph else None),  # P6: causal chain
             "llm_model_used": self.llm_model_used,  # P5.3: audit trail
         }
@@ -153,6 +160,7 @@ class RemediationService:
         self.reproduction_service = ReproductionService()  # P2: Proof-oriented testing
         self.rollback_generator = ExecutableRollbackGenerator()  # P2.1: Executable rollbacks
         self.git_correlation = GitCorrelationService(repo_path=repo_path)  # P3: Change correlation
+        self.deployment_correlator = DeploymentCorrelationService()
         self.pr_service = PRService()
         self.worktree_service = WorktreePreparationService()
         self.environment = environment
@@ -214,6 +222,8 @@ class RemediationService:
                 logger.debug("P3 correlation: no suspect commit identified")
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Git correlation failed (non-fatal): {exc}")
+
+        deployment_correlation = self._correlate_deployment_events(incident)
 
         # Step 3: Assess incident impact
         impact_assessment = assess_impact(
@@ -312,6 +322,8 @@ class RemediationService:
         # Step 5: Trust gate validation
         validation_result = await self.trust_gate.validate_remediation(remediation_request)
         validation_result.evidence["source_context"] = source_context.to_dict()
+        if deployment_correlation is not None:
+            validation_result.evidence["deployment_correlation"] = deployment_correlation.model_dump(mode="json")
 
         # P2 Policy Enforcement: Downgrade execution mode if proof is weak
         if (
@@ -393,6 +405,7 @@ class RemediationService:
             required_actions=validation_result.required_actions,
             proof_bundle=proof_bundle,  # P2: Proof-oriented evidence
             correlation=correlation,  # P3: Git change-to-incident correlation
+            deployment_correlation=deployment_correlation,
             llm_model_used=analysis_result.get("llm_model_used"),  # P5.3: audit trail
         )
 
@@ -488,6 +501,7 @@ class RemediationService:
             impact_score=impact_assessment.score,
             perf_result=perf_result,
             proof_bundle=proof_bundle,
+            deployment_correlation=deployment_correlation,
         )
 
         # Step 10: #2 v2.18.0 — Persist sealed ProofBundle to DB (SOC2 audit trail)
@@ -520,6 +534,30 @@ class RemediationService:
             f"**Rollback plan:**\n{recommendation.rollback_plan or 'Review before merge.'}\n\n"
             "This is a draft PR. Review the diff and evidence before merging."
         )
+
+    def _correlate_deployment_events(self, incident: dict) -> DeploymentCorrelationResult | None:
+        raw_events = incident.get("deployment_events", [])
+        if not raw_events:
+            return None
+        try:
+            events = [DeploymentEvent.model_validate(event) for event in raw_events]
+            raw_time = incident.get("occurred_at") or incident.get("created_at")
+            if isinstance(raw_time, str):
+                raw_time = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+            incident_at = raw_time if isinstance(raw_time, datetime) else datetime.now(timezone.utc)
+            return self.deployment_correlator.correlate(
+                events,
+                incident_at=incident_at,
+                service=incident.get("service"),
+                commit_sha=incident.get("commit_sha"),
+                image_sha=incident.get("image_sha"),
+                config_digest=incident.get("config_digest"),
+                feature_flags=incident.get("feature_flags"),
+                lookback_hours=int(incident.get("deployment_lookback_hours", 24)),
+            )
+        except (TypeError, ValueError) as exc:
+            logger.warning("Invalid deployment event input; skipping correlation: %s", exc)
+            return None
 
     def _create_failed_recommendation(self, incident_id: str, reason: str) -> RemediationRecommendation:
         """Create a failed remediation recommendation."""

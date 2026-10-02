@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from responseiq.schemas.causal_graph import CausalGraph, EdgeType, NodeType
+from responseiq.schemas.deployment import DeploymentCorrelationResult, DeploymentEvent, DeploymentEventKind
 from responseiq.services.causal_graph_service import build_causal_graph
 
 
@@ -70,13 +71,33 @@ class TestBuildCausalGraph:
             correlation=_FakeCorrelation(),
         )
         node_types = [n.type for n in g.nodes]
-        assert NodeType.DEPLOY_EVENT in node_types
+        assert NodeType.CHANGE_EVENT in node_types
+        assert NodeType.DEPLOY_EVENT not in node_types
 
-    def test_deploy_node_confidence_matches_correlation(self):
+    def test_change_node_confidence_matches_correlation(self):
         corr = _FakeCorrelation(confidence_score=0.72)
         g = build_causal_graph(incident_id="INC-004", correlation=corr)
-        deploy_node = next(n for n in g.nodes if n.type == NodeType.DEPLOY_EVENT)
-        assert deploy_node.confidence == 0.72
+        change_node = next(n for n in g.nodes if n.type == NodeType.CHANGE_EVENT)
+        assert change_node.confidence == 0.72
+
+    def test_explicit_deployment_event_creates_deployment_node(self):
+        event = DeploymentEvent(
+            event_id="deploy-42",
+            kind=DeploymentEventKind.DEPLOYMENT,
+            occurred_at="2026-10-02T12:00:00Z",
+            source="test",
+            service="payments",
+            image_sha="sha256:abc",
+        )
+        deployment = DeploymentCorrelationResult(
+            event=event, confidence=0.8, reasons=["service_match"], lookback_hours=24
+        )
+
+        graph = build_causal_graph(incident_id="INC-DEPLOY", deployment_correlation=deployment)
+
+        node = next(node for node in graph.nodes if node.type == NodeType.DEPLOY_EVENT)
+        assert node.label == "Correlated deployment: deploy-42"
+        assert node.metadata["image_sha"] == "sha256:abc"
 
     def test_latency_spike_node_created_from_perf_result(self):
         g = build_causal_graph(
@@ -122,7 +143,7 @@ class TestBuildCausalGraph:
             proof_bundle=_fake_proof(),
         )
         node_types = {n.type for n in g.nodes}
-        assert NodeType.DEPLOY_EVENT in node_types
+        assert NodeType.CHANGE_EVENT in node_types
         assert NodeType.LATENCY_SPIKE in node_types
         assert NodeType.ERROR_LOG in node_types
         assert NodeType.AFFECTED_CODE in node_types
@@ -138,21 +159,21 @@ class TestBuildCausalGraph:
         assert len(g.edges) >= 1
         source_ids = {e.source_id for e in g.edges}
         target_ids = {e.target_id for e in g.edges}
-        assert "deploy_event" in source_ids
+        assert "change_event" in source_ids
         assert "error_log" in target_ids
 
-    def test_deploy_to_latency_edge_type(self):
+    def test_git_change_to_latency_edge_is_correlated_not_causal(self):
         g = build_causal_graph(
             incident_id="INC-011",
             correlation=_FakeCorrelation(),
             perf_result=_FakePerfResult(),
         )
         deploy_to_latency = next(
-            (e for e in g.edges if e.source_id == "deploy_event" and e.target_id == "latency_spike"),
+            (e for e in g.edges if e.source_id == "change_event" and e.target_id == "latency_spike"),
             None,
         )
         assert deploy_to_latency is not None
-        assert deploy_to_latency.type == EdgeType.CAUSED
+        assert deploy_to_latency.type == EdgeType.CORRELATED
 
     def test_overall_confidence_is_min_of_edges(self):
         g = build_causal_graph(
@@ -188,9 +209,11 @@ class TestBuildCausalGraph:
         g = build_causal_graph(incident_id="INC-015", correlation=None)
         node_types = [n.type for n in g.nodes]
         assert NodeType.DEPLOY_EVENT not in node_types
+        assert NodeType.CHANGE_EVENT not in node_types
 
     def test_correlation_without_suspect_commit_no_deploy_node(self):
         corr = _FakeCorrelation(suspect_commit=None)
         g = build_causal_graph(incident_id="INC-016", correlation=corr)
         node_types = [n.type for n in g.nodes]
         assert NodeType.DEPLOY_EVENT not in node_types
+        assert NodeType.CHANGE_EVENT not in node_types

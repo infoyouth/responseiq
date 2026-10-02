@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 class NodeType(str, Enum):
     DEPLOY_EVENT = "deploy_event"
+    CHANGE_EVENT = "change_event"
     LATENCY_SPIKE = "latency_spike"
     ERROR_LOG = "error_log"
     AFFECTED_CODE = "affected_code"
