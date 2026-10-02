@@ -10,8 +10,11 @@ Each function maps an ``AgentState`` to a string outcome that the
 from responseiq.config import base as config
 from responseiq.models.agent_state import AgentState
 from responseiq.services.prompt_loader import load_prompts
+import hashlib
+import re
 
 NODE_PROMPTS = load_prompts()
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 # Each node function takes AgentState and returns a string outcome
 
@@ -43,6 +46,16 @@ def critique_node(state: AgentState) -> str:
     patch = state.get("current_patch")
     if patch is not None:
         state.setdefault("attempt_history", []).append(patch)
+    failure = state.get("last_verification")
+    if patch and failure:
+        normalized_patch = "\n".join(line.rstrip() for line in patch.replace("\r\n", "\n").splitlines()).strip()
+        normalized_failure = " ".join(_ANSI_ESCAPE_RE.sub("", failure).split())
+        fingerprint = hashlib.sha256(f"{normalized_patch}\0{normalized_failure}".encode()).hexdigest()
+        seen = state.setdefault("attempt_fingerprints", [])
+        if fingerprint in seen:
+            state["status"] = "repeated_failure"
+            return "max_retries"
+        seen.append(fingerprint)
     state["retry_count"] = state.get("retry_count", 0) + 1
     if state["retry_count"] >= config.REMEDIATION_MAX_RETRIES:
         return "max_retries"

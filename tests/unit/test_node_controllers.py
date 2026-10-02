@@ -49,3 +49,40 @@ def test_critique_node_retry_and_max():
     assert result == "retry"
     assert state["retry_count"] == 1
     assert state["attempt_history"] == ["patch_v2"]
+
+
+def test_critique_stops_repeated_patch_and_failure_pair():
+    state: AgentState = {
+        "current_patch": "diff --git a/app.py b/app.py\n+return False\n",
+        "last_verification": "AssertionError: still failing",
+        "retry_count": 1,
+    }
+
+    assert critique_node(state) == "retry"
+    assert critique_node(state) == "max_retries"
+    assert state["status"] == "repeated_failure"
+    assert len(state["attempt_fingerprints"]) == 1
+
+
+def test_critique_allows_same_patch_with_different_failure():
+    state: AgentState = {
+        "current_patch": "patch",
+        "last_verification": "first failure",
+        "retry_count": 0,
+    }
+    assert critique_node(state) == "retry"
+    state["last_verification"] = "different failure"
+    assert critique_node(state) == "retry"
+
+
+def test_critique_normalizes_patch_and_failure_before_repeat_detection():
+    state: AgentState = {
+        "current_patch": "patch line\n",
+        "last_verification": "\x1b[31mAssertionError: still failing\x1b[0m",
+        "retry_count": 0,
+    }
+    assert critique_node(state) == "retry"
+
+    state["current_patch"] = "patch line  \r\n"
+    state["last_verification"] = "AssertionError:   still failing"
+    assert critique_node(state) == "max_retries"

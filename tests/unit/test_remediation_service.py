@@ -50,6 +50,31 @@ async def test_remediate_incident_success(remediation_service):
         mock_analyze.assert_called_once_with("Critical error in main.py", code_context="")
 
 
+def test_remediation_normalizes_and_correlates_deployment_events(remediation_service):
+    result = remediation_service._correlate_deployment_events(
+        {
+            "service": " Payments ",
+            "commit_sha": "ABC123",
+            "occurred_at": "2026-10-02T12:10:00Z",
+            "deployment_events": [
+                {
+                    "event_id": "deploy-123",
+                    "kind": "deployment",
+                    "occurred_at": "2026-10-02T12:00:00Z",
+                    "source": "test-provider",
+                    "service": "payments",
+                    "commit_sha": "abc123",
+                }
+            ],
+        }
+    )
+
+    assert result is not None
+    assert result.event.event_id == "deploy-123"
+    assert result.relation == "correlated"
+    assert {"service_match", "commit_sha_match"}.issubset(result.reasons)
+
+
 @pytest.mark.asyncio
 async def test_source_context_flows_through_remediation_and_proof(remediation_service):
     source_context = SourceContext(
