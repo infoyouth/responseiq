@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shutil
 import subprocess  # nosec B404
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -124,9 +125,13 @@ class ProvenanceResolver:
 
 
 def _head_sha(source_root: Path) -> Optional[str]:
+    git_bin = shutil.which("git")
+    if git_bin is None:
+        return None
+
     try:
-        result = subprocess.run(  # noqa: S603, S607
-            ["git", "-C", str(source_root), "rev-parse", "HEAD"],
+        result = subprocess.run(  # noqa: S603
+            [git_bin, "-C", str(source_root), "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
             check=True,
