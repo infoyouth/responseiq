@@ -56,6 +56,7 @@ class ContextResolutionReason(str, Enum):
     REMOTE_CLONE_FAILED = "remote_clone_failed"
     FILE_NOT_FOUND = "file_not_found"
     PARSE_ERROR = "parse_error"
+    PROVENANCE_MISMATCH = "provenance_mismatch"
 
 
 @dataclass
