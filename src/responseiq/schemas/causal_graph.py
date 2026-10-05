@@ -19,6 +19,7 @@ class NodeType(str, Enum):
     DEPLOY_EVENT = "deploy_event"
     CHANGE_EVENT = "change_event"
     LATENCY_SPIKE = "latency_spike"
+    SERVICE = "service"
     ERROR_LOG = "error_log"
     AFFECTED_CODE = "affected_code"
     POLICY_DECISION = "policy_decision"

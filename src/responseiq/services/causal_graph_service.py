@@ -119,12 +119,53 @@ def build_causal_graph(
             )
             edge_confidences.append(conf)
 
-    # --- Node 3: Error Log (from AI analysis) ---
+    # --- Node 3: Service context and trace metadata ---
+    service_name = None
+    trace_id = None
+    span_id = None
+    if analysis_result:
+        service_name = (analysis_result or {}).get("service")
+        trace_id = (analysis_result or {}).get("trace_id")
+        span_id = (analysis_result or {}).get("span_id")
+
+    if service_name is None and deployment_correlation is not None:
+        service_name = deployment_correlation.event.service
+
+    service_node_id: Optional[str] = None
+    if service_name:
+        service_node_id = f"service_{str(service_name).strip().lower().replace(' ', '_')}"
+        service_metadata: dict[str, Any] = {"service": str(service_name).strip()}
+        if trace_id:
+            service_metadata["trace_id"] = str(trace_id)
+        if span_id:
+            service_metadata["span_id"] = str(span_id)
+        nodes.append(
+            CausalNode(
+                id=service_node_id,
+                type=NodeType.SERVICE,
+                label=f"Service: {service_name}",
+                detail="Cross-service incident context",
+                confidence=0.8,
+                metadata=service_metadata,
+            )
+        )
+
+    # --- Node 4: Error Log (from AI analysis) ---
     error_node_id: Optional[str] = None
     title = (analysis_result or {}).get("title", "")
     severity = (analysis_result or {}).get("severity", "unknown")
     if title:
         error_node_id = "error_log"
+        error_metadata: dict[str, Any] = {
+            "severity": severity,
+            "impact_score": impact_score,
+        }
+        if trace_id:
+            error_metadata["trace_id"] = str(trace_id)
+        if span_id:
+            error_metadata["span_id"] = str(span_id)
+        if service_name:
+            error_metadata["service"] = str(service_name).strip()
         nodes.append(
             CausalNode(
                 id=error_node_id,
@@ -132,10 +173,7 @@ def build_causal_graph(
                 label=title,
                 detail=(analysis_result or {}).get("description"),
                 confidence=min(1.0, impact_score / 100.0) if impact_score else 0.5,
-                metadata={
-                    "severity": severity,
-                    "impact_score": impact_score,
-                },
+                metadata=error_metadata,
             )
         )
         # Edge from whichever upstream node exists
@@ -153,7 +191,19 @@ def build_causal_graph(
             )
             edge_confidences.append(conf)
 
-    # --- Node 4: Affected Code Line (from P2 proof bundle) ---
+    if service_node_id and error_node_id:
+        edges.append(
+            CausalEdge(
+                source_id=service_node_id,
+                target_id=error_node_id,
+                type=EdgeType.CORRELATED,
+                label="service emitted the incident signal",
+                confidence=0.8,
+            )
+        )
+        edge_confidences.append(0.8)
+
+    # --- Node 5: Affected Code Line (from P2 proof bundle) ---
     if proof_bundle and getattr(proof_bundle, "reproduction_test", None):
         repro = proof_bundle.reproduction_test
         affected_node_id = "affected_code"
@@ -183,7 +233,7 @@ def build_causal_graph(
             )
             edge_confidences.append(conf)
 
-    # --- Node 5: Policy Decision (always present) ---
+    # --- Node 6: Policy Decision (always present) ---
     policy_node_id = "policy_decision"
     nodes.append(
         CausalNode(
@@ -219,6 +269,8 @@ def build_causal_graph(
         summary_parts.append(f"deployment event '{deployment_correlation.event.event_id}' was correlated")
     if latency_node_id:
         summary_parts.append(f"latency regression of +{getattr(perf_result, 'delta_pct', 0):.1f}% was observed")
+    if service_name:
+        summary_parts.append(f"service '{service_name}' emitted the incident trace context")
     if error_node_id:
         summary_parts.append(f"error '{title}' (severity: {severity}) was triggered")
     if proof_bundle and getattr(proof_bundle, "reproduction_test", None):
