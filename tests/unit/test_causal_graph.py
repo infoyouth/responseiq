@@ -217,3 +217,39 @@ class TestBuildCausalGraph:
         node_types = [n.type for n in g.nodes]
         assert NodeType.DEPLOY_EVENT not in node_types
         assert NodeType.CHANGE_EVENT not in node_types
+
+    def test_service_and_trace_metadata_create_context_node(self):
+        g = build_causal_graph(
+            incident_id="INC-017",
+            analysis_result={
+                "title": "Payments timeout",
+                "severity": "critical",
+                "service": "payments",
+                "trace_id": "trace-123",
+                "span_id": "span-456",
+            },
+            impact_score=85.0,
+        )
+        node_types = {n.type for n in g.nodes}
+        assert NodeType.SERVICE in node_types
+
+        service_node = next(node for node in g.nodes if node.type == NodeType.SERVICE)
+        assert service_node.label == "Service: payments"
+        assert service_node.metadata["service"] == "payments"
+        assert service_node.metadata["trace_id"] == "trace-123"
+        assert service_node.metadata["span_id"] == "span-456"
+
+    def test_service_context_links_error_to_service(self):
+        g = build_causal_graph(
+            incident_id="INC-018",
+            analysis_result={
+                "title": "Auth failure",
+                "severity": "high",
+                "service": "auth",
+                "trace_id": "trace-abc",
+            },
+            impact_score=70.0,
+        )
+        service_node_id = next(node.id for node in g.nodes if node.type == NodeType.SERVICE)
+        error_node_id = next(node.id for node in g.nodes if node.type == NodeType.ERROR_LOG)
+        assert any(edge.source_id == service_node_id and edge.target_id == error_node_id for edge in g.edges)

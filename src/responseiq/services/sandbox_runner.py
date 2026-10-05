@@ -26,8 +26,8 @@ class SandboxLimits:
 
     timeout_seconds: float = 30.0
     cpu_seconds: int = 10
-    memory_bytes: int = 512 * 1024 * 1024
-    process_count: int = 32
+    memory_bytes: int | None = None
+    process_count: int | None = None
     network_disabled: bool = True
     allowed_environment: tuple[str, ...] = ("PATH", "PYTHONPATH", "PYTHONNOUSERSITE")
 
@@ -98,5 +98,7 @@ class SandboxRunner:
 
     def _apply_limits(self) -> None:
         resource.setrlimit(resource.RLIMIT_CPU, (self.limits.cpu_seconds, self.limits.cpu_seconds))
-        resource.setrlimit(resource.RLIMIT_AS, (self.limits.memory_bytes, self.limits.memory_bytes))
-        resource.setrlimit(resource.RLIMIT_NPROC, (self.limits.process_count, self.limits.process_count))
+        if self.limits.memory_bytes is not None:
+            resource.setrlimit(resource.RLIMIT_AS, (self.limits.memory_bytes, self.limits.memory_bytes))
+        if self.limits.process_count is not None:
+            resource.setrlimit(resource.RLIMIT_NPROC, (self.limits.process_count, self.limits.process_count))

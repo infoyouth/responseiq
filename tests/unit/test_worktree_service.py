@@ -100,6 +100,38 @@ def test_required_checks_run_against_patched_candidate(tmp_path, monkeypatch):
     assert run_git(repo, "show", f"{result.branch_name}:app.py") == "def is_fixed():\n    return True\n"
 
 
+def test_validation_runs_in_hermetic_sandbox(tmp_path, monkeypatch):
+    repo = create_repo(tmp_path)
+    calls = []
+
+    class FakeSandboxRunner:
+        async def run(self, command, *, cwd, environment):
+            calls.append({"command": list(command), "cwd": str(cwd), "environment": dict(environment)})
+            return type("Result", (), {"returncode": 0, "output": b"ok", "timed_out": False})()
+
+    monkeypatch.setattr(GitClient, "push", lambda *args: True)
+
+    WorktreePreparationService(sandbox_runner=FakeSandboxRunner()).prepare_and_push(
+        repo_path=repo,
+        repo_name="example/repo",
+        patch_text="""diff --git a/app.txt b/app.txt
+--- a/app.txt
++++ b/app.txt
+@@ -1 +1 @@
+-before
++after
+""",
+        validation_commands=[[sys.executable, "-c", "print('validated')"]],
+        token="test-token",
+        branch_name="responseiq-hermetic-check",
+    )
+
+    assert calls
+    assert calls[0]["command"][0] == sys.executable
+    assert calls[0]["cwd"] != str(repo)
+    assert calls[0]["cwd"].startswith(str(tmp_path))
+
+
 def test_security_check_includes_new_python_files(tmp_path, monkeypatch):
     repo = create_repo(tmp_path)
     monkeypatch.setattr(GitClient, "push", lambda *args: pytest.fail("invalid candidate must not be pushed"))

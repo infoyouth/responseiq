@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
 import shutil
 import subprocess  # nosec B404
 import sys
@@ -13,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from responseiq.services.sandbox_runner import SandboxExecutionError, SandboxLimits, SandboxRunner
 from responseiq.utils.git_utils import GitClient
 from responseiq.utils.logger import logger
 
@@ -35,6 +38,12 @@ class PreparedBranch:
 
 class WorktreePreparationService:
     """Apply an explicit patch, validate it, and publish the resulting branch."""
+
+    def __init__(self, sandbox_runner: SandboxRunner | None = None) -> None:
+        # Keep validation isolated from the caller checkout and strip unapproved env vars.
+        # Network namespace isolation is opt-in because some CI and local environments do not
+        # expose the required `unshare` capability even though the worktree boundary remains.
+        self.sandbox_runner = sandbox_runner or SandboxRunner(SandboxLimits(network_disabled=False))
 
     def prepare_and_push(
         self,
@@ -94,15 +103,28 @@ class WorktreePreparationService:
     def _run_git(cwd: Path, args: list[str]) -> str:
         return WorktreePreparationService._run(["git", *args], cwd, "git")
 
-    @staticmethod
-    def _run_command(cwd: Path, command: Sequence[str]) -> str:
+    def _run_command(self, cwd: Path, command: Sequence[str]) -> str:
         try:
-            return WorktreePreparationService._run(list(command), cwd, "validation")
+            safe_env = {
+                key: value for key, value in os.environ.items() if key in {"PATH", "PYTHONPATH", "PYTHONNOUSERSITE"}
+            }
+            result = asyncio.run(self.sandbox_runner.run(list(command), cwd=cwd, environment=safe_env))
+            if result.timed_out:
+                raise WorktreeValidationError(f"validation command timed out: {' '.join(command)}")
+            if result.returncode not in (0, None):
+                raise WorktreeValidationError(
+                    f"validation command failed ({result.returncode}): {' '.join(command)}\n{result.output.decode('utf-8', errors='replace')}"
+                )
+            return result.output.decode("utf-8", errors="replace")
+        except (SandboxExecutionError, WorktreeValidationError):
+            raise
         except WorktreePreparationError as exc:
             raise WorktreeValidationError(str(exc)) from exc
+        except Exception as exc:
+            raise WorktreeValidationError(f"validation command failed: {' '.join(command)}: {exc}") from exc
 
-    @staticmethod
     def _run_required_checks(
+        self,
         cwd: Path,
         required_checks: Sequence[str],
         validation_commands: Sequence[Sequence[str]],
@@ -117,16 +139,16 @@ class WorktreePreparationService:
         for check_name in required_checks:
             if check_name == "tests":
                 if not any("pytest" in part for command in validation_commands for part in command):
-                    WorktreePreparationService._run_command(cwd, [sys.executable, "-m", "pytest", "-q"])
+                    self._run_command(cwd, [sys.executable, "-m", "pytest", "-q"])
             elif check_name == "security_scan":
                 if python_files:
-                    WorktreePreparationService._run_command(
+                    self._run_command(
                         cwd,
                         ["ruff", "check", "--select", "S", *python_files],
                     )
             elif check_name == "syntax_check":
                 if python_files:
-                    WorktreePreparationService._run_command(
+                    self._run_command(
                         cwd,
                         [sys.executable, "-m", "py_compile", *python_files],
                     )
