@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,9 +11,11 @@ from responseiq.services.worktree_service import (
 )
 from responseiq.services.sandbox_runner import SandboxLimits, SandboxRunner
 from responseiq.services.repair_loop_service import (
+    RepairAttempt,
     RepairAttemptStatus,
     RepairStopReason,
     failure_fingerprint,
+    load_repair_attempts,
     patch_fingerprint,
     run_bounded_repair_loop,
 )
@@ -66,6 +69,7 @@ async def test_bounded_repair_loop_stops_after_repeated_failure():
     assert result.completed is False
     assert result.review_required is True
     assert result.stop_reason == RepairStopReason.REPEATED_FAILURE
+    assert {attempt.run_id for attempt in recorded} == {result.run_id}
     assert [attempt.status for attempt in recorded] == [
         RepairAttemptStatus.STARTED,
         RepairAttemptStatus.FAILED,
@@ -130,6 +134,141 @@ async def test_bounded_repair_loop_fails_closed_when_start_record_cannot_persist
 
     assert result.stop_reason == RepairStopReason.AUDIT_PERSISTENCE_FAILED
     assert validated == []
+
+
+@pytest.mark.asyncio
+async def test_bounded_repair_loop_fails_closed_when_final_record_raises():
+    recorded = []
+
+    async def validate(patch):
+        return None
+
+    async def record_attempt(attempt):
+        recorded.append(attempt.status)
+        if attempt.status == RepairAttemptStatus.VALIDATED:
+            raise RuntimeError("audit store unavailable")
+        return True
+
+    result = await run_bounded_repair_loop(
+        incident_id="INC-final-audit-failure",
+        initial_patch="patch-0",
+        validate=validate,
+        revise=None,
+        record_attempt=record_attempt,
+    )
+
+    assert recorded == [RepairAttemptStatus.STARTED, RepairAttemptStatus.VALIDATED]
+    assert result.completed is False
+    assert result.stop_reason == RepairStopReason.AUDIT_PERSISTENCE_FAILED
+
+
+@pytest.mark.asyncio
+async def test_bounded_repair_loop_refuses_to_replay_persisted_attempts():
+    validated = []
+
+    async def validate(patch):
+        validated.append(patch)
+
+    async def record_attempt(attempt):
+        pytest.fail("replayed runs must not write or execute another attempt")
+
+    prior_attempt = RepairAttempt(
+        run_id="repair-run-1",
+        attempt_number=1,
+        patch_fingerprint=patch_fingerprint("patch-0"),
+        status=RepairAttemptStatus.STARTED,
+    )
+    result = await run_bounded_repair_loop(
+        incident_id="INC-replay",
+        initial_patch="patch-0",
+        validate=validate,
+        revise=None,
+        record_attempt=record_attempt,
+        run_id="repair-run-1",
+        prior_attempts=[prior_attempt],
+    )
+
+    assert result.stop_reason == RepairStopReason.REPLAY_DETECTED
+    assert result.completed is False
+    assert result.attempts == [prior_attempt]
+    assert validated == []
+
+
+@pytest.mark.asyncio
+async def test_bounded_repair_loop_fails_closed_when_attempt_history_is_unavailable():
+    validated = []
+
+    async def validate(patch):
+        validated.append(patch)
+
+    async def record_attempt(attempt):
+        pytest.fail("unavailable attempt history must stop before recording a new attempt")
+
+    result = await run_bounded_repair_loop(
+        incident_id="INC-history-unavailable",
+        initial_patch="patch-0",
+        validate=validate,
+        revise=None,
+        record_attempt=record_attempt,
+        run_id="INC-history-unavailable",
+        prior_attempts=None,
+    )
+
+    assert result.stop_reason == RepairStopReason.ATTEMPT_HISTORY_UNAVAILABLE
+    assert result.completed is False
+    assert validated == []
+
+
+def test_load_repair_attempts_groups_records_by_run_id(monkeypatch):
+    selected = RepairAttempt(
+        run_id="repair-run-a",
+        attempt_number=1,
+        patch_fingerprint=patch_fingerprint("patch-a"),
+        status=RepairAttemptStatus.STARTED,
+    )
+    other_run = RepairAttempt(
+        run_id="repair-run-b",
+        attempt_number=1,
+        patch_fingerprint=patch_fingerprint("patch-b"),
+        status=RepairAttemptStatus.STARTED,
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def exec(self, statement):
+            return SimpleNamespace(
+                all=lambda: [
+                    SimpleNamespace(metadata_json=selected.model_dump_json()),
+                    SimpleNamespace(metadata_json=other_run.model_dump_json()),
+                ]
+            )
+
+    monkeypatch.setattr("responseiq.services.repair_loop_service.get_session", lambda: iter([FakeSession()]))
+
+    attempts = load_repair_attempts("incident-1", "repair-run-a")
+
+    assert attempts == [selected]
+
+
+def test_load_repair_attempts_fails_closed_on_legacy_records(monkeypatch):
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def exec(self, statement):
+            return SimpleNamespace(all=lambda: [SimpleNamespace(metadata_json='{"attempt_number": 1}')])
+
+    monkeypatch.setattr("responseiq.services.repair_loop_service.get_session", lambda: iter([FakeSession()]))
+
+    assert load_repair_attempts("incident-1", "repair-run-a") is None
 
 
 def test_worktree_service_disables_network_by_default():

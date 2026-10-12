@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from responseiq.config.policy_config import DEFAULT_POLICIES, PolicyMode
+from responseiq.schemas.outcome import OutcomeSource, OutcomeStatus
 from responseiq.schemas.proof import ProofBundle, SourceContext, SourceReference
 from responseiq.services.remediation_service import RemediationService
 
@@ -36,6 +37,7 @@ async def test_remediate_incident_success(remediation_service):
 
     with (
         patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
+        patch("responseiq.services.remediation_service.record_outcome") as mock_record_outcome,
         patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
     ):
         mock_analyze.return_value = mock_analysis
@@ -48,6 +50,13 @@ async def test_remediate_incident_success(remediation_service):
         assert hasattr(result, "title"), "Expected RemediationRecommendation object"
         assert result.title == "Critical Main Crash"
         mock_analyze.assert_called_once_with("Critical error in main.py", code_context="")
+
+    outcome = mock_record_outcome.call_args.args[0]
+    assert outcome.source == OutcomeSource.RESPONSEIQ_PIPELINE
+    assert outcome.status == (OutcomeStatus.RECOMMENDED if result.allowed else OutcomeStatus.BLOCKED)
+    assert outcome.root_cause_correct is None
+    assert outcome.patch_applied is None
+    assert outcome.rollback_succeeded is None
 
 
 def test_remediation_normalizes_and_correlates_deployment_events(remediation_service):
@@ -124,6 +133,7 @@ async def test_remediate_incident_no_analysis(remediation_service):
 
     with (
         patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
+        patch("responseiq.services.remediation_service.record_outcome") as mock_record_outcome,
         patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
     ):
         mock_analyze.return_value = None
@@ -135,6 +145,11 @@ async def test_remediate_incident_no_analysis(remediation_service):
         assert hasattr(result, "allowed"), "Expected RemediationRecommendation object"
         assert hasattr(result, "title"), "Expected RemediationRecommendation object"
         assert result.title == "Remediation Failed"
+
+    outcome = mock_record_outcome.call_args.args[0]
+    assert outcome.source == OutcomeSource.RESPONSEIQ_PIPELINE
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.validation_passed is None
 
 
 @pytest.mark.asyncio
