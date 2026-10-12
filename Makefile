@@ -1,6 +1,6 @@
 
 
-.PHONY: all sync install dev-install lint format format-check test test-safety coverage-test run build deploy \
+.PHONY: all sync install dev-install lint format format-check test test-safety coverage-test replay-fixtures run build deploy \
 	mypy security dependency-audit package-smoke lock-check docker-build docker-up ci check help \
 	sand sand-v sand-payment sand-auth sand-inventory sand-fastapi sand-flask sand-setup
 
@@ -41,8 +41,14 @@ test-safety:  ## Run fast regression tests for provenance, graph, and candidate 
 		tests/unit/test_outcome_ledger.py \
 		tests/unit/test_feedback.py \
 		tests/unit/test_audit_service.py \
+		tests/unit/test_cli.py \
 		tests/e2e/test_remediation_e2e.py \
-		tests/fixtures/test_sandbox_regressions.py -q
+		tests/fixtures/test_sandbox_regressions.py \
+		tests/fixtures/test_fixture_replay.py -q
+
+
+replay-fixtures:  ## Replay pinned synthetic incidents in the sandbox and emit JSONL outcomes
+	uv run python tests/fixtures/run_fixture_replay.py
 
 
 coverage-test:  ## Run the full suite with the CI branch-coverage floor

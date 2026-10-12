@@ -86,6 +86,19 @@ class SandboxRunner:
             }
         )
         bounded_command = [self._rewrite_candidate_path(part, cwd) for part in command]
+        if self.limits.process_count is not None:
+            bounded_command = [
+                str(Path(sys.prefix) / "bin" / "python"),
+                "-c",
+                (
+                    "import os, resource, sys; "
+                    "limit = int(sys.argv[1]); "
+                    "resource.setrlimit(resource.RLIMIT_NPROC, (limit, limit)); "
+                    "os.execvp(sys.argv[2], sys.argv[2:])"
+                ),
+                str(self.limits.process_count),
+                *bounded_command,
+            ]
         wrapped_command = self._build_command(bwrap, bounded_command, cwd, safe_environment)
 
         process = await asyncio.create_subprocess_exec(
@@ -216,5 +229,3 @@ class SandboxRunner:
         resource.setrlimit(resource.RLIMIT_CPU, (self.limits.cpu_seconds, self.limits.cpu_seconds))
         if self.limits.memory_bytes is not None:
             resource.setrlimit(resource.RLIMIT_AS, (self.limits.memory_bytes, self.limits.memory_bytes))
-        if self.limits.process_count is not None:
-            resource.setrlimit(resource.RLIMIT_NPROC, (self.limits.process_count, self.limits.process_count))

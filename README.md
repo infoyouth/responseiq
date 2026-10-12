@@ -13,11 +13,21 @@
 
 ResponseIQ is a **trust-first incident remediation copilot**. It analyzes crash logs with Ollama or OpenAI, applies policy and safety checks, records rollback and proof evidence, and can validate an explicit patch in an isolated Git worktree before opening a GitHub draft PR.
 
-**Zero config. Try it now:**
+**Fastest install (isolated CLI):**
 
 ```bash
-pip install responseiq && responseiq demo
+uv tool install responseiq
+responseiq doctor
+responseiq demo
 ```
+
+If you do not use `uv`, install with `python -m pip install responseiq` in a
+virtual environment. Scanning and the demo need no LLM key. Isolated candidate
+patch validation additionally requires Linux with Bubblewrap and working user
+and network namespaces; `responseiq doctor` reports whether that boundary is
+available. If it is not, candidate validation fails closed while scan/demo
+remain usable. On Debian or Ubuntu, install Bubblewrap with `sudo apt install
+bubblewrap` and ensure unprivileged user namespaces are enabled.
 
 ## Support ResponseIQ
 
