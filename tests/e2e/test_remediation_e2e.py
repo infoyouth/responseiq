@@ -450,7 +450,7 @@ class TestTrustGateE2E:
                 service.pr_service.create_prepared_draft_pr.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_policy_mode_pr_only_prepares_patch_before_pr(self, critical_incident, mock_ai_analysis):
+    async def test_policy_mode_pr_only_prepares_patch_before_pr(self, critical_incident, mock_ai_analysis, monkeypatch):
         pr_only_policy = create_custom_policy(
             mode=PolicyMode.PR_ONLY,
             min_severity=SeverityThreshold.MEDIUM,
@@ -459,6 +459,8 @@ class TestTrustGateE2E:
         critical_incident["github_repository"] = "example/service"
         critical_incident["remediation_patch"] = "validated patch"
         critical_incident["validation_commands"] = [["pytest", "-q"]]
+        audit_attempts = AsyncMock(return_value=True)
+        monkeypatch.setattr("responseiq.services.remediation_service.persist_repair_attempt", audit_attempts)
         with (
             patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
             patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
@@ -467,9 +469,10 @@ class TestTrustGateE2E:
             mock_api_key.get_secret_value.return_value = "test-key"
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(pr_only_policy)
-            service.worktree_service.prepare_and_push = MagicMock(
-                return_value=MagicMock(branch_name="responseiq-prepared-fix")
+            service.worktree_service.prepare_candidate = MagicMock(
+                return_value=MagicMock(branch_name="responseiq-prepared-fix", commit_sha="a" * 40)
             )
+            service.worktree_service.push_prepared_branch = MagicMock()
             service.pr_service.create_prepared_draft_pr = MagicMock(
                 return_value="https://github.com/example/service/pull/43"
             )
@@ -486,17 +489,19 @@ class TestTrustGateE2E:
                 recommendation = await service.remediate_incident(critical_incident)
 
         assert recommendation.draft_pr_url == "https://github.com/example/service/pull/43"
-        assert "candidate_validation" in recommendation.checks_passed
+        assert "candidate_validation" in recommendation.checks_passed, recommendation.evidence.get("repair_loop")
         assert recommendation.evidence["candidate_validation"]["status"] == "passed"
-        service.worktree_service.prepare_and_push.assert_called_once()
-        assert service.worktree_service.prepare_and_push.call_args.kwargs["required_checks"] == [
+        service.worktree_service.prepare_candidate.assert_called_once()
+        assert service.worktree_service.prepare_candidate.call_args.kwargs["required_checks"] == [
             "tests",
             "security_scan",
             "syntax_check",
         ]
+        service.worktree_service.push_prepared_branch.assert_called_once()
+        assert [call.args[1].status.value for call in audit_attempts.await_args_list] == ["started", "validated"]
         service.pr_service.create_prepared_draft_pr.assert_called_once()
 
-        service.worktree_service.prepare_and_push.side_effect = WorktreeValidationError("validation failed")
+        service.worktree_service.prepare_candidate.side_effect = WorktreeValidationError("validation failed")
         with (
             patch.object(service.trust_gate, "_run_security_scan", return_value=True),
             patch.object(service.trust_gate, "_run_syntax_check", return_value=True),

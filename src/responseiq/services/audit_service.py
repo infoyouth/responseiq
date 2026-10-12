@@ -58,6 +58,8 @@ class AuditEventType(str, Enum):
 
     # ── Remediation Lifecycle ──────────────────────────────────────────────
     INCIDENT_ANALYZED = "incident.analyzed"
+    REPAIR_ATTEMPT_RECORDED = "repair.attempt_recorded"
+    REMEDIATION_OUTCOME_RECORDED = "remediation.outcome_recorded"
     PR_OPENED = "pr.opened"
     PR_COMMAND_DISPATCHED = "pr.command_dispatched"
     ROLLBACK_TRIGGERED = "rollback.triggered"

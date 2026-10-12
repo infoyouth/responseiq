@@ -19,6 +19,8 @@ from responseiq.models.base import FeedbackRecord
 from responseiq.schemas.feedback import FeedbackIn, FeedbackOut, FeedbackSummary
 from responseiq.schemas.semantic import SimilaritySearchResult
 from responseiq.services.audit_service import AuditEventType, log_event_sync
+from responseiq.schemas.outcome import OutcomeLedgerEntry, OutcomeSource, OutcomeStatus
+from responseiq.services.outcome_ledger_service import record_outcome
 from responseiq.services.semantic_search_service import SemanticSearchService
 from responseiq.utils.logger import logger
 from responseiq.utils.tracing import score_langfuse
@@ -77,6 +79,19 @@ def submit_feedback(payload: FeedbackIn, session=Depends(get_session)):
         actor="user",
         outcome="success",
         metadata={"approved": payload.approved, "comment": payload.comment},
+    )
+    record_outcome(
+        OutcomeLedgerEntry(
+            incident_id=str(payload.log_id),
+            source=OutcomeSource.HUMAN_REVIEW,
+            status=OutcomeStatus.ACCEPTED if payload.approved else OutcomeStatus.REJECTED,
+            review_duration_seconds=payload.review_duration_seconds,
+            duration_ms=payload.duration_ms,
+            cost_usd=payload.cost_usd,
+            rollback_succeeded=payload.rollback_succeeded,
+            evidence_level=payload.evidence_level,
+            evidence_completeness=payload.evidence_completeness,
+        )
     )
     return FeedbackOut(
         id=record.id,  # type: ignore[arg-type]

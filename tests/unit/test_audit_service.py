@@ -311,6 +311,37 @@ class TestAuditEventsRouter:
         assert resp.json()["total"] >= 1
 
 
+class TestOutcomeLedgerExport:
+    def test_exports_outcomes_as_stable_jsonl(self, client, mem_session):
+        row = AuditEventLog(
+            event_type=AuditEventType.REMEDIATION_OUTCOME_RECORDED.value,
+            incident_id="replay-17",
+            actor="synthetic_replay",
+            outcome="fixed",
+            action="Outcome recorded",
+            metadata_json=json.dumps(
+                {
+                    "source": "synthetic_replay",
+                    "dataset_revision": "corpus-v3",
+                    "validation_passed": True,
+                }
+            ),
+            timestamp=datetime.now(timezone.utc),
+        )
+        mem_session.add(row)
+        mem_session.commit()
+
+        response = client.get("/api/v1/audit/outcomes.jsonl")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/x-ndjson")
+        entries = [json.loads(line) for line in response.text.splitlines()]
+        assert len(entries) == 1
+        assert entries[0]["incident_id"] == "replay-17"
+        assert entries[0]["source"] == "synthetic_replay"
+        assert entries[0]["metrics"]["dataset_revision"] == "corpus-v3"
+
+
 # ── Audit router — GET /api/v1/audit/events/{incident_id} ────────────────────
 
 

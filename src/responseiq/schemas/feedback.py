@@ -24,6 +24,12 @@ class FeedbackIn(BaseModel):
         max_length=1000,
         description="Optional human note explaining the decision.",
     )
+    review_duration_seconds: Optional[float] = Field(default=None, ge=0)
+    duration_ms: Optional[float] = Field(default=None, ge=0)
+    cost_usd: Optional[float] = Field(default=None, ge=0)
+    rollback_succeeded: Optional[bool] = None
+    evidence_level: Optional[str] = Field(default=None, max_length=64)
+    evidence_completeness: Optional[float] = Field(default=None, ge=0, le=1)
 
 
 class FeedbackOut(BaseModel):

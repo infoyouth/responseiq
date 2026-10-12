@@ -114,6 +114,33 @@ def test_submit_feedback_persisted_to_db(client: TestClient, session: Session):
     assert records[0].approved is True
 
 
+def test_submit_feedback_records_provenance_aware_outcome(client: TestClient, session: Session):
+    _seed_log_and_incident(session, log_id_override=15)
+    with (
+        patch("responseiq.routers.feedback.score_langfuse"),
+        patch("responseiq.routers.feedback.record_outcome") as mock_record_outcome,
+    ):
+        response = client.post(
+            "/api/v1/feedback",
+            json={
+                "log_id": 15,
+                "approved": True,
+                "review_duration_seconds": 42.5,
+                "duration_ms": 900,
+                "cost_usd": 0.03,
+                "evidence_level": "application_reproduction",
+                "evidence_completeness": 0.8,
+            },
+        )
+
+    assert response.status_code == 201
+    entry = mock_record_outcome.call_args.args[0]
+    assert entry.source.value == "human_review"
+    assert entry.dataset_revision is None
+    assert entry.review_duration_seconds == 42.5
+    assert entry.root_cause_correct is None
+
+
 def test_submit_multiple_feedback_idempotent(client: TestClient, session: Session):
     """Multiple feedback entries for the same log_id are all persisted (not deduplicated)."""
     _seed_log_and_incident(session, log_id_override=14)
