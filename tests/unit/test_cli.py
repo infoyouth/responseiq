@@ -184,6 +184,34 @@ class TestMainSubcommandDispatch:
         assert "rule-engine fallback active" in output
         assert "Doctor complete" in output
 
+    def test_doctor_warns_when_candidate_sandbox_is_missing(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+        monkeypatch.setattr("responseiq.cli.shutil.which", lambda name: None)
+
+        assert _run_doctor() == 0
+
+        output = capsys.readouterr().out
+        assert "Candidate sandbox" in output
+        assert "install bubblewrap" in output
+        assert "Doctor complete" in output
+
+    def test_doctor_probes_bubblewrap_namespace_capabilities(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")
+        monkeypatch.setattr("responseiq.cli._find_project_root", lambda: tmp_path)
+        monkeypatch.setattr(
+            "responseiq.cli.shutil.which",
+            lambda name: {"bwrap": "/usr/bin/bwrap", "true": "/usr/bin/true"}.get(name),
+        )
+        with patch("responseiq.cli.subprocess.run", return_value=MagicMock(returncode=0)) as mock_run:
+            assert _run_doctor() == 0
+
+        output = capsys.readouterr().out
+        assert "Candidate sandbox" in output
+        assert "network and user namespaces available" in output
+        assert mock_run.called
+        assert "--unshare-net" in mock_run.call_args.args[0]
+
     def test_doctor_checks_configured_llm_endpoint(self, tmp_path, monkeypatch, capsys):
         """Doctor checks the configured OpenAI-compatible endpoint."""
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'fixture'\n")

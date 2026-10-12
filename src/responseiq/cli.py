@@ -9,6 +9,8 @@ Exposes the three primary operating modes -- ``scan``, ``fix``, and
 
 import argparse
 import os
+import shutil
+import subprocess
 import sys
 
 from responseiq.__version__ import __version__
@@ -197,7 +199,6 @@ def _find_project_root():
 def _run_demo() -> None:
     """Zero-config live demo — works immediately after `pip install responseiq`."""
     import json
-    import subprocess
     import tempfile
 
     sep = "─" * 60
@@ -321,6 +322,54 @@ def _run_doctor() -> int:
         )
     )
     checks.append(("Git repository", "ok" if (root / ".git").exists() else "warn", "source context available"))
+
+    if os.name != "posix":
+        checks.append(
+            ("Candidate sandbox", "warn", "Bubblewrap requires Linux; isolated patch validation is unavailable")
+        )
+    else:
+        bwrap = shutil.which("bwrap")
+        true_bin = shutil.which("true")
+        if not bwrap or not true_bin:
+            checks.append(
+                (
+                    "Candidate sandbox",
+                    "warn",
+                    "install bubblewrap and coreutils to enable isolated patch validation",
+                )
+            )
+        else:
+            try:
+                probe = subprocess.run(  # noqa: S603
+                    [
+                        bwrap,
+                        "--unshare-user",
+                        "--unshare-net",
+                        "--die-with-parent",
+                        "--ro-bind",
+                        "/",
+                        "/",
+                        "--",
+                        true_bin,
+                    ],
+                    capture_output=True,
+                    check=False,
+                    timeout=3,
+                )
+            except (OSError, subprocess.SubprocessError) as exc:
+                checks.append(("Candidate sandbox", "warn", f"bubblewrap isolation unavailable ({exc})"))
+            else:
+                if probe.returncode == 0:
+                    checks.append(("Candidate sandbox", "ok", "network and user namespaces available"))
+                else:
+                    detail = probe.stderr.decode("utf-8", errors="replace").strip() or "namespace probe failed"
+                    checks.append(
+                        (
+                            "Candidate sandbox",
+                            "warn",
+                            f"bubblewrap installed but isolation unavailable ({detail}); validation fails closed",
+                        )
+                    )
 
     print("ResponseIQ Doctor")
     print("=" * 60)
