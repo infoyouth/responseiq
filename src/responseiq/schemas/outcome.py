@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OutcomeSource(str, Enum):
+    RESPONSEIQ_PIPELINE = "responseiq_pipeline"
     HUMAN_REVIEW = "human_review"
     SYNTHETIC_REPLAY = "synthetic_replay"
     OFFICIAL_SWEBENCH = "official_swebench"
@@ -19,6 +20,8 @@ class OutcomeSource(str, Enum):
 
 
 class OutcomeStatus(str, Enum):
+    RECOMMENDED = "recommended"
+    BLOCKED = "blocked"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     FIXED = "fixed"

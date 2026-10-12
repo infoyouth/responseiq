@@ -16,7 +16,7 @@ from responseiq.config.policy_config import (
     SeverityThreshold,
     create_custom_policy,
 )
-from responseiq.schemas.proof import ProofBundle, ReproductionTest
+from responseiq.schemas.proof import ProofBundle, ReproductionTest, SourceContext
 from responseiq.services.remediation_service import RemediationService
 from responseiq.services.worktree_service import WorktreeValidationError
 
@@ -461,16 +461,30 @@ class TestTrustGateE2E:
         critical_incident["validation_commands"] = [["pytest", "-q"]]
         audit_attempts = AsyncMock(return_value=True)
         monkeypatch.setattr("responseiq.services.remediation_service.persist_repair_attempt", audit_attempts)
+        monkeypatch.setattr("responseiq.services.remediation_service.load_repair_attempts", lambda *_: [])
         with (
             patch("responseiq.services.remediation_service.analyze_with_llm", new_callable=AsyncMock) as mock_analyze,
             patch("responseiq.ai.llm_service.settings.openai_api_key") as mock_api_key,
+            patch(
+                "responseiq.services.remediation_service.extract_source_context",
+                new_callable=AsyncMock,
+                return_value=SourceContext(rendered="def handle(): return failure"),
+            ),
+            patch(
+                "responseiq.services.remediation_service.generate_patch_with_llm",
+                new_callable=AsyncMock,
+                return_value={"unified_diff": "revised patch"},
+            ) as revise_patch,
         ):
             mock_analyze.return_value = mock_ai_analysis
             mock_api_key.get_secret_value.return_value = "test-key"
             service = RemediationService(environment="test")
             service.trust_gate.update_policy(pr_only_policy)
             service.worktree_service.prepare_candidate = MagicMock(
-                return_value=MagicMock(branch_name="responseiq-prepared-fix", commit_sha="a" * 40)
+                side_effect=[
+                    WorktreeValidationError("candidate test failed"),
+                    MagicMock(branch_name="responseiq-prepared-fix", commit_sha="a" * 40),
+                ]
             )
             service.worktree_service.push_prepared_branch = MagicMock()
             service.pr_service.create_prepared_draft_pr = MagicMock(
@@ -489,16 +503,24 @@ class TestTrustGateE2E:
                 recommendation = await service.remediate_incident(critical_incident)
 
         assert recommendation.draft_pr_url == "https://github.com/example/service/pull/43"
+        assert recommendation.execution_mode == PolicyMode.PR_ONLY
         assert "candidate_validation" in recommendation.checks_passed, recommendation.evidence.get("repair_loop")
         assert recommendation.evidence["candidate_validation"]["status"] == "passed"
-        service.worktree_service.prepare_candidate.assert_called_once()
+        assert service.worktree_service.prepare_candidate.call_count == 2
         assert service.worktree_service.prepare_candidate.call_args.kwargs["required_checks"] == [
             "tests",
             "security_scan",
             "syntax_check",
         ]
         service.worktree_service.push_prepared_branch.assert_called_once()
-        assert [call.args[1].status.value for call in audit_attempts.await_args_list] == ["started", "validated"]
+        assert [call.args[1].status.value for call in audit_attempts.await_args_list] == [
+            "started",
+            "failed",
+            "started",
+            "validated",
+        ]
+        assert len({call.args[1].run_id for call in audit_attempts.await_args_list}) == 1
+        revise_patch.assert_awaited_once()
         service.pr_service.create_prepared_draft_pr.assert_called_once()
 
         service.worktree_service.prepare_candidate.side_effect = WorktreeValidationError("validation failed")
@@ -509,6 +531,7 @@ class TestTrustGateE2E:
         ):
             recommendation = await service.remediate_incident(critical_incident)
         assert recommendation.allowed is False
+        assert recommendation.execution_mode == PolicyMode.PR_ONLY
         assert recommendation.policy_validation.allowed is False
         assert "candidate_validation" in recommendation.checks_failed
         assert recommendation.evidence["candidate_validation"]["status"] == "failed"

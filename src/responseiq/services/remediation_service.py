@@ -21,14 +21,20 @@ from responseiq.ai.llm_service import analyze_with_llm, generate_patch_with_llm
 from responseiq.config.policy_config import DenyReason, PolicyMode
 from responseiq.schemas.causal_graph import CausalGraph
 from responseiq.schemas.deployment import DeploymentCorrelationResult, DeploymentEvent
-from responseiq.schemas.proof import ProofBundle, ReproductionStatus
+from responseiq.schemas.outcome import OutcomeLedgerEntry, OutcomeSource, OutcomeStatus
+from responseiq.schemas.proof import EvidenceLevel, ProofBundle, ReproductionStatus
 from responseiq.services.causal_graph_service import build_causal_graph
 from responseiq.services.deployment_correlation_service import DeploymentCorrelationService
 from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
 from responseiq.services.impact import assess_impact
 from responseiq.services.performance_gate import PerformanceGateResult, gate as _perf_gate, measure_latency
+from responseiq.services.outcome_ledger_service import record_outcome
 from responseiq.services.pr_service import PRService
-from responseiq.services.repair_loop_service import persist_repair_attempt, run_bounded_repair_loop
+from responseiq.services.repair_loop_service import (
+    load_repair_attempts,
+    persist_repair_attempt,
+    run_bounded_repair_loop,
+)
 from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.rollback_generator import ExecutableRollbackGenerator
 from responseiq.services.trust_gate import (
@@ -196,18 +202,22 @@ class RemediationService:
             analysis_result = await analyze_with_llm(log_content, code_context=source_context.rendered)
 
         if not analysis_result:
-            return self._create_failed_recommendation(
+            recommendation = self._create_failed_recommendation(
                 incident_id, "AI analysis failed or was skipped (API Key missing?)"
             )
+            self._record_pipeline_outcome(recommendation)
+            return recommendation
 
         title = analysis_result.get("title", "Unknown Issue")
         remediation_plan = analysis_result.get("remediation")
         ai_confidence = analysis_result.get("confidence", 0.6)
 
         if not remediation_plan:
-            return self._create_failed_recommendation(
+            recommendation = self._create_failed_recommendation(
                 incident_id, f"AI analyzed '{title}' but provided no specific remediation steps."
             )
+            self._record_pipeline_outcome(recommendation, analysis_result.get("llm_model_used"))
+            return recommendation
 
         logger.info(f"AI analysis complete for '{title}' with confidence: {ai_confidence}")
 
@@ -442,6 +452,7 @@ class RemediationService:
             and not prepared_branch
         ):
             candidate_holder: dict[str, Any] = {}
+            repair_run_id = incident_id
             github_token = (
                 incident.get("github_token")
                 or os.environ.get("GITHUB_TOKEN")
@@ -472,12 +483,15 @@ class RemediationService:
                 return proposal.get("unified_diff") if proposal else None
 
             try:
+                prior_attempts = await asyncio.to_thread(load_repair_attempts, incident_id, repair_run_id)
                 repair_result = await run_bounded_repair_loop(
                     incident_id=incident_id,
                     initial_patch=patch_text,
                     validate=validate_candidate,
                     revise=revise_candidate,
                     record_attempt=lambda attempt: persist_repair_attempt(incident_id, attempt),
+                    run_id=repair_run_id,
+                    prior_attempts=prior_attempts,
                 )
                 validation_result.evidence["repair_loop"] = repair_result.model_dump(mode="json")
                 prepared = candidate_holder.get("prepared")
@@ -602,7 +616,42 @@ class RemediationService:
             if proof_bundle:
                 await self.reproduction_service.cleanup_reproduction_test(proof_bundle)
 
+        self._record_pipeline_outcome(recommendation, analysis_result.get("llm_model_used"))
         return recommendation
+
+    @staticmethod
+    def _record_pipeline_outcome(
+        recommendation: RemediationRecommendation,
+        model_name: Optional[str] = None,
+    ) -> None:
+        """Record the system's decision without claiming the proposed fix worked in production."""
+        candidate_validation = recommendation.evidence.get("candidate_validation")
+        validation_status = candidate_validation.get("status") if isinstance(candidate_validation, dict) else None
+        validation_passed = (
+            True
+            if validation_status in {"passed", "validated_not_published"}
+            else False
+            if validation_status == "failed"
+            else None
+        )
+        raw_evidence_level = recommendation.proof_bundle.evidence_level if recommendation.proof_bundle else None
+        evidence_level = raw_evidence_level if isinstance(raw_evidence_level, EvidenceLevel) else None
+        entry = OutcomeLedgerEntry(
+            incident_id=recommendation.incident_id,
+            source=OutcomeSource.RESPONSEIQ_PIPELINE,
+            status=(
+                OutcomeStatus.RECOMMENDED
+                if recommendation.allowed
+                else OutcomeStatus.FAILED
+                if recommendation.policy_validation is None
+                else OutcomeStatus.BLOCKED
+            ),
+            model_name=model_name,
+            validation_passed=validation_passed,
+            evidence_level=evidence_level.value if evidence_level else None,
+        )
+        if not record_outcome(entry):
+            logger.warning("Pipeline outcome could not be persisted", incident_id=recommendation.incident_id)
 
     @staticmethod
     def _build_draft_pr_body(recommendation: RemediationRecommendation) -> str:
