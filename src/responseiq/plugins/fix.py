@@ -19,6 +19,7 @@ from loguru import logger
 
 from responseiq.config.policy_config import PolicyMode
 from responseiq.config.settings import settings
+from responseiq.utils.otel_context import parse_otel_json_log_line
 
 from .base import BasePlugin
 
@@ -65,14 +66,16 @@ class FixPlugin(BasePlugin):
             repository = cli_args.get("github_repository") or agent_state.get("context", {}).get("env", {}).get(
                 "GITHUB_REPOSITORY"
             )
+            parsed_records = [parse_otel_json_log_line(message) for message in msgs]
+            analysis_messages = [parsed.body if parsed else message for message, parsed in zip(msgs, parsed_records)]
 
             # Step 1: scan all messages concurrently
-            scan_results = await asyncio.gather(*[analyze_log_async(m) for m in msgs])
+            scan_results = await asyncio.gather(*[analyze_log_async(message) for message in analysis_messages])
 
             # Step 2: triage — pick incidents with severity >= high
             severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
             incidents_to_fix = []
-            for msg, result in zip(msgs, scan_results):
+            for msg, parsed, result in zip(analysis_messages, parsed_records, scan_results):
                 if result is None:
                     continue
                 sev = (result.severity or "low").lower()
@@ -90,6 +93,14 @@ class FixPlugin(BasePlugin):
                             "github_token": (
                                 agent_state.get("context", {}).get("env", {}).get("GITHUB_TOKEN")
                                 or agent_state.get("context", {}).get("env", {}).get("RESPONSEIQ_GITHUB_TOKEN", "")
+                            ),
+                            "otel_context": parsed.context.model_dump(mode="json", exclude_none=True)
+                            if parsed
+                            else None,
+                            "occurred_at": (
+                                parsed.context.observed_at.isoformat()
+                                if parsed and parsed.context.observed_at
+                                else None
                             ),
                         }
                     )

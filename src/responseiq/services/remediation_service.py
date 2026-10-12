@@ -23,6 +23,7 @@ from responseiq.schemas.causal_graph import CausalGraph
 from responseiq.schemas.deployment import DeploymentCorrelationResult, DeploymentEvent
 from responseiq.schemas.outcome import OutcomeLedgerEntry, OutcomeSource, OutcomeStatus
 from responseiq.schemas.proof import EvidenceLevel, ProofBundle, ReproductionStatus
+from responseiq.schemas.telemetry import OTelIncidentContext
 from responseiq.services.causal_graph_service import build_causal_graph
 from responseiq.services.deployment_correlation_service import DeploymentCorrelationService
 from responseiq.services.git_correlation_service import CorrelationResult, GitCorrelationService
@@ -207,6 +208,28 @@ class RemediationService:
             )
             self._record_pipeline_outcome(recommendation)
             return recommendation
+
+        raw_otel_context = incident.get("otel_context")
+        if isinstance(raw_otel_context, dict):
+            try:
+                otel_context = OTelIncidentContext.model_validate(raw_otel_context)
+            except ValueError as exc:
+                logger.warning("Invalid OTel incident context ignored: %s", exc)
+            else:
+                analysis_result = dict(analysis_result)
+                context_fields = {
+                    "service_name": "service",
+                    "deployment_environment_name": "deployment_environment_name",
+                    "deployment_id": "deployment_id",
+                    "observed_at": "telemetry_observed_at",
+                    "trace_id": "trace_id",
+                    "span_id": "span_id",
+                    "provenance": "telemetry_provenance",
+                }
+                for context_field, analysis_field in context_fields.items():
+                    value = getattr(otel_context, context_field)
+                    if value:
+                        analysis_result[analysis_field] = value.isoformat() if context_field == "observed_at" else value
 
         title = analysis_result.get("title", "Unknown Issue")
         remediation_plan = analysis_result.get("remediation")

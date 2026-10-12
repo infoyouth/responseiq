@@ -16,6 +16,7 @@ Coverage matrix:
 """
 
 import io
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -187,6 +188,68 @@ class TestSuccessfulRemediation:
         assert state["fix_result"] == "success"
         assert len(state["fixes"]) == 1
         assert state["fixes"][0]["title"] == "Fix It"
+
+    def test_otel_jsonl_body_and_context_reach_remediation(self, tmp_path):
+        log = tmp_path / "otel.jsonl"
+        log.write_text(
+            json.dumps(
+                {
+                    "body": {"stringValue": "ERROR database timeout"},
+                    "timeUnixNano": "1791820800000000000",
+                    "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                    "spanId": "00f067aa0ba902b7",
+                    "resource": {
+                        "attributes": [
+                            {"key": "service.name", "value": {"stringValue": "payments"}},
+                            {"key": "deployment.environment.name", "value": {"stringValue": "production"}},
+                            {"key": "deployment.id", "value": {"stringValue": "deploy-42"}},
+                        ]
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        incident = _make_incident_out(severity="high")
+        captured = {}
+
+        async def _fake_remediate(remediation_incident, context_path=None):
+            captured.update(remediation_incident)
+            return _make_recommendation()
+
+        with (
+            patch(
+                "responseiq.services.analyzer.analyze_log_async",
+                new_callable=AsyncMock,
+                return_value=incident,
+            ) as mock_analyze,
+            patch(
+                "responseiq.services.remediation_service.RemediationService.remediate_incident",
+                side_effect=_fake_remediate,
+            ),
+        ):
+            result = FixPlugin().run(_build_state(str(log)))
+
+        assert result["fix_result"] == "success"
+        mock_analyze.assert_awaited_once_with("ERROR database timeout")
+        assert captured["log_content"] == "ERROR database timeout"
+        assert captured["occurred_at"] == "2026-10-12T16:00:00+00:00"
+        assert captured["otel_context"] == {
+            "service_name": "payments",
+            "deployment_environment_name": "production",
+            "deployment_id": "deploy-42",
+            "observed_at": "2026-10-12T16:00:00Z",
+            "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "span_id": "00f067aa0ba902b7",
+            "provenance": {
+                "service_name": "resource.attributes[service.name]",
+                "deployment_environment_name": "resource.attributes[deployment.environment.name]",
+                "deployment_id": "resource.attributes[deployment.id]",
+                "observed_at": "log_record.timeUnixNano",
+                "trace_id": "log_record.traceId",
+                "span_id": "log_record.spanId",
+            },
+        }
 
     def test_policy_mode_setting_reaches_remediation_service(self, tmp_path):
         from responseiq.config.policy_config import PolicyMode

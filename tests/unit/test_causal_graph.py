@@ -227,6 +227,11 @@ class TestBuildCausalGraph:
                 "service": "payments",
                 "trace_id": "trace-123",
                 "span_id": "span-456",
+                "telemetry_provenance": {
+                    "service_name": "resource.attributes[service.name]",
+                    "trace_id": "log_record.traceId",
+                    "span_id": "log_record.spanId",
+                },
             },
             impact_score=85.0,
         )
@@ -239,7 +244,30 @@ class TestBuildCausalGraph:
         assert service_node.metadata["trace_id"] == "trace-123"
         assert service_node.metadata["span_id"] == "span-456"
 
+    def test_unproven_analysis_service_and_trace_ids_are_not_graph_evidence(self):
+        graph = build_causal_graph(
+            incident_id="INC-untrusted-context",
+            analysis_result={
+                "title": "Auth failure",
+                "severity": "high",
+                "service": "auth",
+                "trace_id": "model-invented-trace",
+                "span_id": "model-invented-span",
+            },
+            impact_score=70.0,
+        )
+
+        assert NodeType.SERVICE not in {node.type for node in graph.nodes}
+        error = next(node for node in graph.nodes if node.type == NodeType.ERROR_LOG)
+        assert "service" not in error.metadata
+        assert "trace_id" not in error.metadata
+        assert "span_id" not in error.metadata
+
     def test_service_context_links_error_to_service(self):
+        provenance = {
+            "service_name": "resource.attributes[service.name]",
+            "trace_id": "log_record.traceId",
+        }
         g = build_causal_graph(
             incident_id="INC-018",
             analysis_result={
@@ -247,9 +275,35 @@ class TestBuildCausalGraph:
                 "severity": "high",
                 "service": "auth",
                 "trace_id": "trace-abc",
+                "deployment_environment_name": "production",
+                "deployment_id": "deploy-42",
+                "telemetry_provenance": provenance,
             },
             impact_score=70.0,
         )
         service_node_id = next(node.id for node in g.nodes if node.type == NodeType.SERVICE)
         error_node_id = next(node.id for node in g.nodes if node.type == NodeType.ERROR_LOG)
-        assert any(edge.source_id == service_node_id and edge.target_id == error_node_id for edge in g.edges)
+        edge = next(edge for edge in g.edges if edge.source_id == service_node_id and edge.target_id == error_node_id)
+        service_node = next(node for node in g.nodes if node.id == service_node_id)
+
+        assert edge.type == EdgeType.CORRELATED
+        assert edge.evidence == {
+            "basis": "same_otel_log_record",
+            "fields": provenance,
+        }
+        assert service_node.metadata["deployment_environment_name"] == "production"
+        assert service_node.metadata["deployment_id"] == "deploy-42"
+        assert service_node.metadata["telemetry_provenance"] == provenance
+        assert NodeType.DEPLOY_EVENT not in {node.type for node in g.nodes}
+
+    def test_unproven_service_name_does_not_create_service_error_edge(self):
+        graph = build_causal_graph(
+            incident_id="INC-unproven-service",
+            analysis_result={
+                "title": "Auth failure",
+                "severity": "high",
+                "service": "auth",
+            },
+        )
+
+        assert NodeType.SERVICE not in {node.type for node in graph.nodes}

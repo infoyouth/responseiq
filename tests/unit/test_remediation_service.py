@@ -95,6 +95,18 @@ async def test_source_context_flows_through_remediation_and_proof(remediation_se
         "id": "context-incident",
         "log_content": 'File "service.py", line 12, in handle: ValueError: failure',
         "severity": "critical",
+        "otel_context": {
+            "service_name": "payments",
+            "deployment_environment_name": "production",
+            "deployment_id": "deploy-42",
+            "observed_at": "2026-10-12T16:00:00Z",
+            "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "span_id": "00f067aa0ba902b7",
+            "provenance": {
+                "service_name": "resource.attributes[service.name]",
+                "trace_id": "log_record.traceId",
+            },
+        },
     }
     mock_analysis = {
         "title": "Contextual failure",
@@ -124,6 +136,17 @@ async def test_source_context_flows_through_remediation_and_proof(remediation_se
     assert result.evidence["source_context"] == source_context.to_dict()
     assert result.proof_bundle is proof
     assert proof.source_context is source_context
+    service_node = next(node for node in result.causal_graph.nodes if node.type.value == "service")
+    service_edge = next(
+        edge
+        for edge in result.causal_graph.edges
+        if edge.source_id == service_node.id and edge.target_id == "error_log"
+    )
+    assert service_node.metadata["service"] == "payments"
+    assert service_node.metadata["trace_id"] == "4bf92f3577b34da6a3ce929d0e0e4736"
+    assert service_node.metadata["deployment_id"] == "deploy-42"
+    assert service_node.metadata["telemetry_observed_at"] == "2026-10-12T16:00:00+00:00"
+    assert service_edge.evidence["fields"]["service_name"] == "resource.attributes[service.name]"
 
 
 @pytest.mark.asyncio
