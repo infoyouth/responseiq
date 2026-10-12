@@ -6,4 +6,4 @@ Bumped automatically by ``python-semantic-release`` on every
 Conventional Commit merge to main.
 """
 
-__version__ = "2.38.0"
+__version__ = "2.39.0"
