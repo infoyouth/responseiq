@@ -40,10 +40,16 @@ class WorktreePreparationService:
     """Apply an explicit patch, validate it, and publish the resulting branch."""
 
     def __init__(self, sandbox_runner: SandboxRunner | None = None) -> None:
-        # Keep validation isolated from the caller checkout and strip unapproved env vars.
-        # Network namespace isolation is opt-in because some CI and local environments do not
-        # expose the required `unshare` capability even though the worktree boundary remains.
-        self.sandbox_runner = sandbox_runner or SandboxRunner(SandboxLimits(network_disabled=False))
+        self.sandbox_runner = sandbox_runner or SandboxRunner(
+            SandboxLimits(
+                timeout_seconds=300.0,
+                cpu_seconds=180,
+                memory_bytes=4 * 1024 * 1024 * 1024,
+                process_count=1024,
+                disk_bytes=2 * 1024 * 1024 * 1024,
+                network_disabled=True,
+            )
+        )
 
     def prepare_and_push(
         self,
@@ -65,12 +71,47 @@ class WorktreePreparationService:
         if not token:
             raise WorktreePreparationError("A GitHub token is required to push the validated branch")
 
+        prepared = self.prepare_candidate(
+            repo_path=repo_path,
+            patch_text=patch_text,
+            validation_commands=validation_commands,
+            required_checks=required_checks,
+            base=base,
+            branch_name=branch_name,
+        )
+        self.push_prepared_branch(
+            repo_path=repo_path,
+            prepared=prepared,
+            token=token,
+            repo_name=repo_name,
+        )
+        return prepared
+
+    def prepare_candidate(
+        self,
+        *,
+        repo_path: Path,
+        patch_text: str,
+        validation_commands: Sequence[Sequence[str]],
+        required_checks: Sequence[str] = (),
+        base: str = "main",
+        branch_name: str | None = None,
+    ) -> PreparedBranch:
+        """Validate and commit a candidate locally without publishing it."""
+        if not patch_text.strip():
+            raise WorktreePreparationError("A non-empty unified diff is required")
+        if not validation_commands and not required_checks:
+            raise WorktreePreparationError("At least one validation command is required")
+
         branch = branch_name or f"responseiq-fix-{uuid.uuid4().hex[:12]}"
         worktree_path = Path(tempfile.mkdtemp(prefix="responseiq-worktree-", dir=repo_path.parent))
         patch_path = worktree_path.parent / f"{worktree_path.name}.patch"
+        worktree_added = False
+        prepared = False
 
         try:
             self._run_git(repo_path, ["worktree", "add", "-b", branch, str(worktree_path), base])
+            worktree_added = True
             patch_path.write_text(patch_text, encoding="utf-8")
             try:
                 self._run_git(worktree_path, ["apply", "--check", str(patch_path)])
@@ -90,14 +131,34 @@ class WorktreePreparationService:
             self._run_git(worktree_path, ["add", "--all"])
             self._run_git(worktree_path, ["commit", "-m", "fix: validated ResponseIQ remediation"])
             commit_sha = self._run_git(worktree_path, ["rev-parse", "HEAD"]).strip()
-
-            if not GitClient(cwd=worktree_path).push(branch, token, repo_name):
-                raise WorktreePreparationError("Failed to push the validated remediation branch")
-
+            prepared = True
             return PreparedBranch(branch_name=branch, commit_sha=commit_sha)
         finally:
             patch_path.unlink(missing_ok=True)
             self._remove_worktree(repo_path, worktree_path)
+            if worktree_added and not prepared:
+                self.delete_prepared_branch(repo_path=repo_path, branch_name=branch)
+
+    @staticmethod
+    def push_prepared_branch(
+        *,
+        repo_path: Path,
+        prepared: PreparedBranch,
+        token: str,
+        repo_name: str,
+    ) -> None:
+        if not token:
+            raise WorktreePreparationError("A GitHub token is required to push the validated branch")
+        if not GitClient(cwd=repo_path).push(prepared.branch_name, token, repo_name):
+            WorktreePreparationService.delete_prepared_branch(repo_path, prepared.branch_name)
+            raise WorktreePreparationError("Failed to push the validated remediation branch")
+
+    @staticmethod
+    def delete_prepared_branch(repo_path: Path, branch_name: str) -> None:
+        try:
+            WorktreePreparationService._run_git(repo_path, ["branch", "-D", branch_name])
+        except WorktreePreparationError:
+            logger.warning("Failed to remove unpublished candidate branch: %s", branch_name)
 
     @staticmethod
     def _run_git(cwd: Path, args: list[str]) -> str:
@@ -116,7 +177,9 @@ class WorktreePreparationService:
                     f"validation command failed ({result.returncode}): {' '.join(command)}\n{result.output.decode('utf-8', errors='replace')}"
                 )
             return result.output.decode("utf-8", errors="replace")
-        except (SandboxExecutionError, WorktreeValidationError):
+        except SandboxExecutionError as exc:
+            raise WorktreeValidationError(f"Sandbox unavailable: {exc}") from exc
+        except WorktreeValidationError:
             raise
         except WorktreePreparationError as exc:
             raise WorktreeValidationError(str(exc)) from exc

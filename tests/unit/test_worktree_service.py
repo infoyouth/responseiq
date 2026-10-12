@@ -8,6 +8,14 @@ from responseiq.services.worktree_service import (
     WorktreePreparationService,
     WorktreeValidationError,
 )
+from responseiq.services.sandbox_runner import SandboxLimits, SandboxRunner
+from responseiq.services.repair_loop_service import (
+    RepairAttemptStatus,
+    RepairStopReason,
+    failure_fingerprint,
+    patch_fingerprint,
+    run_bounded_repair_loop,
+)
 from responseiq.utils.git_utils import GitClient
 
 
@@ -27,6 +35,107 @@ def create_repo(tmp_path):
     return repo
 
 
+def service_without_network_isolation():
+    return WorktreePreparationService(sandbox_runner=SandboxRunner(SandboxLimits(network_disabled=False)))
+
+
+@pytest.mark.asyncio
+async def test_bounded_repair_loop_stops_after_repeated_failure():
+    validated = []
+    recorded = []
+
+    async def validate(patch):
+        validated.append(patch)
+        raise WorktreeValidationError("same failure")
+
+    async def revise(patch, failure, attempt_number):
+        return f"patch-{attempt_number}"
+
+    async def record_attempt(attempt):
+        recorded.append(attempt)
+        return True
+
+    result = await run_bounded_repair_loop(
+        incident_id="INC-retry",
+        initial_patch="patch-0",
+        validate=validate,
+        revise=revise,
+        record_attempt=record_attempt,
+    )
+
+    assert result.completed is False
+    assert result.review_required is True
+    assert result.stop_reason == RepairStopReason.REPEATED_FAILURE
+    assert [attempt.status for attempt in recorded] == [
+        RepairAttemptStatus.STARTED,
+        RepairAttemptStatus.FAILED,
+        RepairAttemptStatus.STARTED,
+        RepairAttemptStatus.FAILED,
+    ]
+    assert len(validated) == 2
+
+
+@pytest.mark.asyncio
+async def test_bounded_repair_loop_caps_attempts_and_records_hashes():
+    validated = []
+    recorded = []
+
+    async def validate(patch):
+        validated.append(patch)
+        raise WorktreeValidationError(f"failure {patch}")
+
+    async def revise(patch, failure, attempt_number):
+        return f"patch-{attempt_number}"
+
+    async def record_attempt(attempt):
+        recorded.append(attempt)
+        return True
+
+    result = await run_bounded_repair_loop(
+        incident_id="INC-limit",
+        initial_patch="patch-0",
+        validate=validate,
+        revise=revise,
+        record_attempt=record_attempt,
+        max_attempts=3,
+    )
+
+    assert result.stop_reason == RepairStopReason.ATTEMPT_LIMIT
+    assert len(validated) == len(result.attempts) == 3
+    assert sum(attempt.status == RepairAttemptStatus.STARTED for attempt in recorded) == 3
+    assert all(len(attempt.patch_fingerprint) == 64 for attempt in result.attempts)
+    assert patch_fingerprint("diff\n") == patch_fingerprint("diff  \r\n")
+    assert failure_fingerprint("/tmp/responseiq-worktree-one failed") == failure_fingerprint(
+        "/tmp/responseiq-worktree-two failed"
+    )
+
+
+@pytest.mark.asyncio
+async def test_bounded_repair_loop_fails_closed_when_start_record_cannot_persist():
+    validated = []
+
+    async def validate(patch):
+        validated.append(patch)
+
+    async def record_attempt(attempt):
+        return False
+
+    result = await run_bounded_repair_loop(
+        incident_id="INC-audit-failure",
+        initial_patch="patch-0",
+        validate=validate,
+        revise=None,
+        record_attempt=record_attempt,
+    )
+
+    assert result.stop_reason == RepairStopReason.AUDIT_PERSISTENCE_FAILED
+    assert validated == []
+
+
+def test_worktree_service_disables_network_by_default():
+    assert WorktreePreparationService().sandbox_runner.limits.network_disabled is True
+
+
 def test_prepare_and_push_applies_validates_and_cleans_worktree(tmp_path, monkeypatch):
     repo = create_repo(tmp_path)
 
@@ -38,7 +147,7 @@ def test_prepare_and_push_applies_validates_and_cleans_worktree(tmp_path, monkey
 
     monkeypatch.setattr(GitClient, "push", fake_push)
 
-    result = WorktreePreparationService().prepare_and_push(
+    result = service_without_network_isolation().prepare_and_push(
         repo_path=repo,
         repo_name="example/repo",
         patch_text="""diff --git a/app.txt b/app.txt
@@ -80,7 +189,7 @@ def test_required_checks_run_against_patched_candidate(tmp_path, monkeypatch):
     run_git(repo, "commit", "-m", "add candidate regression test")
     monkeypatch.setattr(GitClient, "push", lambda *args: True)
 
-    result = WorktreePreparationService().prepare_and_push(
+    result = service_without_network_isolation().prepare_and_push(
         repo_path=repo,
         repo_name="example/repo",
         patch_text="""diff --git a/app.py b/app.py
@@ -137,7 +246,7 @@ def test_security_check_includes_new_python_files(tmp_path, monkeypatch):
     monkeypatch.setattr(GitClient, "push", lambda *args: pytest.fail("invalid candidate must not be pushed"))
 
     with pytest.raises(WorktreeValidationError, match=r"ruff check --select S unsafe\.py"):
-        WorktreePreparationService().prepare_and_push(
+        service_without_network_isolation().prepare_and_push(
             repo_path=repo,
             repo_name="example/repo",
             patch_text="""diff --git a/unsafe.py b/unsafe.py
@@ -161,7 +270,7 @@ def test_failed_candidate_validation_does_not_push_or_change_checkout(tmp_path, 
     monkeypatch.setattr(GitClient, "push", lambda *args: pushed.append(args) or True)
 
     with pytest.raises(WorktreeValidationError, match="validation command failed"):
-        WorktreePreparationService().prepare_and_push(
+        service_without_network_isolation().prepare_and_push(
             repo_path=repo,
             repo_name="example/repo",
             patch_text="""diff --git a/app.txt b/app.txt
@@ -196,7 +305,7 @@ def test_failed_candidate_validation_does_not_push_or_change_checkout(tmp_path, 
 )
 def test_prepare_rejects_missing_prerequisites(tmp_path, patch_text, validation_commands, token, message):
     with pytest.raises(WorktreePreparationError, match=message):
-        WorktreePreparationService().prepare_and_push(
+        service_without_network_isolation().prepare_and_push(
             repo_path=tmp_path,
             repo_name="example/repo",
             patch_text=patch_text,
@@ -208,7 +317,7 @@ def test_prepare_rejects_missing_prerequisites(tmp_path, patch_text, validation_
 def test_prepare_rejects_empty_validation_argv(tmp_path):
     repo = create_repo(tmp_path)
     with pytest.raises(WorktreePreparationError, match="non-empty argv"):
-        WorktreePreparationService().prepare_and_push(
+        service_without_network_isolation().prepare_and_push(
             repo_path=repo,
             repo_name="example/repo",
             patch_text="""diff --git a/app.txt b/app.txt
@@ -227,7 +336,7 @@ def test_prepare_reports_push_failure(tmp_path, monkeypatch):
     repo = create_repo(tmp_path)
     monkeypatch.setattr(GitClient, "push", lambda self, branch_name, token, repo_slug: False)
     with pytest.raises(WorktreePreparationError, match="push"):
-        WorktreePreparationService().prepare_and_push(
+        service_without_network_isolation().prepare_and_push(
             repo_path=repo,
             repo_name="example/repo",
             patch_text="""diff --git a/app.txt b/app.txt

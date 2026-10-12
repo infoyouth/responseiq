@@ -112,6 +112,32 @@ class TestGeneratePatchWithLLM:
         assert result["llm_model_used"] == "llama3.2"
 
     @pytest.mark.asyncio
+    async def test_validation_feedback_is_scrubbed_before_patch_revision(self):
+        from responseiq.ai.llm_service import generate_patch_with_llm
+
+        proposal = PatchProposal(unified_diff=_valid_patch(), test_commands=[], rationale="fix")
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock(return_value=proposal)
+        settings = MagicMock(openai_api_key=MagicMock(), llm_base_url=None, llm_max_tokens=100, scrub_enabled=True)
+        with (
+            patch("responseiq.ai.llm_service.settings", settings),
+            patch("responseiq.ai.llm_service._get_instructor_client", return_value=client),
+            patch("responseiq.ai.llm_service._router.model_for", return_value="llama3.2"),
+            patch("responseiq.ai.llm_service.scrub", return_value=("redacted validation output", {})),
+        ):
+            await generate_patch_with_llm(
+                "incident",
+                "source",
+                ["app.py"],
+                max_attempts=1,
+                validation_feedback="private validation output",
+            )
+
+        prompt = client.chat.completions.create.await_args.kwargs["messages"][1]["content"]
+        assert "redacted validation output" in prompt
+        assert "private validation output" not in prompt
+
+    @pytest.mark.asyncio
     async def test_rejects_invalid_attempt_count(self):
         from responseiq.ai.llm_service import generate_patch_with_llm
 

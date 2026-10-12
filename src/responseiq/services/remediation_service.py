@@ -9,6 +9,7 @@ GitHub PR. This is the central brain of ResponseIQ.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 import os
 from dataclasses import dataclass, field, replace
@@ -16,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from responseiq.ai.llm_service import analyze_with_llm
+from responseiq.ai.llm_service import analyze_with_llm, generate_patch_with_llm
 from responseiq.config.policy_config import DenyReason, PolicyMode
 from responseiq.schemas.causal_graph import CausalGraph
 from responseiq.schemas.deployment import DeploymentCorrelationResult, DeploymentEvent
@@ -27,6 +28,7 @@ from responseiq.services.git_correlation_service import CorrelationResult, GitCo
 from responseiq.services.impact import assess_impact
 from responseiq.services.performance_gate import PerformanceGateResult, gate as _perf_gate, measure_latency
 from responseiq.services.pr_service import PRService
+from responseiq.services.repair_loop_service import persist_repair_attempt, run_bounded_repair_loop
 from responseiq.services.reproduction_service import ReproductionService
 from responseiq.services.rollback_generator import ExecutableRollbackGenerator
 from responseiq.services.trust_gate import (
@@ -421,44 +423,119 @@ class RemediationService:
         # prepared; otherwise an explicit patch is prepared in an isolated worktree.
         prepared_branch = incident.get("prepared_branch")
         repository = incident.get("github_repository")
-        patch_text = incident.get("remediation_patch") or incident.get("patch_text")
+        patch_text = (
+            incident.get("remediation_patch") or incident.get("patch_text") or analysis_result.get("unified_diff")
+        )
         validation_commands = incident.get("validation_commands", [])
+        required_checks = [check.name for check in self.trust_gate.policy.get_required_checks(enabled_only=True)]
+        allowed_files = [
+            path
+            for path in (analysis_result.get("affected_files") or [])
+            if isinstance(path, str) and path and not Path(path).is_absolute() and ".." not in Path(path).parts
+        ]
         if (
             recommendation.allowed
             and recommendation.execution_mode == PolicyMode.PR_ONLY
             and repository
             and patch_text
-            and validation_commands
+            and (validation_commands or required_checks)
             and not prepared_branch
         ):
-            try:
-                prepared = self.worktree_service.prepare_and_push(
+            candidate_holder: dict[str, Any] = {}
+            github_token = (
+                incident.get("github_token")
+                or os.environ.get("GITHUB_TOKEN")
+                or os.environ.get("RESPONSEIQ_GITHUB_TOKEN")
+                or os.environ.get("INPUT_GITHUB_TOKEN", "")
+            )
+
+            async def validate_candidate(candidate_patch: str) -> None:
+                candidate_holder["prepared"] = await asyncio.to_thread(
+                    self.worktree_service.prepare_candidate,
                     repo_path=self.git_correlation.repo_path,
-                    repo_name=repository,
-                    patch_text=patch_text,
+                    patch_text=candidate_patch,
                     validation_commands=validation_commands,
-                    required_checks=[
-                        check.name for check in self.trust_gate.policy.get_required_checks(enabled_only=True)
-                    ],
-                    token=(
-                        incident.get("github_token")
-                        or os.environ.get("GITHUB_TOKEN")
-                        or os.environ.get("RESPONSEIQ_GITHUB_TOKEN")
-                        or os.environ.get("INPUT_GITHUB_TOKEN", "")
-                    ),
+                    required_checks=required_checks,
                     base=incident.get("github_base", "main"),
                 )
-                prepared_branch = prepared.branch_name
-                validation_result.checks_passed.append("candidate_validation")
-                validation_result.evidence["candidate_validation"] = {
-                    "status": "passed",
-                    "commands": [list(command) for command in validation_commands],
-                    "required_checks": [
-                        check.name for check in self.trust_gate.policy.get_required_checks(enabled_only=True)
-                    ],
-                    "branch_name": prepared.branch_name,
-                    "commit_sha": prepared.commit_sha,
-                }
+
+            async def revise_candidate(_previous_patch: str, failure: str, _attempt_number: int) -> str | None:
+                if not allowed_files or not source_context.rendered:
+                    return None
+                proposal = await generate_patch_with_llm(
+                    incident_summary=f"{title}\n{remediation_plan}",
+                    relevant_code=source_context.rendered,
+                    allowed_files=allowed_files,
+                    max_attempts=1,
+                    validation_feedback=failure,
+                )
+                return proposal.get("unified_diff") if proposal else None
+
+            try:
+                repair_result = await run_bounded_repair_loop(
+                    incident_id=incident_id,
+                    initial_patch=patch_text,
+                    validate=validate_candidate,
+                    revise=revise_candidate,
+                    record_attempt=lambda attempt: persist_repair_attempt(incident_id, attempt),
+                )
+                validation_result.evidence["repair_loop"] = repair_result.model_dump(mode="json")
+                prepared = candidate_holder.get("prepared")
+                if repair_result.completed and prepared:
+                    try:
+                        await asyncio.to_thread(
+                            self.worktree_service.push_prepared_branch,
+                            repo_path=self.git_correlation.repo_path,
+                            prepared=prepared,
+                            token=github_token,
+                            repo_name=repository,
+                        )
+                    except WorktreePreparationError as exc:
+                        validation_result.allowed = False
+                        validation_result.reason = DenyReason.CHECKS_FAILED
+                        validation_result.message = "Validated candidate could not be published"
+                        validation_result.checks_failed.append("candidate_validation")
+                        validation_result.evidence["candidate_validation"] = {
+                            "status": "validated_not_published",
+                            "commands": [list(command) for command in validation_commands],
+                            "required_checks": required_checks,
+                            "error": str(exc),
+                        }
+                        recommendation.allowed = False
+                        recommendation.risk_assessment["validation_passed"] = False
+                        recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
+                    else:
+                        prepared_branch = prepared.branch_name
+                        validation_result.checks_passed.append("candidate_validation")
+                        validation_result.evidence["candidate_validation"] = {
+                            "status": "passed",
+                            "commands": [list(command) for command in validation_commands],
+                            "required_checks": required_checks,
+                            "branch_name": prepared.branch_name,
+                            "commit_sha": prepared.commit_sha,
+                        }
+                else:
+                    if prepared:
+                        await asyncio.to_thread(
+                            self.worktree_service.delete_prepared_branch,
+                            self.git_correlation.repo_path,
+                            prepared.branch_name,
+                        )
+                    validation_result.allowed = False
+                    validation_result.reason = DenyReason.CHECKS_FAILED
+                    validation_result.message = "Candidate validation did not produce an auditable passing attempt"
+                    validation_result.checks_failed.append("candidate_validation")
+                    validation_result.required_actions.append("Review candidate validation evidence before retrying")
+                    validation_result.evidence["candidate_validation"] = {
+                        "status": "failed",
+                        "commands": [list(command) for command in validation_commands],
+                        "required_checks": required_checks,
+                        "error": repair_result.stop_reason.value,
+                        "attempts": [attempt.model_dump(mode="json") for attempt in repair_result.attempts],
+                    }
+                    recommendation.allowed = False
+                    recommendation.risk_assessment["validation_passed"] = False
+                    recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
             except WorktreeValidationError as exc:
                 logger.warning("Candidate patch validation failed: %s", exc)
                 validation_result.allowed = False
@@ -477,6 +554,11 @@ class RemediationService:
                 recommendation.next_steps = self._generate_next_steps(validation_result, recommendation)
             except WorktreePreparationError as exc:
                 logger.warning("Validated worktree preparation failed: %s", exc)
+                validation_result.allowed = False
+                validation_result.reason = DenyReason.CHECKS_FAILED
+                validation_result.message = "Candidate worktree preparation failed"
+                validation_result.checks_failed.append("candidate_validation")
+                recommendation.allowed = False
 
         if (
             recommendation.allowed

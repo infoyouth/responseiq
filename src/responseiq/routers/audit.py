@@ -25,10 +25,12 @@ GET /api/v1/audit/retention-policy
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, col, select
 
 from responseiq.config.settings import settings
@@ -37,6 +39,49 @@ from responseiq.models.base import AuditEventLog
 from responseiq.services.audit_service import AuditEventType
 
 router = APIRouter(prefix="/api/v1/audit", tags=["SOC2 Audit"])
+
+
+@router.get(
+    "/outcomes.jsonl",
+    summary="Export remediation outcomes as provenance-aware JSON Lines",
+    responses={200: {"description": "Append-only outcome ledger export in JSONL format"}},
+)
+def export_outcomes_jsonl(
+    limit: int = Query(default=1000, ge=1, le=10000),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+):
+    """Export outcome records in stable chronological order for external analysis."""
+    statement = (
+        select(AuditEventLog)
+        .where(AuditEventLog.event_type == AuditEventType.REMEDIATION_OUTCOME_RECORDED.value)
+        .order_by(col(AuditEventLog.id).asc())
+        .offset(offset)
+        .limit(limit)
+    )
+    events = session.exec(statement).all()
+
+    def lines():
+        for event in events:
+            try:
+                metrics = json.loads(event.metadata_json) if event.metadata_json else {}
+            except json.JSONDecodeError:
+                metrics = {"unparsed_metadata": event.metadata_json}
+            record = {
+                "record_id": event.id,
+                "incident_id": event.incident_id,
+                "source": event.actor,
+                "status": event.outcome,
+                "recorded_at": event.timestamp.isoformat(),
+                "metrics": metrics,
+            }
+            yield json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+
+    return StreamingResponse(
+        lines(),
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": 'attachment; filename="responseiq-outcomes.jsonl"'},
+    )
 
 
 @router.get(

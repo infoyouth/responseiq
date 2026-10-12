@@ -266,6 +266,7 @@ async def generate_patch_with_llm(
     relevant_code: str,
     allowed_files: list[str],
     max_attempts: int = 2,
+    validation_feedback: str | None = None,
 ) -> Optional[Dict[str, Any]]:
     """Generate a bounded structured patch proposal from Llama/OpenAI-compatible models."""
     if not settings.openai_api_key and not settings.llm_base_url:
@@ -275,11 +276,16 @@ async def generate_patch_with_llm(
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
 
+    feedback = validation_feedback or ""
+    if feedback and settings.scrub_enabled:
+        feedback, _ = scrub(feedback)
+
     prompt = (
         f"INCIDENT:\n{incident_summary}\n\n"
         f"ALLOWED FILES:\n{chr(10).join(allowed_files)}\n\n"
         f"SOURCE CODE:\n{relevant_code}\n\n"
-        "Return one minimal patch. The diff must apply to the supplied source files."
+        + (f"PREVIOUS VALIDATION FAILURE:\n{feedback}\n\n" if feedback else "")
+        + "Return one minimal patch. The diff must apply to the supplied source files."
     )
     model = _router.model_for("analyze")
     client = _get_instructor_client()
