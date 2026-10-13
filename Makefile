@@ -34,6 +34,7 @@ test-safety:  ## Run fast regression tests for provenance, graph, and candidate 
 	uv run pytest \
 		tests/unit/test_artifact_provenance.py \
 		tests/unit/test_causal_graph.py \
+		tests/unit/test_otel_context.py \
 		tests/unit/test_sandbox_runner.py \
 		tests/unit/test_worktree_service.py \
 		tests/unit/test_remediation_service.py \
@@ -42,6 +43,7 @@ test-safety:  ## Run fast regression tests for provenance, graph, and candidate 
 		tests/unit/test_feedback.py \
 		tests/unit/test_audit_service.py \
 		tests/unit/test_cli.py \
+		tests/unit/test_fix_plugin.py \
 		tests/e2e/test_remediation_e2e.py \
 		tests/fixtures/test_sandbox_regressions.py \
 		tests/fixtures/test_fixture_replay.py -q

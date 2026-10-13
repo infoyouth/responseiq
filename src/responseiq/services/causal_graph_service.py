@@ -123,10 +123,15 @@ def build_causal_graph(
     service_name = None
     trace_id = None
     span_id = None
+    raw_telemetry_provenance = (analysis_result or {}).get("telemetry_provenance") or {}
+    telemetry_provenance = raw_telemetry_provenance if isinstance(raw_telemetry_provenance, dict) else {}
     if analysis_result:
-        service_name = (analysis_result or {}).get("service")
-        trace_id = (analysis_result or {}).get("trace_id")
-        span_id = (analysis_result or {}).get("span_id")
+        if telemetry_provenance.get("service_name"):
+            service_name = analysis_result.get("service")
+        if telemetry_provenance.get("trace_id"):
+            trace_id = analysis_result.get("trace_id")
+        if telemetry_provenance.get("span_id"):
+            span_id = analysis_result.get("span_id")
 
     if service_name is None and deployment_correlation is not None:
         service_name = deployment_correlation.event.service
@@ -139,6 +144,12 @@ def build_causal_graph(
             service_metadata["trace_id"] = str(trace_id)
         if span_id:
             service_metadata["span_id"] = str(span_id)
+        if telemetry_provenance:
+            service_metadata["telemetry_provenance"] = telemetry_provenance
+        for field in ("deployment_environment_name", "deployment_id", "telemetry_observed_at"):
+            value = (analysis_result or {}).get(field)
+            if value:
+                service_metadata[field] = str(value)
         nodes.append(
             CausalNode(
                 id=service_node_id,
@@ -191,14 +202,18 @@ def build_causal_graph(
             )
             edge_confidences.append(conf)
 
-    if service_node_id and error_node_id:
+    if service_node_id and error_node_id and telemetry_provenance.get("service_name"):
         edges.append(
             CausalEdge(
                 source_id=service_node_id,
                 target_id=error_node_id,
                 type=EdgeType.CORRELATED,
-                label="service emitted the incident signal",
+                label="OTel service identity is attached to the same incident record",
                 confidence=0.8,
+                evidence={
+                    "basis": "same_otel_log_record",
+                    "fields": telemetry_provenance,
+                },
             )
         )
         edge_confidences.append(0.8)
@@ -270,7 +285,7 @@ def build_causal_graph(
     if latency_node_id:
         summary_parts.append(f"latency regression of +{getattr(perf_result, 'delta_pct', 0):.1f}% was observed")
     if service_name:
-        summary_parts.append(f"service '{service_name}' emitted the incident trace context")
+        summary_parts.append(f"service context '{service_name}' was attached to the incident")
     if error_node_id:
         summary_parts.append(f"error '{title}' (severity: {severity}) was triggered")
     if proof_bundle and getattr(proof_bundle, "reproduction_test", None):

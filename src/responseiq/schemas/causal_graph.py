@@ -52,6 +52,7 @@ class CausalEdge(BaseModel):
     type: EdgeType = EdgeType.CAUSED
     label: Optional[str] = None
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    evidence: Dict[str, Any] = Field(default_factory=dict)
 
 
 class CausalGraph(BaseModel):
