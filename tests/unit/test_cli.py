@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import at module level — avoids module-cache pollution in xdist workers
-from responseiq.cli import _run_demo, _run_doctor, main
+from responseiq.cli import _print_result, _run_demo, _run_doctor, main
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +110,54 @@ class TestRunDemoFallback:
 # main() — demo / init subcommand dispatch
 # ---------------------------------------------------------------------------
 class TestMainSubcommandDispatch:
+    def test_fix_report_uses_lifecycle_status_and_supported_policy_modes(self, capsys):
+        _print_result(
+            "fix",
+            {
+                "fix_result": "success",
+                "fix_status": "recommendations_ready",
+                "fixes": [
+                    {
+                        "title": "Pool leak",
+                        "severity": "high",
+                        "allowed": True,
+                        "confidence": 0.9,
+                        "impact_score": 80.0,
+                        "blast_radius": "single_service",
+                        "execution_mode": "pr_only",
+                        "evidence": {},
+                        "next_steps": [],
+                    }
+                ],
+                "total_scanned": 1,
+                "total_recommendations": 1,
+                "total_blocked": 0,
+                "total_validated": 0,
+                "total_draft_prs": 0,
+                "total_applied": 0,
+                "context": {"args": {"target": "incident.log"}},
+            },
+        )
+
+        output = capsys.readouterr().out
+        assert "Status : RECOMMENDATIONS READY" in output
+        assert "Recommendations : 1" in output
+        assert "Applied         : 0" in output
+        assert "Fixes    :" not in output
+        assert "RESPONSEIQ_POLICY_MODE=apply" not in output
+        assert "guarded_apply" in output
+
+    def test_fix_report_distinguishes_empty_input_from_no_actionable_incidents(self, capsys):
+        base_state = {"fixes": [], "context": {"args": {"target": "incident.log"}}}
+        _print_result("fix", base_state | {"fix_status": "no_incidents"})
+        empty_output = capsys.readouterr().out
+        assert "No incident records found." in empty_output
+        assert "No actionable incidents" not in empty_output
+
+        _print_result("fix", base_state | {"fix_status": "no_actionable_incidents"})
+        no_action_output = capsys.readouterr().out
+        assert "No actionable incidents found" in no_action_output
+
     def test_demo_subcommand_calls_run_demo_and_exits(self, monkeypatch):
         """main() with 'demo' as argv[1] calls _run_demo and sys.exit(0)."""
         monkeypatch.setattr(sys, "argv", ["responseiq", "demo"])

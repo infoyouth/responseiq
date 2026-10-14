@@ -318,6 +318,29 @@ class TestSuccessfulRemediation:
         state = self._patched_run(tmp_path, incidents, recs)
         assert state["fix_result"] == "success"
         assert state["total_fixed"] == 1
+        assert state["total_recommendations"] == 1
+        assert state["total_applied"] == 0
+
+    def test_outcome_counts_distinguish_recommendations_validation_prs_and_application(self, tmp_path):
+        incidents = [_make_incident_out(severity="high") for _ in range(3)]
+        blocked = _make_recommendation(allowed=False)
+        blocked.to_dict.return_value["evidence"] = {"candidate_validation": {"status": "failed"}}
+        validated_pr = _make_recommendation()
+        validated_pr.to_dict.return_value["evidence"] = {"candidate_validation": {"status": "passed"}}
+        validated_pr.to_dict.return_value["draft_pr_url"] = "https://example.test/pull/1"
+        applied_with_evidence = _make_recommendation()
+        applied_with_evidence.to_dict.return_value["evidence"] = {"application": {"status": "applied"}}
+
+        state = self._patched_run(tmp_path, incidents, [blocked, validated_pr, applied_with_evidence])
+
+        assert state["fix_result"] == "success"
+        assert state["fix_status"] == "draft_prs_opened"
+        assert state["total_recommendations"] == 3
+        assert state["total_blocked"] == 1
+        assert state["total_validated"] == 1
+        assert state["total_draft_prs"] == 1
+        assert state["total_applied"] == 1
+        assert state["total_fixed"] == 3
 
     def test_total_scanned_reflects_input_lines(self, tmp_path):
         incidents = [_make_incident_out(severity="high")] * 4
@@ -353,6 +376,9 @@ class TestSuccessfulRemediation:
         assert fix["rollback_plan"] == "git revert HEAD"
         assert fix["test_plan"] == "pytest tests/"
         assert fix["checks_passed"] == ["policy_ok", "safety_ok"]
+        assert state["fix_status"] == "blocked"
+        assert state["total_blocked"] == 1
+        assert state["total_applied"] == 0
 
 
 # ---------------------------------------------------------------------------

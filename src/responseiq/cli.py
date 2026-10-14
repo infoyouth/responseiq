@@ -727,6 +727,7 @@ def _print_result(mode: str, state: dict, explain: bool = False) -> None:
 
     elif mode == "fix":
         result = state.get("fix_result", "unknown")
+        outcome_status = state.get("fix_status", result)
         error = state.get("fix_error")
         fixes: list = state.get("fixes", [])
         total = state.get("total_scanned", 0)
@@ -735,7 +736,7 @@ def _print_result(mode: str, state: dict, explain: bool = False) -> None:
         print(sep)
         print("  ResponseIQ Fix Report")
         print(f"  Target : {target}")
-        print(f"  Status : {result.upper()}")
+        print(f"  Status : {str(outcome_status).replace('_', ' ').upper()}")
         print(sep)
 
         if error:
@@ -744,12 +745,19 @@ def _print_result(mode: str, state: dict, explain: bool = False) -> None:
             return
 
         if not fixes:
-            print("  No actionable incidents found (severity < HIGH).")
+            if outcome_status == "no_incidents":
+                print("  No incident records found.")
+            else:
+                print("  No actionable incidents found (severity < HIGH).")
             print(sep)
             return
 
         print(f"  Scanned  : {total} message(s)")
-        print(f"  Fixes    : {len(fixes)} remediation(s) generated")
+        print(f"  Recommendations : {state.get('total_recommendations', len(fixes))}")
+        print(f"  Blocked         : {state.get('total_blocked', 0)}")
+        print(f"  Validated       : {state.get('total_validated', 0)}")
+        print(f"  Draft PRs       : {state.get('total_draft_prs', 0)}")
+        print(f"  Applied         : {state.get('total_applied', 0)}")
         print(sep)
 
         for i, fix in enumerate(fixes, 1):
@@ -757,7 +765,7 @@ def _print_result(mode: str, state: dict, explain: bool = False) -> None:
             icon = _SEVERITY_ICON.get(severity, f"[{severity.upper()[:6]}]")
             title = fix.get("title") or "Untitled"
             print(f"  {i}. {icon} {title}")
-            print(f"     Allowed         : {'YES' if fix.get('allowed') else 'NO (suggest_only)'}")
+            print(f"     Trust Gate      : {'APPROVED' if fix.get('allowed') else 'BLOCKED'}")
             print(f"     Confidence      : {fix.get('confidence', 0):.0%}")
             print(f"     Impact Score    : {fix.get('impact_score', 0):.1f}/100")
             print(f"     Blast Radius    : {fix.get('blast_radius', 'unknown')}")
@@ -780,13 +788,26 @@ def _print_result(mode: str, state: dict, explain: bool = False) -> None:
                 print(f"     Checks Passed   : {', '.join(passed[:4])}")
             if failed:
                 print(f"     Checks Failed   : {', '.join(failed[:4])}")
+            evidence = fix.get("evidence") if isinstance(fix.get("evidence"), dict) else {}
+            candidate = evidence.get("candidate_validation")
+            if isinstance(candidate, dict):
+                print(f"     Candidate Check : {candidate.get('status', 'unknown')}")
+            print(f"     Draft PR        : {fix.get('draft_pr_url') or 'not opened'}")
+            application = evidence.get("application")
+            applied = fix.get("applied") is True or (
+                isinstance(application, dict) and application.get("status") == "applied"
+            )
+            print(f"     Applied         : {'yes' if applied else 'no'}")
             next_steps = fix.get("next_steps") or []
             for ns in next_steps[:3]:
                 print(f"     Next Step       : {ns[:100]}")
             print()
 
         print(sep)
-        print("  Trust Gate: set RESPONSEIQ_POLICY_MODE=apply to execute changes.")
+        print(
+            "  Policy modes: suggest_only (recommend), pr_only (human-reviewed draft PR), "
+            "guarded_apply (explicit opt-in where supported)."
+        )
         print(sep)
 
         if explain:
