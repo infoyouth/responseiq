@@ -1,8 +1,10 @@
+import hashlib
 import json
 import subprocess
 from pathlib import Path
 
 import pytest
+from sqlmodel import Session, SQLModel, create_engine
 
 from responseiq.schemas.proof import ContextResolutionReason
 from responseiq.utils.artifact_provenance import (
@@ -10,6 +12,8 @@ from responseiq.utils.artifact_provenance import (
     ProvenanceError,
     ProvenanceRegistry,
     ProvenanceResolver,
+    SigstoreProvenanceVerifier,
+    persist_verified_provenance,
 )
 from responseiq.utils.context_extractor import extract_source_context
 
@@ -131,6 +135,18 @@ async def test_checkout_at_different_commit_fails_closed(repo):
 
 
 @pytest.mark.asyncio
+async def test_dirty_checkout_fails_closed(repo):
+    root, commit = repo
+    resolver = _resolver(_record(root, commit))
+    (root / "services" / "payments" / "app.py").write_text("def charge():\n    return 1\n")
+
+    result = await resolver.resolve("services/payments/app.py", 2)
+
+    assert not result.ok
+    assert result.failure.reason == ContextResolutionReason.PROVENANCE_MISMATCH
+
+
+@pytest.mark.asyncio
 async def test_non_git_source_root_fails_closed(tmp_path):
     (tmp_path / "app.py").write_text("x = 1\n")
     resolver = _resolver(_record(tmp_path, "c" * 40))
@@ -168,6 +184,113 @@ async def test_symlink_escape_is_rejected(repo, tmp_path):
     assert not result.ok
 
 
+def _verifier_fixture(commit: str, *, digest: str = DIGEST, repository: str = "acme/payments"):
+    statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [{"name": "image", "digest": {"sha256": digest.removeprefix("sha256:")}}],
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {
+            "buildDefinition": {
+                "resolvedDependencies": [
+                    {
+                        "uri": f"git+https://github.com/{repository}@refs/heads/main",
+                        "digest": {"gitCommit": commit},
+                    }
+                ]
+            }
+        },
+    }
+
+    class FakeVerifier:
+        def __init__(self):
+            self.policy = None
+
+        def verify_dsse(self, bundle, policy):
+            self.policy = policy
+            return "application/vnd.in-toto+json", json.dumps(statement).encode()
+
+    backend = FakeVerifier()
+    verifier = SigstoreProvenanceVerifier(
+        "https://github.com/acme/payments/.github/workflows/build.yml@refs/heads/main",
+        verifier=backend,
+        bundle_loader=lambda raw: raw,
+        identity_policy_factory=lambda identity, issuer: (identity, issuer),
+    )
+    return verifier, backend
+
+
+def test_sigstore_verifier_requires_configured_identity_and_matching_slsa(repo):
+    root, commit = repo
+    verifier, backend = _verifier_fixture(commit)
+
+    record, bundle_sha, predicate_type = verifier.verify(b"signed-bundle", DIGEST, "acme/payments", root)
+
+    assert record.commit_sha == commit
+    assert record.repository == "acme/payments"
+    assert backend.policy == (
+        "https://github.com/acme/payments/.github/workflows/build.yml@refs/heads/main",
+        "https://token.actions.githubusercontent.com",
+    )
+    assert bundle_sha == hashlib.sha256(b"signed-bundle").hexdigest()
+    assert predicate_type == "https://slsa.dev/provenance/v1"
+
+
+@pytest.mark.parametrize(
+    ("requested_digest", "repository"),
+    [("sha256:" + "b" * 64, "acme/payments"), (DIGEST, "acme/other")],
+)
+def test_sigstore_verifier_rejects_wrong_artifact_subject_or_repository(repo, requested_digest, repository):
+    root, commit = repo
+    verifier, _ = _verifier_fixture(commit)
+
+    with pytest.raises(ProvenanceError):
+        verifier.verify(b"signed-bundle", requested_digest, repository, root)
+
+
+def test_sigstore_verifier_rejects_failed_signature(repo):
+    root, commit = repo
+    verifier, _ = _verifier_fixture(commit)
+
+    class RejectingVerifier:
+        def verify_dsse(self, bundle, policy):
+            raise ValueError("untrusted signer")
+
+    verifier._verifier = RejectingVerifier()
+    with pytest.raises(ProvenanceError, match="DSSE verification failed"):
+        verifier.verify(b"unsigned", DIGEST, "acme/payments", root)
+
+
+def test_persists_verified_provenance_idempotently_and_loads_it(repo):
+    root, commit = repo
+    verifier, _ = _verifier_fixture(commit)
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        stored = persist_verified_provenance(session, verifier, b"signed-bundle", DIGEST, "acme/payments", root)
+        assert persist_verified_provenance(session, verifier, b"signed-bundle", DIGEST, "acme/payments", root) == stored
+        session.commit()
+        registry = ProvenanceRegistry.from_session(session)
+
+    assert registry.get(DIGEST).commit_sha == commit
+    assert stored.bundle_sha256 == hashlib.sha256(b"signed-bundle").hexdigest()
+    assert stored.bundle_json == "signed-bundle"
+
+
+def test_conflicting_verified_provenance_is_rejected(repo):
+    root, commit = repo
+    verifier, _ = _verifier_fixture(commit)
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        persist_verified_provenance(session, verifier, b"signed-bundle", DIGEST, "acme/payments", root)
+        conflicting, _ = _verifier_fixture(commit)
+        conflicting.signer_identity = "different-trusted-identity"
+        with pytest.raises(ProvenanceError, match="conflicting"):
+            persist_verified_provenance(session, conflicting, b"signed-bundle", DIGEST, "acme/payments", root)
+
+
 @pytest.mark.asyncio
 async def test_extractor_uses_provenance_resolver_and_records_failures(repo):
     root, commit = repo
@@ -183,3 +306,19 @@ async def test_extractor_uses_provenance_resolver_and_records_failures(repo):
     )
     assert missing.rendered == ""
     assert missing.failures[0].reason == ContextResolutionReason.PROVENANCE_MISMATCH
+
+
+@pytest.mark.asyncio
+async def test_required_provenance_never_falls_back_to_local_resolution(repo):
+    root, _ = repo
+    stale = _resolver(_record(root, "d" * 40, path_prefix="/app"))
+
+    context = await extract_source_context(
+        'File "/app/services/payments/app.py", line 2, in charge',
+        root_path=root,
+        resolver=stale,
+        require_resolver=True,
+    )
+
+    assert context.rendered == ""
+    assert context.failures[0].reason == ContextResolutionReason.PROVENANCE_MISMATCH

@@ -97,6 +97,23 @@ class ProofBundleRecord(SQLModel, table=True):  # type: ignore[call-arg]
     created_at: datetime = Field(default_factory=_now)
 
 
+class ArtifactProvenanceRecord(SQLModel, table=True):  # type: ignore[call-arg]
+    """Verified artifact provenance, keyed by immutable artifact digest."""
+
+    __table_args__ = {"extend_existing": True}
+    artifact_digest: str = Field(primary_key=True)
+    repository: str
+    commit_sha: str
+    source_root: str
+    path_prefix: str = ""
+    signer_identity: str
+    signer_issuer: str
+    bundle_sha256: str
+    bundle_json: str
+    predicate_type: str
+    verified_at: datetime = Field(default_factory=_now)
+
+
 class AuditEventLog(SQLModel, table=True):  # type: ignore[call-arg]
     """SOC2 CC6/CC7: Immutable, append-only audit event log.
 

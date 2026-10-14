@@ -14,6 +14,7 @@ from .config.settings import settings
 
 # Reuse models from responseiq.models to avoid duplicate table definitions
 from .models.base import (  # noqa: F401
+    ArtifactProvenanceRecord,
     AuditEventLog,
     FeedbackRecord,
     Incident,
