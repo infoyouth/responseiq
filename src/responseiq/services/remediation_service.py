@@ -17,8 +17,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from sqlmodel import Session
+
 from responseiq.ai.llm_service import analyze_with_llm, generate_patch_with_llm
 from responseiq.config.policy_config import DenyReason, PolicyMode
+from responseiq.db import get_engine
 from responseiq.schemas.causal_graph import CausalGraph
 from responseiq.schemas.deployment import DeploymentCorrelationResult, DeploymentEvent
 from responseiq.schemas.outcome import OutcomeLedgerEntry, OutcomeSource, OutcomeStatus
@@ -49,6 +52,7 @@ from responseiq.services.worktree_service import (
     WorktreeValidationError,
 )
 from responseiq.utils.context_extractor import extract_source_context
+from responseiq.utils.artifact_provenance import ProvenanceRegistry, ProvenanceResolver
 from responseiq.utils.k8s_patcher import KubernetesPatcher
 from responseiq.utils.logger import logger
 
@@ -193,9 +197,22 @@ class RemediationService:
         # Step 1: Extract and analyze incident data
         log_content = incident.get("log_content") or incident.get("reason") or "No log provided"
         severity = incident.get("severity", "medium").lower()
+        artifact_digest = incident.get("artifact_digest")
+        provenance_resolver = None
+        require_provenance = bool(artifact_digest)
+        if require_provenance:
+            registry = ProvenanceRegistry()
+            try:
+                with Session(get_engine()) as session:
+                    registry = ProvenanceRegistry.from_session(session, str(artifact_digest))
+            except Exception as exc:
+                logger.warning("Unable to load artifact provenance for {}: {}", artifact_digest, exc)
+            provenance_resolver = ProvenanceResolver(registry, str(artifact_digest))
         source_context = await extract_source_context(
             log_content,
             root_path=Path(context_path) if context_path else Path("."),
+            resolver=provenance_resolver,
+            require_resolver=require_provenance,
         )
 
         # Step 2: AI analysis for remediation plan (P5: timed for performance gate)

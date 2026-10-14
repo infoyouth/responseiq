@@ -90,6 +90,7 @@ async def extract_source_context(
     root_path: Path = Path("."),
     *,
     resolver: Optional["MultiRepoResolver"] = None,  # type: ignore[name-defined]  # noqa: F821
+    require_resolver: bool = False,
     context_failures: Optional[List[ContextResolutionFailure]] = None,
 ) -> SourceContext:
     """
@@ -132,6 +133,9 @@ async def extract_source_context(
                     if result.ok:
                         local_file = result.resolved_path
                     elif result.failure is not None:
+                        if require_resolver:
+                            failures.append(result.failure)
+                            continue
                         # Resolver returned a structured failure — fall through to
                         # the legacy path resolver before recording the failure.
                         legacy = resolve_local_path(file_path_str, root_path)
@@ -190,6 +194,7 @@ async def extract_context_from_log(
     root_path: Path = Path("."),
     *,
     resolver: Optional["MultiRepoResolver"] = None,  # type: ignore[name-defined]  # noqa: F821
+    require_resolver: bool = False,
     context_failures: Optional[List[ContextResolutionFailure]] = None,
 ) -> str:
     """Return rendered source context for legacy callers."""
@@ -197,6 +202,7 @@ async def extract_context_from_log(
         log_text,
         root_path,
         resolver=resolver,
+        require_resolver=require_resolver,
         context_failures=context_failures,
     )
     return context.rendered

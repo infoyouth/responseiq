@@ -83,6 +83,7 @@ responseiq = "responseiq.cli:main"
 responseiq-mcp = "responseiq.mcp_server:main"
 
 [project.optional-dependencies]
+provenance = ["sigstore>=4.5,<5"]
 temporal = ["temporalio>=1.0.0"]
 pgvector = ["pgvector>=0.3.0"]
 ner = ["spacy>=3.7.0"]
