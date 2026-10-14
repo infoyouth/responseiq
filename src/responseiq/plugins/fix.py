@@ -13,7 +13,7 @@ import asyncio
 import shlex
 import uuid
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from loguru import logger
 
@@ -24,6 +24,51 @@ from responseiq.utils.otel_context import parse_otel_json_log_line
 from .base import BasePlugin
 
 
+def _summarize_outcomes(fixes: list[dict]) -> dict[str, int | str]:
+    """Count recommendations, validation, PR, and application as separate events."""
+    blocked = 0
+    validated = 0
+    draft_prs = 0
+    applied = 0
+    for fix in fixes:
+        if not fix.get("allowed", False):
+            blocked += 1
+        raw_evidence = fix.get("evidence")
+        evidence: dict[str, Any] = raw_evidence if isinstance(raw_evidence, dict) else {}
+        candidate = evidence.get("candidate_validation")
+        candidate_status = None
+        if isinstance(candidate, dict):
+            candidate_status = candidate.get("status")
+        if candidate_status in {"passed", "validated_not_published"}:
+            validated += 1
+        if fix.get("draft_pr_url"):
+            draft_prs += 1
+        application = evidence.get("application")
+        application_status = application.get("status") if isinstance(application, dict) else None
+        if fix.get("applied") is True or application_status == "applied":
+            applied += 1
+
+    recommendations = len(fixes)
+    if recommendations == 0:
+        status = "no_actionable_incidents"
+    elif blocked == recommendations:
+        status = "blocked"
+    elif draft_prs:
+        status = "draft_prs_opened"
+    elif validated:
+        status = "validated_for_review"
+    else:
+        status = "recommendations_ready"
+    return {
+        "fix_status": status,
+        "total_recommendations": recommendations,
+        "total_blocked": blocked,
+        "total_validated": validated,
+        "total_draft_prs": draft_prs,
+        "total_applied": applied,
+    }
+
+
 class FixPlugin(BasePlugin):
     def run(self, agent_state: dict) -> dict:
         agent_state = agent_state.copy()
@@ -31,6 +76,7 @@ class FixPlugin(BasePlugin):
 
         if not target:
             agent_state["fix_result"] = "error"
+            agent_state["fix_status"] = "error"
             agent_state["fix_error"] = (
                 "No --target specified. Use --target <file_or_directory> or --target - to read from stdin."
             )
@@ -44,12 +90,15 @@ class FixPlugin(BasePlugin):
             target_path = Path(target)
             if not target_path.exists():
                 agent_state["fix_result"] = "error"
+                agent_state["fix_status"] = "error"
                 agent_state["fix_error"] = f"Target not found: {target}"
                 return agent_state
             messages = self._collect_messages(target_path)
         if not messages:
             agent_state["fix_result"] = "no_incidents"
+            agent_state["fix_status"] = "no_incidents"
             agent_state["fixes"] = []
+            agent_state.update(_summarize_outcomes([]))
             return agent_state
 
         async def _run_all(msgs: List[str]) -> list:
@@ -127,6 +176,8 @@ class FixPlugin(BasePlugin):
         agent_state["fix_result"] = "success" if fixes else "no_actionable_incidents"
         agent_state["fixes"] = fixes
         agent_state["total_scanned"] = len(messages)
+        agent_state.update(_summarize_outcomes(fixes))
+        # Deprecated compatibility alias: historically this counted recommendations.
         agent_state["total_fixed"] = len(fixes)
         return agent_state
 
