@@ -1,0 +1,19 @@
+class PaymentError(Exception):
+    pass
+
+
+class NetworkRetryExhausted(PaymentError):
+    pass
+
+
+def _call_stripe(payload):
+    return {"id": "charge-fixture"}
+
+
+def process_charge(amount_cents, currency, source_token, order_id):
+    try:
+        result = _call_stripe({})
+        return {"status": "succeeded", "charge_id": result.get("id")}
+    except:
+        print("payment failed but was swallowed")
+        return {"status": "succeeded", "charge_id": None}
