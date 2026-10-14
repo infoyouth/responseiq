@@ -1,6 +1,6 @@
 
 
-.PHONY: all sync install dev-install lint format format-check test test-safety coverage-test replay-fixtures run build deploy \
+.PHONY: all sync install dev-install lint format format-check test test-safety test-sandbox-security coverage-test replay-fixtures run build deploy \
 	mypy security dependency-audit package-smoke lock-check docker-build docker-up ci check help \
 	sand sand-v sand-payment sand-auth sand-inventory sand-fastapi sand-flask sand-setup
 
@@ -47,6 +47,10 @@ test-safety:  ## Run fast regression tests for provenance, graph, and candidate 
 		tests/e2e/test_remediation_e2e.py \
 		tests/fixtures/test_sandbox_regressions.py \
 		tests/fixtures/test_fixture_replay.py -q
+
+
+test-sandbox-security:  ## Require bubblewrap namespaces and run adversarial sandbox/replay probes
+	RESPONSEIQ_REQUIRE_SANDBOX=1 uv run pytest tests/unit/test_sandbox_runner.py tests/fixtures/test_fixture_replay.py -q
 
 
 replay-fixtures:  ## Replay pinned synthetic incidents in the sandbox and emit JSONL outcomes

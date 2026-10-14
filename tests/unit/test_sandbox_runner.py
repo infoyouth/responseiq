@@ -2,6 +2,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import os
 
 import pytest
 
@@ -9,9 +10,13 @@ from responseiq.services.sandbox_runner import SandboxExecutionError, SandboxLim
 
 
 def _require_bwrap():
+    require_sandbox = os.environ.get("RESPONSEIQ_REQUIRE_SANDBOX") == "1"
     bwrap = shutil.which("bwrap")
     if bwrap is None:
-        pytest.skip("bubblewrap is unavailable")
+        message = "bubblewrap is unavailable"
+        if require_sandbox:
+            pytest.fail(message)
+        pytest.skip(message)
     probe = subprocess.run(
         [
             bwrap,
@@ -28,7 +33,11 @@ def _require_bwrap():
         check=False,
     )
     if probe.returncode != 0:
-        pytest.skip("bubblewrap namespaces are unavailable")
+        detail = probe.stderr.decode("utf-8", errors="replace").strip()
+        message = f"bubblewrap namespaces are unavailable: {detail}"
+        if require_sandbox:
+            pytest.fail(message)
+        pytest.skip(message)
     return bwrap
 
 
