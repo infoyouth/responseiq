@@ -26,6 +26,7 @@ FIXTURE_ROOT = Path(__file__).resolve().parent / "regressions"
 class ReplayCase:
     case_id: str
     source_path: Path
+    source_name: str
     fixture_dir: Path
     script: str
 
@@ -33,7 +34,8 @@ class ReplayCase:
 CASES = (
     ReplayCase(
         "auth-refresh-missing-last-seen",
-        REPO_ROOT / "sandbox/services/auth_service.py",
+        FIXTURE_ROOT / "auth" / "auth_service.py.fixture",
+        "auth_service.py",
         FIXTURE_ROOT / "auth",
         "from auth_service import login, refresh_session\n"
         "session = login('fixture@example.com', 'password-hash')\n"
@@ -41,7 +43,8 @@ CASES = (
     ),
     ReplayCase(
         "payment-upstream-error-swallowed",
-        REPO_ROOT / "sandbox/services/payment_service.py",
+        FIXTURE_ROOT / "payment" / "payment_service.py.fixture",
+        "payment_service.py",
         FIXTURE_ROOT / "payment",
         "import payment_service\n"
         "def fail(_payload):\n"
@@ -56,7 +59,8 @@ CASES = (
     ),
     ReplayCase(
         "inventory-empty-result-pool-leak",
-        REPO_ROOT / "sandbox/services/inventory_service.py",
+        FIXTURE_ROOT / "inventory" / "inventory_service.py.fixture",
+        "inventory_service.py",
         FIXTURE_ROOT / "inventory",
         "import inventory_service\nfor _ in range(16):\n    inventory_service.get_low_stock_items()\n",
     ),
@@ -99,7 +103,7 @@ async def replay_fixture_cases() -> list[OutcomeLedgerEntry]:
     for case in CASES:
         expected = FixtureSpec(case.source_path, case.fixture_dir).expected
         expected_failure = str(expected["expected_failure"])
-        fixture = FixtureRunner(FixtureSpec(case.source_path, case.fixture_dir))
+        fixture = FixtureRunner(FixtureSpec(case.source_path, case.fixture_dir, case.source_name))
         started_at = time.monotonic()
 
         with tempfile.TemporaryDirectory(prefix=f"responseiq-replay-{case.case_id}-") as temporary:

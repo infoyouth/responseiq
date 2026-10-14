@@ -15,6 +15,11 @@ class FixtureSpec:
 
     source_path: Path
     fixture_dir: Path
+    source_name: str | None = None
+
+    @property
+    def target_name(self) -> str:
+        return self.source_name or self.source_path.name
 
     @property
     def expected(self) -> dict[str, object]:
@@ -31,7 +36,7 @@ class FixtureRunner:
     def prepare(self, root: Path, *, patched: bool = False, name: str | None = None) -> Path:
         module_dir = root / (name or self.spec.fixture_dir.name)
         module_dir.mkdir()
-        (module_dir / self.spec.source_path.name).write_bytes(self.spec.source_path.read_bytes())
+        (module_dir / self.spec.target_name).write_bytes(self.spec.source_path.read_bytes())
         if patched:
             self.apply_patch(module_dir)
         return module_dir

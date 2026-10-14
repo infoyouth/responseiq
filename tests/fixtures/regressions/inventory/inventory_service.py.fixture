@@ -1,0 +1,31 @@
+class _PoolExhaustedError(Exception):
+    pass
+
+
+_open_connections = 0
+
+
+class _Connection:
+    def execute(self, query):
+        return []
+
+    def close(self):
+        global _open_connections
+        _open_connections -= 1
+
+
+def _connect():
+    global _open_connections
+    if _open_connections >= 15:
+        raise _PoolExhaustedError("connection pool exhausted")
+    _open_connections += 1
+    return _Connection()
+
+
+def get_low_stock_items():
+    conn = _connect()
+    rows = conn.execute("SELECT * FROM inventory WHERE qty < low_stock_threshold")
+    if not rows:
+        return []
+    conn.close()
+    return rows

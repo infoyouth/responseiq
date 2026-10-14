@@ -232,6 +232,35 @@ jobs:
           path: reports/coverage-html/
           retention-days: 14
 
+  sandbox-security:
+    name: 🔒 Adversarial sandbox checks
+    needs: check-changes
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    if: needs.check-changes.outputs.python == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: ⚡ Install UV
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
+      - name: 📦 Sync dependencies
+        run: uv sync --group dev --active
+      - name: 🫧 Install Bubblewrap
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y bubblewrap
+      - name: 🔍 Require user and network namespaces
+        run: |
+          bwrap --unshare-user --unshare-net --die-with-parent --ro-bind / / -- /usr/bin/true
+      - name: 🧪 Run non-skipping sandbox and replay probes
+        run: make test-sandbox-security
 
   # Merged into quality-checks
   # security-scan: ... REMOVED ...
@@ -259,6 +288,7 @@ jobs:
     needs:
       - check-changes
       - quality-checks
+      - sandbox-security
       - check-docker-build
       - license-check
     if: always()
@@ -268,6 +298,7 @@ jobs:
         run: |
           echo "One or more required jobs failed or were cancelled."
           echo "quality-checks:    ${{ needs.quality-checks.result }}"
+          echo "sandbox-security:  ${{ needs.sandbox-security.result }}"
           echo "check-docker-build: ${{ needs.check-docker-build.result }}"
           echo "license-check:     ${{ needs.license-check.result }}"
           exit 1

@@ -10,16 +10,16 @@ from fixture_runner import FixtureRunner, FixtureSpec
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AUTH_SOURCE = REPO_ROOT / "sandbox" / "services" / "auth_service.py"
 AUTH_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "regressions" / "auth"
-PAYMENT_SOURCE = REPO_ROOT / "sandbox" / "services" / "payment_service.py"
+AUTH_SOURCE = AUTH_FIXTURE / "auth_service.py.fixture"
 PAYMENT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "regressions" / "payment"
-INVENTORY_SOURCE = REPO_ROOT / "sandbox" / "services" / "inventory_service.py"
+PAYMENT_SOURCE = PAYMENT_FIXTURE / "payment_service.py.fixture"
 INVENTORY_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "regressions" / "inventory"
+INVENTORY_SOURCE = INVENTORY_FIXTURE / "inventory_service.py.fixture"
 
-AUTH = FixtureRunner(FixtureSpec(AUTH_SOURCE, AUTH_FIXTURE))
-PAYMENT = FixtureRunner(FixtureSpec(PAYMENT_SOURCE, PAYMENT_FIXTURE))
-INVENTORY = FixtureRunner(FixtureSpec(INVENTORY_SOURCE, INVENTORY_FIXTURE))
+AUTH = FixtureRunner(FixtureSpec(AUTH_SOURCE, AUTH_FIXTURE, "auth_service.py"))
+PAYMENT = FixtureRunner(FixtureSpec(PAYMENT_SOURCE, PAYMENT_FIXTURE, "payment_service.py"))
+INVENTORY = FixtureRunner(FixtureSpec(INVENTORY_SOURCE, INVENTORY_FIXTURE, "inventory_service.py"))
 
 
 def _run_auth_flow(runner: FixtureRunner, module_dir: Path):
@@ -39,7 +39,7 @@ def _run_script(runner: FixtureRunner, module_dir: Path, script: str):
 @pytest.mark.parametrize("runner", [AUTH, PAYMENT, INVENTORY], ids=["auth", "payment", "inventory"])
 def test_fixture_contract_metadata_is_complete(runner: FixtureRunner) -> None:
     expected = runner.spec.expected
-    assert expected["affected_files"] == [runner.spec.source_path.name]
+    assert expected["affected_files"] == [runner.spec.target_name]
     assert expected["expected_failure"]
     assert expected["expected_success"]
     assert expected["policy_mode"] == "pr_only_until_validated"
@@ -72,8 +72,8 @@ def test_auth_fixture_rejects_patch_that_does_not_fix_refresh_failure(tmp_path: 
     patch_path = tmp_path / "wrong.patch"
     patch_path.write_text(wrong_patch, encoding="utf-8")
 
-    AUTH.run_command(["git", "apply", "--check", str(patch_path)], cwd=module_dir, check=True)
-    AUTH.run_command(["git", "apply", str(patch_path)], cwd=module_dir, check=True)
+    AUTH.run_command(["git", "apply", "--unidiff-zero", "--check", str(patch_path)], cwd=module_dir, check=True)
+    AUTH.run_command(["git", "apply", "--unidiff-zero", str(patch_path)], cwd=module_dir, check=True)
 
     result = _run_auth_flow(AUTH, module_dir)
     assert result.returncode != 0

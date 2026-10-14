@@ -1,0 +1,28 @@
+import time
+
+_session_store = {}
+
+
+def login(email, password_hash):
+    token = "fixture-token"
+    user_id = "fixture-user"
+    claims = {}
+    _session_store[token] = {
+        "user_id": user_id,
+        "email": email,
+        "claims": claims,
+        "created_at": time.time(),
+    }
+    return {"access_token": token}
+
+
+def refresh_session(token, user_email):
+    session = _session_store.get(token)
+    if session is None:
+        raise ValueError("invalid session")
+    now = time.time()
+    last_seen = _session_store[token]["last_seen"]
+    if now - last_seen > 300:
+        raise ValueError("refresh window expired")
+    _session_store[token]["last_seen"] = now
+    return {"access_token": token}
