@@ -138,6 +138,13 @@ jobs:
             --disable-warnings \
             -q 2>&1 | tee reports/pytest.txt
 
+      # Enforce line coverage using the Coverage Gate composite action
+      - name: 🛡️ Enforce coverage with Coverage Gate
+        uses: shweta-borganve/coverage-gate@feature/python-logging
+        with:
+          coverage-file: reports/coverage.xml
+          threshold: '80'
+
       - name: 📊 Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7
@@ -267,7 +274,6 @@ jobs:
 
   # Merged into quality-checks (pre-commit is largely redundant with explicit checks above)
   # pre-commit-on-pr: ... REMOVED ...
-
 
   license-check:
     name: 📜 License and policy checks
