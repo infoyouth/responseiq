@@ -68,30 +68,21 @@ class SandboxRunner:
         environment: Mapping[str, str] | None = None,
     ) -> SandboxResult:
         if not command or any(not part for part in command):
-            raise SandboxExecutionError(
-                "Sandbox commands must contain non-empty argv entries"
-            )
+            raise SandboxExecutionError("Sandbox commands must contain non-empty argv entries")
         if os.name != "posix" or resource is None:
             raise SandboxExecutionError("Sandbox resource limits require a POSIX host")
         if self.limits.disk_bytes <= 0:
             raise SandboxExecutionError("Sandbox disk limit must be positive")
         if not cwd.is_dir():
-            raise SandboxExecutionError(
-                f"Sandbox working directory does not exist: {cwd}"
-            )
+            raise SandboxExecutionError(f"Sandbox working directory does not exist: {cwd}")
 
         safe_environment = {
-            key: value
-            for key, value in (environment or os.environ).items()
-            if key in self.limits.allowed_environment
+            key: value for key, value in (environment or os.environ).items() if key in self.limits.allowed_environment
         }
 
         bwrap = shutil.which("bwrap")
         if not bwrap:
-            raise SandboxExecutionError(
-                "Bubblewrap is required; refusing to execute "
-                "without filesystem isolation"
-            )
+            raise SandboxExecutionError("Bubblewrap is required; refusing to execute without filesystem isolation")
 
         safe_environment.update(
             {
@@ -127,9 +118,7 @@ class SandboxRunner:
                 *bounded_command,
             ]
 
-        wrapped_command = self._build_command(
-            bwrap, bounded_command, cwd, safe_environment
-        )
+        wrapped_command = self._build_command(bwrap, bounded_command, cwd, safe_environment)
 
         process = await asyncio.create_subprocess_exec(
             *wrapped_command,
@@ -143,9 +132,7 @@ class SandboxRunner:
 
         timed_out = False
         try:
-            output, _ = await asyncio.wait_for(
-                process.communicate(), self.limits.timeout_seconds
-            )
+            output, _ = await asyncio.wait_for(process.communicate(), self.limits.timeout_seconds)
         except asyncio.TimeoutError:
             timed_out = True
             try:
@@ -153,10 +140,7 @@ class SandboxRunner:
             except ProcessLookupError:
                 pass
             output, _ = await process.communicate()
-            output += (
-                f"\n[ResponseIQ] Execution TIMED OUT after "
-                f"{self.limits.timeout_seconds}s."
-            ).encode()
+            output += (f"\n[ResponseIQ] Execution TIMED OUT after {self.limits.timeout_seconds}s.").encode()
 
         return SandboxResult(
             returncode=process.returncode,
@@ -260,11 +244,7 @@ class SandboxRunner:
                 _SANDBOX_TMP,
                 "/bin/sh",
                 "-c",
-                (
-                    "cp -a /candidate/. /tmp/workspace/ && "
-                    "rm -rf /tmp/workspace/.git && "
-                    'cd /tmp/workspace && exec "$@"'
-                ),
+                ('cp -a /candidate/. /tmp/workspace/ && rm -rf /tmp/workspace/.git && cd /tmp/workspace && exec "$@"'),
                 "responseiq-sandbox",
                 *command,
             ]
@@ -288,10 +268,7 @@ class SandboxRunner:
 
             # These locations already exist because their parent system
             # filesystem has been mounted, or because /home is a tmpfs.
-            if any(
-                parent == Path(root) or parent.is_relative_to(Path(root))
-                for root in _SYSTEM_MOUNTS
-            ):
+            if any(parent == Path(root) or parent.is_relative_to(Path(root)) for root in _SYSTEM_MOUNTS):
                 continue
 
             if parent == Path("/home"):
