@@ -7,7 +7,7 @@ name = "responseiq"
 version = "2.41.2"
 description = "AI-Powered Infrastructure Copilot: The Self-Healing SRE."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.5"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
@@ -50,7 +50,7 @@ dependencies = [
     "langfuse>=5,<5.2",
     "slack-sdk>=3.20.0",
     "githubkit>=0.12.0",
-    "opentelemetry-api>=1.24.0",
+    "opentelemetry-api>=1.45.2",
     "opentelemetry-sdk>=1.24.0",
     "opentelemetry-instrumentation>=0.50b0",
     "opentelemetry-instrumentation-fastapi>=0.50b0",
@@ -66,6 +66,7 @@ dependencies = [
     "tree-sitter>=0.25.2",
     "tree-sitter-language-pack>=0.0.1",
     "beautifulsoup4>=4.12.0",
+    "soupsieve>=4.1.1",
     "lxml>=6.0.2",
     "types-pyyaml>=6.0.12.20250915",
     "pyyaml>=6.0",
