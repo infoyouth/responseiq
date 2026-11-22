@@ -140,7 +140,7 @@ jobs:
 
       # Enforce line coverage using the Coverage Gate composite action
       - name: 🛡️ Enforce coverage with Coverage Gate
-        uses: shweta-borganve/coverage-gate@mail
+        uses: shweta-borganve/coverage-gate@main
         with:
           coverage-file: reports/coverage.xml
           threshold: '80'
