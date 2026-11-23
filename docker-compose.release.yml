@@ -13,7 +13,7 @@ services:
     # No volumes: we want to test the baked-in code, not local source
 
   db:
-    image: postgres:18
+    image: postgres:19
     environment:
       POSTGRES_USER: responseiq
       POSTGRES_PASSWORD: responseiq
