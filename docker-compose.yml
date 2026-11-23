@@ -14,7 +14,7 @@ services:
       - db
       - jaeger
   db:
-    image: postgres:18
+    image: postgres:19
     environment:
       POSTGRES_USER: responseiq
       POSTGRES_PASSWORD: responseiq
